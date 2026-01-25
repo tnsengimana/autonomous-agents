@@ -5,6 +5,10 @@
  * that continuously polls for active team leads and processes their cycles.
  */
 
+// Load environment variables from .env.local (Next.js does this automatically, but worker runs standalone)
+import { config } from 'dotenv';
+config({ path: '.env.local' });
+
 import { startRunner, stopRunner } from './runner';
 
 // ============================================================================

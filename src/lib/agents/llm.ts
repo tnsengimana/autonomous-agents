@@ -403,29 +403,53 @@ export async function streamLLMResponseWithTools(
       stopWhen: stepCountIs(maxSteps),
     });
 
-    // Create a wrapper that extracts tool call information
-    const fullResponsePromise = (async () => {
-      // Wait for the stream to complete and get the full response
+    // Collect all text chunks to build the full response
+    let fullText = '';
+    const collectedToolCalls: Array<{ toolName: string; args: Record<string, unknown> }> = [];
+    const collectedToolResults: Array<{ toolName: string; result: unknown }> = [];
+
+    // Create a wrapped stream that collects data as it's consumed
+    const wrappedStream = (async function* () {
+      for await (const chunk of result.textStream) {
+        fullText += chunk;
+        yield chunk;
+      }
+
+      // After stream completes, collect tool data
       const response = await result;
-      const text = await response.text;
       const toolCallsRaw = await response.toolCalls;
       const toolResultsRaw = await response.toolResults;
 
-      return {
-        text,
-        toolCalls: (toolCallsRaw || []).map((tc) => ({
+      for (const tc of toolCallsRaw || []) {
+        collectedToolCalls.push({
           toolName: tc.toolName,
           args: tc.input as Record<string, unknown>,
-        })),
-        toolResults: (toolResultsRaw || []).map((tr) => ({
+        });
+      }
+      for (const tr of toolResultsRaw || []) {
+        collectedToolResults.push({
           toolName: tr.toolName,
           result: tr.output,
-        })),
+        });
+      }
+    })();
+
+    // Create a promise that resolves when stream is fully consumed
+    const fullResponsePromise = (async () => {
+      // Consume the stream to completion
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      for await (const _chunk of wrappedStream) {
+        // Just consume, data is collected in wrappedStream
+      }
+      return {
+        text: fullText,
+        toolCalls: collectedToolCalls,
+        toolResults: collectedToolResults,
       };
     })();
 
     return {
-      textStream: result.textStream,
+      textStream: wrappedStream,
       fullResponse: fullResponsePromise,
     };
   }
