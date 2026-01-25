@@ -39,9 +39,9 @@ npx drizzle-kit studio            # Open Drizzle Studio UI
 - `drizzle.config.ts` points to `src/lib/db/schema.ts`
 
 **Background Worker** (`src/worker/runner.ts`)
-- Registered via `instrumentation.ts` in nodejs runtime
-- Polls every 5 seconds for active team leads (agents with no parent)
-- Calls `agent.runCycle()` for proactive behavior
+- Event-driven + timer-based execution for agent work sessions
+- Processes agents with pending tasks or team leads due for scheduled run
+- Calls `agent.runWorkSession()` for thread-based task processing
 
 **Authentication** (`src/lib/auth/config.ts`)
 - NextAuth.js with passwordless magic links
@@ -74,7 +74,7 @@ For teams to run autonomously and deliver proactive insights:
    ```bash
    npx ts-node --project tsconfig.json src/worker/index.ts
    ```
-3. Worker polls every 5 seconds for active team leads and runs their cycles
+3. Worker processes agents with pending tasks and team leads due for scheduled runs via `runWorkSession()`
 4. Team leads can delegate to workers and push items to user inbox
 
 ## Design Document
