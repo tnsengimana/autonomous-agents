@@ -45,3 +45,36 @@ export {
   getConversationSummary,
   type ConversationSummary,
 } from './conversation';
+
+// Tools infrastructure
+export {
+  registerTool,
+  getTool,
+  getAllTools,
+  getTeamLeadTools,
+  getWorkerTools,
+  getToolSchemas,
+  executeTool,
+  toolSchemasToOpenAIFunctions,
+  type Tool,
+  type ToolSchema,
+  type ToolContext,
+  type ToolResult,
+  type ToolHandler,
+  type ToolParameter,
+} from './tools';
+
+// Team lead tools
+export {
+  registerTeamLeadTools,
+  delegateToAgentTool,
+  getTeamStatusTool,
+  createInboxItemTool,
+} from './tools/team-lead-tools';
+
+// Worker tools
+export {
+  registerWorkerTools,
+  reportToLeadTool,
+  requestInputTool,
+} from './tools/worker-tools';

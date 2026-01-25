@@ -1,0 +1,189 @@
+/**
+ * Worker Spawner
+ *
+ * Handles on-demand spawning of worker agents when a team lead delegates tasks.
+ * Currently uses a polling-based approach, but could be extended to use
+ * event-driven notifications.
+ */
+
+import { Agent } from '@/lib/agents/agent';
+import { getAgentById, updateAgentStatus } from '@/lib/db/queries/agents';
+import {
+  getPendingTasksForAgent,
+  updateTaskStatus,
+  completeTask,
+} from '@/lib/db/queries/agentTasks';
+
+// ============================================================================
+// Utility Functions
+// ============================================================================
+
+function log(message: string, ...args: unknown[]): void {
+  const timestamp = new Date().toISOString();
+  console.log(`[${timestamp}] [Spawner] ${message}`, ...args);
+}
+
+function logError(message: string, error: unknown): void {
+  const timestamp = new Date().toISOString();
+  console.error(`[${timestamp}] [Spawner] ${message}`, error);
+}
+
+// ============================================================================
+// Worker Spawning
+// ============================================================================
+
+/**
+ * Spawn a worker agent to execute a specific task
+ */
+export async function spawnWorker(
+  agentId: string,
+  taskDescription: string
+): Promise<{ success: boolean; result?: string; error?: string }> {
+  log(`Spawning worker: ${agentId}`);
+
+  try {
+    // Get the agent data
+    const agentData = await getAgentById(agentId);
+    if (!agentData) {
+      return {
+        success: false,
+        error: `Agent not found: ${agentId}`,
+      };
+    }
+
+    // Set agent status to running
+    await updateAgentStatus(agentId, 'running');
+
+    // Create the agent instance
+    const agent = new Agent(agentData);
+
+    // Execute the task
+    log(`Executing task for ${agent.name}: ${taskDescription.substring(0, 50)}...`);
+
+    const response = await agent.handleMessageSync(
+      `You have been assigned a task. Please complete it and report back:\n\n${taskDescription}`
+    );
+
+    // Set agent status back to idle
+    await updateAgentStatus(agentId, 'idle');
+
+    log(`Task completed for ${agent.name}`);
+
+    return {
+      success: true,
+      result: response,
+    };
+  } catch (error) {
+    logError(`Error spawning worker ${agentId}:`, error);
+
+    // Try to reset agent status
+    try {
+      await updateAgentStatus(agentId, 'idle');
+    } catch {
+      // Ignore status update errors
+    }
+
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error',
+    };
+  }
+}
+
+/**
+ * Process all pending tasks for a worker agent
+ */
+export async function processWorkerPendingTasks(
+  agentId: string
+): Promise<void> {
+  log(`Processing pending tasks for worker: ${agentId}`);
+
+  try {
+    const pendingTasks = await getPendingTasksForAgent(agentId);
+
+    if (pendingTasks.length === 0) {
+      log(`No pending tasks for worker: ${agentId}`);
+      return;
+    }
+
+    log(`Found ${pendingTasks.length} pending tasks`);
+
+    // Process tasks sequentially
+    for (const task of pendingTasks) {
+      log(`Starting task: ${task.id}`);
+
+      // Mark as in progress
+      await updateTaskStatus(task.id, 'in_progress');
+
+      // Execute the task
+      const result = await spawnWorker(agentId, task.task);
+
+      // Complete the task with the result
+      if (result.success) {
+        await completeTask(task.id, result.result ?? 'Task completed', 'completed');
+        log(`Task ${task.id} completed successfully`);
+      } else {
+        await completeTask(task.id, result.error ?? 'Task failed', 'failed');
+        log(`Task ${task.id} failed: ${result.error}`);
+      }
+    }
+
+    log(`Finished processing tasks for worker: ${agentId}`);
+  } catch (error) {
+    logError(`Error processing pending tasks for ${agentId}:`, error);
+  }
+}
+
+/**
+ * Spawn workers for all pending tasks in a team
+ * This can be called periodically or triggered by task creation
+ */
+export async function processTeamPendingTasks(teamId: string): Promise<void> {
+  log(`Processing pending tasks for team: ${teamId}`);
+
+  try {
+    // Get all agents for the team
+    const { getAgentsByTeamId } = await import('@/lib/db/queries/agents');
+    const agents = await getAgentsByTeamId(teamId);
+
+    // Filter to worker agents (those with a parent)
+    const workers = agents.filter((a) => a.parentAgentId !== null);
+
+    // Process pending tasks for each worker
+    for (const worker of workers) {
+      await processWorkerPendingTasks(worker.id);
+    }
+
+    log(`Finished processing team: ${teamId}`);
+  } catch (error) {
+    logError(`Error processing team ${teamId}:`, error);
+  }
+}
+
+// ============================================================================
+// Task Notification (for future event-driven implementation)
+// ============================================================================
+
+/**
+ * Notify that a new task has been created
+ * For now this triggers immediate processing, but could be
+ * implemented with a message queue in the future
+ */
+export async function notifyNewTask(taskId: string): Promise<void> {
+  log(`New task notification: ${taskId}`);
+
+  try {
+    const { getAgentTaskById } = await import('@/lib/db/queries/agentTasks');
+    const task = await getAgentTaskById(taskId);
+
+    if (!task) {
+      logError(`Task not found: ${taskId}`, null);
+      return;
+    }
+
+    // Process the task immediately
+    await processWorkerPendingTasks(task.assignedToId);
+  } catch (error) {
+    logError(`Error handling task notification ${taskId}:`, error);
+  }
+}

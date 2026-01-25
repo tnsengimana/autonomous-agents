@@ -10,5 +10,22 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
+  # Worker service for background agent processing
+  # Build with: docker build -t autonomous-teams-worker .
+  # Note: Requires a Dockerfile to be created for production use
+  worker:
+    build: .
+    command: npm run worker
+    depends_on:
+      - postgres
+    environment:
+      DATABASE_URL: postgres://postgres:postgres@postgres:5432/autonomous_teams
+      NODE_ENV: production
+    # Uncomment and add your API keys for production
+    # OPENAI_API_KEY: ${OPENAI_API_KEY}
+    # ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+    profiles:
+      - worker  # Only starts when explicitly requested with --profile worker
+
 volumes:
   postgres_data:

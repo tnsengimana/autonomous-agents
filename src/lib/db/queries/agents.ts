@@ -38,6 +38,7 @@ export async function getTeamLead(teamId: string): Promise<Agent | null> {
 
 /**
  * Get all active team leads (for worker runner)
+ * Returns team leads for active teams regardless of agent status
  */
 export async function getActiveTeamLeads(): Promise<Agent[]> {
   return db
@@ -57,8 +58,7 @@ export async function getActiveTeamLeads(): Promise<Agent[]> {
     .where(
       and(
         isNull(agents.parentAgentId),
-        eq(teams.status, 'active'),
-        eq(agents.status, 'running')
+        eq(teams.status, 'active')
       )
     );
 }

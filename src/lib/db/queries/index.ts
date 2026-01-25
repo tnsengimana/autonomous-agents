@@ -3,6 +3,7 @@
  */
 
 export * from './agents';
+export * from './agentTasks';
 export * from './conversations';
 export * from './messages';
 export * from './memories';

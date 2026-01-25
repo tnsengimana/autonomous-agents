@@ -159,6 +159,24 @@ export const inboxItems = pgTable('inbox_items', {
   createdAt: timestamp('created_at', { mode: 'date' }).defaultNow().notNull(),
 });
 
+export const agentTasks = pgTable('agent_tasks', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  teamId: uuid('team_id')
+    .notNull()
+    .references(() => teams.id, { onDelete: 'cascade' }),
+  assignedToId: uuid('assigned_to_id')
+    .notNull()
+    .references(() => agents.id, { onDelete: 'cascade' }),
+  assignedById: uuid('assigned_by_id')
+    .notNull()
+    .references(() => agents.id, { onDelete: 'cascade' }),
+  task: text('task').notNull(),
+  result: text('result'),
+  status: text('status').notNull().default('pending'), // 'pending', 'in_progress', 'completed', 'failed'
+  createdAt: timestamp('created_at', { mode: 'date' }).defaultNow().notNull(),
+  completedAt: timestamp('completed_at', { mode: 'date' }),
+});
+
 // ============================================================================
 // Relations
 // ============================================================================
@@ -199,6 +217,7 @@ export const teamsRelations = relations(teams, ({ one, many }) => ({
   }),
   agents: many(agents),
   inboxItems: many(inboxItems),
+  agentTasks: many(agentTasks),
 }));
 
 export const agentsRelations = relations(agents, ({ one, many }) => ({
@@ -216,6 +235,12 @@ export const agentsRelations = relations(agents, ({ one, many }) => ({
   }),
   conversations: many(conversations),
   memories: many(memories),
+  assignedTasks: many(agentTasks, {
+    relationName: 'assignedTasks',
+  }),
+  delegatedTasks: many(agentTasks, {
+    relationName: 'delegatedTasks',
+  }),
 }));
 
 export const conversationsRelations = relations(conversations, ({ one, many }) => ({
@@ -253,5 +278,22 @@ export const inboxItemsRelations = relations(inboxItems, ({ one }) => ({
   team: one(teams, {
     fields: [inboxItems.teamId],
     references: [teams.id],
+  }),
+}));
+
+export const agentTasksRelations = relations(agentTasks, ({ one }) => ({
+  team: one(teams, {
+    fields: [agentTasks.teamId],
+    references: [teams.id],
+  }),
+  assignedTo: one(agents, {
+    fields: [agentTasks.assignedToId],
+    references: [agents.id],
+    relationName: 'assignedTasks',
+  }),
+  assignedBy: one(agents, {
+    fields: [agentTasks.assignedById],
+    references: [agents.id],
+    relationName: 'delegatedTasks',
   }),
 }));

@@ -266,14 +266,106 @@ Always be professional, concise, and focused on your role.`;
 
   /**
    * Run a proactive cycle (for team leads running continuously)
-   * Override this in subclasses for specific behavior
+   *
+   * For team leads:
+   * - Check for completed tasks from workers
+   * - Optionally generate proactive briefings
+   *
+   * For workers:
+   * - Check for assigned tasks
+   * - Execute pending tasks
+   * - Report results back
    */
   async runCycle(): Promise<void> {
-    // Default implementation does nothing
-    // Team leads will override this to:
-    // 1. Check for pending tasks
-    // 2. Generate briefings
-    // 3. Coordinate with worker agents
+    if (this.isTeamLead()) {
+      await this.runTeamLeadCycle();
+    } else {
+      await this.runWorkerCycle();
+    }
+  }
+
+  /**
+   * Run a team lead's proactive cycle
+   */
+  private async runTeamLeadCycle(): Promise<void> {
+    // Import dynamically to avoid circular dependencies
+    const { getCompletedTasksDelegatedBy, archiveCompletedTasks } =
+      await import('@/lib/db/queries/agentTasks');
+    const { processWorkerPendingTasks } = await import('@/worker/spawner');
+    const { getChildAgents } = await import('@/lib/db/queries/agents');
+
+    // 1. Check for completed tasks from workers
+    const completedTasks = await getCompletedTasksDelegatedBy(this.id);
+
+    if (completedTasks.length > 0) {
+      // Process completed task results
+      for (const task of completedTasks) {
+        // Load the result into the agent's context
+        await this.loadMemories();
+
+        // Optionally, we could send a system message about the completed task
+        // For now, just log and archive
+        console.log(
+          `[Agent ${this.name}] Task completed: ${task.id} - ${task.status}`
+        );
+      }
+
+      // Archive processed tasks
+      await archiveCompletedTasks(completedTasks.map((t) => t.id));
+    }
+
+    // 2. Trigger processing of any pending worker tasks
+    const childAgents = await getChildAgents(this.id);
+    for (const child of childAgents) {
+      await processWorkerPendingTasks(child.id);
+    }
+  }
+
+  /**
+   * Run a worker agent's cycle
+   */
+  private async runWorkerCycle(): Promise<void> {
+    // Import dynamically to avoid circular dependencies
+    const {
+      getActionableTasksForAgent,
+      updateTaskStatus,
+      completeTask,
+    } = await import('@/lib/db/queries/agentTasks');
+
+    // Check for assigned tasks
+    const tasks = await getActionableTasksForAgent(this.id);
+    const pendingTasks = tasks.filter((t) => t.status === 'pending');
+
+    if (pendingTasks.length === 0) {
+      return; // No work to do
+    }
+
+    // Process the first pending task
+    const task = pendingTasks[0];
+    console.log(`[Agent ${this.name}] Starting task: ${task.id}`);
+
+    // Mark as in progress
+    await updateTaskStatus(task.id, 'in_progress');
+    await this.setStatus('running');
+
+    try {
+      // Execute the task
+      const response = await this.handleMessageSync(
+        `Execute this task: ${task.task}`
+      );
+
+      // Mark as completed
+      await completeTask(task.id, response, 'completed');
+      console.log(`[Agent ${this.name}] Task completed: ${task.id}`);
+    } catch (error) {
+      // Mark as failed
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error';
+      await completeTask(task.id, errorMessage, 'failed');
+      console.error(`[Agent ${this.name}] Task failed: ${task.id}`, error);
+    }
+
+    await this.setStatus('idle');
   }
 
   /**

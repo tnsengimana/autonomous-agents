@@ -8,6 +8,7 @@
 import type { InferSelectModel } from 'drizzle-orm';
 import type {
   agents,
+  agentTasks,
   conversations,
   memories,
   messages,
@@ -20,6 +21,7 @@ import type {
 // ============================================================================
 
 export type Agent = InferSelectModel<typeof agents>;
+export type AgentTask = InferSelectModel<typeof agentTasks>;
 export type Conversation = InferSelectModel<typeof conversations>;
 export type Memory = InferSelectModel<typeof memories>;
 export type Message = InferSelectModel<typeof messages>;
@@ -31,6 +33,7 @@ export type UserApiKey = InferSelectModel<typeof userApiKeys>;
 // ============================================================================
 
 export type AgentStatus = 'idle' | 'running' | 'paused';
+export type AgentTaskStatus = 'pending' | 'in_progress' | 'completed' | 'failed';
 export type TeamStatus = 'active' | 'paused' | 'archived';
 export type MemoryType = 'preference' | 'insight' | 'fact';
 export type MessageRole = 'user' | 'assistant' | 'system';
