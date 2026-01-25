@@ -107,6 +107,7 @@ export interface InboxItem {
   id: string;
   userId: string;
   teamId: string;
+  agentId: string;
   type: InboxItemType;
   title: string;
   content: string;

@@ -1,0 +1,2 @@
+ALTER TABLE "inbox_items" ADD COLUMN "agent_id" uuid;--> statement-breakpoint
+ALTER TABLE "inbox_items" ADD CONSTRAINT "inbox_items_agent_id_agents_id_fk" FOREIGN KEY ("agent_id") REFERENCES "public"."agents"("id") ON DELETE set null ON UPDATE no action;

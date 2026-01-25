@@ -152,6 +152,9 @@ export const inboxItems = pgTable('inbox_items', {
   teamId: uuid('team_id')
     .notNull()
     .references(() => teams.id, { onDelete: 'cascade' }),
+  agentId: uuid('agent_id')
+    .notNull()
+    .references(() => agents.id, { onDelete: 'cascade' }),
   type: text('type').notNull(), // 'insight', 'question', 'alert', etc.
   title: text('title').notNull(),
   content: text('content').notNull(),
@@ -235,6 +238,7 @@ export const agentsRelations = relations(agents, ({ one, many }) => ({
   }),
   conversations: many(conversations),
   memories: many(memories),
+  inboxItems: many(inboxItems),
   assignedTasks: many(agentTasks, {
     relationName: 'assignedTasks',
   }),
@@ -278,6 +282,10 @@ export const inboxItemsRelations = relations(inboxItems, ({ one }) => ({
   team: one(teams, {
     fields: [inboxItems.teamId],
     references: [teams.id],
+  }),
+  agent: one(agents, {
+    fields: [inboxItems.agentId],
+    references: [agents.id],
   }),
 }));
 

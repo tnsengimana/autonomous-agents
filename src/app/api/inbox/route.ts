@@ -30,6 +30,7 @@ export async function GET() {
       title: item.title,
       content: item.content,
       teamId: item.teamId,
+      agentId: item.agentId,
       teamName,
       read: item.readAt !== null,
       readAt: item.readAt,

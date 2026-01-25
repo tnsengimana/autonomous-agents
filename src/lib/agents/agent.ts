@@ -528,6 +528,7 @@ Keep the briefing concise (2-3 paragraphs max).`;
       await createInboxItem({
         userId,
         teamId: this.teamId,
+        agentId: this.id,
         type: 'briefing',
         title: `Daily Briefing from ${this.name}`,
         content: briefingContent,

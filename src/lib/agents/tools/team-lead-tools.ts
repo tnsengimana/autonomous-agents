@@ -208,6 +208,7 @@ const createInboxItemTool: Tool = {
       .values({
         userId,
         teamId: context.teamId,
+        agentId: context.agentId,
         type,
         title,
         content,

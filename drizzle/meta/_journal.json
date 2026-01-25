@@ -29,6 +29,20 @@
       "when": 1769336696405,
       "tag": "0003_broad_omega_flight",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1769348526500,
+      "tag": "0004_violet_micromax",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1769348734219,
+      "tag": "0005_rapid_shape",
+      "breakpoints": true
     }
   ]
 }

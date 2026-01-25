@@ -96,6 +96,7 @@ export async function getInboxItemWithTeam(itemId: string): Promise<{
 export async function createInboxItem(data: {
   userId: string;
   teamId: string;
+  agentId: string;
   type: string;
   title: string;
   content: string;
@@ -105,6 +106,7 @@ export async function createInboxItem(data: {
     .values({
       userId: data.userId,
       teamId: data.teamId,
+      agentId: data.agentId,
       type: data.type,
       title: data.title,
       content: data.content,

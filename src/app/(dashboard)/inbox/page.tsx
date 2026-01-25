@@ -20,6 +20,7 @@ interface InboxItem {
   content: string;
   teamId: string;
   teamName: string;
+  agentId: string;
   read: boolean;
   readAt: string | null;
   createdAt: string;
@@ -77,6 +78,9 @@ export default function InboxPage() {
   const [loading, setLoading] = useState(true);
   const [selectedItem, setSelectedItem] = useState<InboxItem | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [replyMessage, setReplyMessage] = useState("");
+  const [sendingReply, setSendingReply] = useState(false);
+  const [replySuccess, setReplySuccess] = useState(false);
 
   // Fetch inbox items
   useEffect(() => {
@@ -104,6 +108,8 @@ export default function InboxPage() {
   // Mark item as read when selected
   const handleSelectItem = async (item: InboxItem) => {
     setSelectedItem(item);
+    setReplyMessage("");
+    setReplySuccess(false);
     if (!item.read) {
       try {
         const response = await fetch(`/api/inbox/${item.id}`, {
@@ -182,6 +188,42 @@ export default function InboxPage() {
       }
     } catch (err) {
       console.error("Failed to mark all as read:", err);
+    }
+  };
+
+  // Send reply to agent
+  const handleSendReply = async () => {
+    if (!selectedItem || !replyMessage.trim()) return;
+
+    setSendingReply(true);
+    setReplySuccess(false);
+
+    try {
+      const response = await fetch(`/api/inbox/${selectedItem.id}/reply`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: replyMessage.trim() }),
+      });
+
+      if (response.ok) {
+        setReplyMessage("");
+        setReplySuccess(true);
+        // Remove the item from the list after successful reply
+        setItems((prev) => prev.filter((i) => i.id !== selectedItem.id));
+        // Select the next item or clear selection
+        const remaining = items.filter((i) => i.id !== selectedItem.id);
+        setSelectedItem(remaining.length > 0 ? remaining[0] : null);
+        // Clear success message after 3 seconds
+        setTimeout(() => setReplySuccess(false), 3000);
+      } else {
+        const data = await response.json();
+        alert(data.error || "Failed to send reply");
+      }
+    } catch (err) {
+      console.error("Failed to send reply:", err);
+      alert("Failed to send reply");
+    } finally {
+      setSendingReply(false);
     }
   };
 
@@ -333,6 +375,32 @@ export default function InboxPage() {
                       <span className="font-medium">Received:</span>{" "}
                       {new Date(selectedItem.createdAt).toLocaleString()}
                     </p>
+                  </div>
+                  <Separator className="my-6" />
+                  <div className="space-y-4">
+                    <h4 className="font-medium">Reply to Agent</h4>
+                    <textarea
+                      value={replyMessage}
+                      onChange={(e) => setReplyMessage(e.target.value)}
+                      placeholder="Type your reply..."
+                      className="w-full min-h-[100px] p-3 border rounded-md bg-background resize-y focus:outline-none focus:ring-2 focus:ring-ring"
+                      disabled={sendingReply}
+                    />
+                    <div className="flex items-center justify-between">
+                      <div>
+                        {replySuccess && (
+                          <span className="text-sm text-green-600 dark:text-green-400">
+                            Reply sent successfully!
+                          </span>
+                        )}
+                      </div>
+                      <Button
+                        onClick={handleSendReply}
+                        disabled={sendingReply || !replyMessage.trim()}
+                      >
+                        {sendingReply ? "Sending..." : "Send Reply"}
+                      </Button>
+                    </div>
                   </div>
                 </CardContent>
               </>
