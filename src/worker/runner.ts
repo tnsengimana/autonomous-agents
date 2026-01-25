@@ -1,27 +1,34 @@
 /**
  * Worker Runner
  *
- * Main loop that polls for active team leads and triggers their run cycles.
- * This runs continuously in the background, checking every 5 seconds.
+ * Event-driven + timer-based execution for agent work sessions.
+ *
+ * Execution triggers:
+ * 1. Event-driven: When tasks are queued to any agent
+ * 2. Timer-based: Team leads run every hour (scheduled via nextRunAt)
+ *
+ * Workers are purely reactive - they only run when they have queued tasks.
+ * Team leads get scheduled for 1 hour after each work session completion.
  */
 
 import { Agent } from '@/lib/agents/agent';
-import { getActiveTeamLeads } from '@/lib/db/queries/agents';
 import {
-  getCompletedTasksDelegatedBy,
-  getActionableTasksForAgent,
-  updateTaskStatus,
-  archiveCompletedTasks,
-} from '@/lib/db/queries/agentTasks';
+  getAgentsWithPendingTasks,
+  getTeamLeadsDueToRun,
+} from '@/lib/db/queries/agents';
 
 // ============================================================================
 // Configuration
 // ============================================================================
 
-const POLL_INTERVAL_MS = 5000; // 5 seconds
+// Poll interval - longer since we have event-driven triggers
+const POLL_INTERVAL_MS = 30000; // 30 seconds
 
 // Shutdown flag
 let isShuttingDown = false;
+
+// Set of agent IDs that have been notified and need immediate processing
+const pendingNotifications = new Set<string>();
 
 export function stopRunner(): void {
   isShuttingDown = true;
@@ -46,99 +53,44 @@ function logError(message: string, error: unknown): void {
 }
 
 // ============================================================================
-// Team Lead Cycle
+// Event-Driven Task Notification
 // ============================================================================
 
 /**
- * Run a proactive cycle for a team lead agent
+ * Notify the worker that a task has been queued for an agent.
+ * This triggers immediate processing of the agent's queue.
+ *
+ * Called from taskQueue.ts after queueing tasks.
  */
-async function runTeamLeadCycle(agent: Agent): Promise<void> {
-  log(`Running cycle for team lead: ${agent.name} (${agent.id})`);
-
-  try {
-    // 1. Check for completed tasks from workers
-    const completedTasks = await getCompletedTasksDelegatedBy(agent.id);
-
-    if (completedTasks.length > 0) {
-      log(`Found ${completedTasks.length} completed tasks to process`);
-
-      // Process each completed task - in a full implementation,
-      // this would send the results to the agent for processing
-      for (const task of completedTasks) {
-        log(
-          `Processing completed task: ${task.id} - Status: ${task.status}`
-        );
-
-        // For now, just log the completion
-        // The agent would typically incorporate this into its context
-      }
-
-      // Archive the processed tasks
-      await archiveCompletedTasks(completedTasks.map((t) => t.id));
-    }
-
-    // 2. Run the agent's proactive cycle
-    await agent.runCycle();
-
-    log(`Completed cycle for team lead: ${agent.name}`);
-  } catch (error) {
-    logError(`Error in team lead cycle for ${agent.name}:`, error);
-  }
+export function notifyTaskQueued(agentId: string): void {
+  log(`Task queued notification for agent: ${agentId}`);
+  pendingNotifications.add(agentId);
 }
 
 // ============================================================================
-// Worker Agent Processing
+// Agent Work Session Processing
 // ============================================================================
 
 /**
- * Process pending tasks for worker agents
- * This is called when a team lead has delegated work
+ * Process one agent's work session
+ * Uses the new thread-based runWorkSession method
  */
-export async function processWorkerTasks(workerId: string): Promise<void> {
-  log(`Processing tasks for worker: ${workerId}`);
+async function processAgentWorkSession(agentId: string): Promise<void> {
+  log(`Processing work session for agent: ${agentId}`);
 
   try {
-    const tasks = await getActionableTasksForAgent(workerId);
-
-    if (tasks.length === 0) {
-      log(`No actionable tasks for worker: ${workerId}`);
+    const agent = await Agent.fromId(agentId);
+    if (!agent) {
+      logError(`Agent not found: ${agentId}`, null);
       return;
     }
 
-    // Get the first pending task
-    const pendingTasks = tasks.filter((t) => t.status === 'pending');
-    if (pendingTasks.length === 0) {
-      log(`No pending tasks for worker: ${workerId}`);
-      return;
-    }
+    // Run work session (processes queue, extracts insights, maybe briefing)
+    await agent.runWorkSession();
 
-    const task = pendingTasks[0];
-    log(`Executing task: ${task.id} - "${task.task.substring(0, 50)}..."`);
-
-    // Mark task as in progress
-    await updateTaskStatus(task.id, 'in_progress');
-
-    // Create the worker agent
-    const workerAgent = await Agent.fromId(workerId);
-    if (!workerAgent) {
-      logError(`Worker agent not found: ${workerId}`, null);
-      await updateTaskStatus(task.id, 'failed');
-      return;
-    }
-
-    // Execute the task by sending it as a message to the agent
-    // The agent will process it and use the reportToLead tool to report back
-    const response = await workerAgent.handleMessageSync(
-      `Execute this task: ${task.task}\n\nWhen complete, use the reportToLead tool to send your results back.`
-    );
-
-    log(`Worker response: ${response.substring(0, 100)}...`);
-
-    // Note: The actual task completion happens via the reportToLead tool
-    // If the agent didn't use the tool, we leave the task in_progress
-    // for manual intervention
+    log(`Completed work session for agent: ${agent.name}`);
   } catch (error) {
-    logError(`Error processing worker tasks for ${workerId}:`, error);
+    logError(`Error in work session for agent ${agentId}:`, error);
   }
 }
 
@@ -147,10 +99,41 @@ export async function processWorkerTasks(workerId: string): Promise<void> {
 // ============================================================================
 
 /**
- * The main runner loop that polls for active team leads
+ * Get all agents that need to run work sessions
+ * Combines: agents with pending tasks + team leads due for scheduled run
+ */
+async function getAgentsNeedingWork(): Promise<string[]> {
+  // 1. Get agents with pending tasks (from notifications or database)
+  const agentsWithTasks = await getAgentsWithPendingTasks();
+
+  // 2. Get team leads due for scheduled proactive run
+  const teamLeadsDue = await getTeamLeadsDueToRun();
+
+  // 3. Add any agents from pending notifications
+  const notifiedAgents = Array.from(pendingNotifications);
+  pendingNotifications.clear();
+
+  // 4. Combine and dedupe
+  const allAgentIds = new Set([
+    ...agentsWithTasks,
+    ...teamLeadsDue,
+    ...notifiedAgents,
+  ]);
+
+  return Array.from(allAgentIds);
+}
+
+/**
+ * The main runner loop
+ *
+ * Polling strategy:
+ * - Check for agents with pending work (hasQueuedWork)
+ * - Check for team leads where nextRunAt <= now
+ * - Process each agent's work session
+ * - Sleep with longer interval since we have event-driven triggers
  */
 export async function startRunner(): Promise<void> {
-  log('Worker runner started');
+  log('Worker runner started (event-driven + timer-based)');
 
   // Register all tools before starting
   const { registerTeamLeadTools } = await import(
@@ -170,17 +153,16 @@ export async function startRunner(): Promise<void> {
 
   while (!isShuttingDown) {
     try {
-      // Get all active team leads
-      const teamLeads = await getActiveTeamLeads();
+      // Get all agents that need work
+      const agentIds = await getAgentsNeedingWork();
 
-      if (teamLeads.length > 0) {
-        log(`Found ${teamLeads.length} active team lead(s)`);
+      if (agentIds.length > 0) {
+        log(`Found ${agentIds.length} agent(s) needing work`);
 
-        // Process each team lead
-        for (const agentData of teamLeads) {
+        // Process each agent's work session
+        for (const agentId of agentIds) {
           if (isShuttingDown) break;
-          const agent = new Agent(agentData);
-          await runTeamLeadCycle(agent);
+          await processAgentWorkSession(agentId);
         }
       }
     } catch (error) {
@@ -203,15 +185,25 @@ export async function runSingleCycle(): Promise<void> {
   log('Running single cycle');
 
   try {
-    const teamLeads = await getActiveTeamLeads();
+    const agentIds = await getAgentsNeedingWork();
 
-    for (const agentData of teamLeads) {
-      const agent = new Agent(agentData);
-      await runTeamLeadCycle(agent);
+    for (const agentId of agentIds) {
+      await processAgentWorkSession(agentId);
     }
 
     log('Single cycle complete');
   } catch (error) {
     logError('Single cycle error:', error);
   }
+}
+
+/**
+ * Process pending tasks for a specific worker agent
+ * This is called when a team lead has delegated work
+ *
+ * @deprecated Use notifyTaskQueued instead - work sessions handle task processing
+ */
+export async function processWorkerTasks(workerId: string): Promise<void> {
+  log(`Processing tasks for worker: ${workerId} (via notifyTaskQueued)`);
+  notifyTaskQueued(workerId);
 }

@@ -139,3 +139,48 @@ export async function updateAgentLastCompletedAt(
     .set({ lastCompletedAt, updatedAt: new Date() })
     .where(eq(agents.id, agentId));
 }
+
+/**
+ * Get all agent IDs that have pending or in_progress tasks
+ * Used by the worker runner to find agents with queued work
+ */
+export async function getAgentsWithPendingTasks(): Promise<string[]> {
+  // Import agentTasks dynamically to avoid circular dependencies
+  const { agentTasks } = await import('../schema');
+  const { or } = await import('drizzle-orm');
+
+  const result = await db
+    .selectDistinct({ agentId: agentTasks.assignedToId })
+    .from(agentTasks)
+    .where(
+      or(
+        eq(agentTasks.status, 'pending'),
+        eq(agentTasks.status, 'in_progress')
+      )
+    );
+
+  return result.map((r) => r.agentId);
+}
+
+/**
+ * Get team lead agent IDs where nextRunAt <= now
+ * Only includes team leads from active teams
+ */
+export async function getTeamLeadsDueToRun(): Promise<string[]> {
+  const { lte } = await import('drizzle-orm');
+
+  const now = new Date();
+  const result = await db
+    .select({ id: agents.id })
+    .from(agents)
+    .innerJoin(teams, eq(agents.teamId, teams.id))
+    .where(
+      and(
+        isNull(agents.parentAgentId), // Team leads only
+        eq(teams.status, 'active'),   // Active teams only
+        lte(agents.nextRunAt, now)    // Due to run
+      )
+    );
+
+  return result.map((r) => r.id);
+}
