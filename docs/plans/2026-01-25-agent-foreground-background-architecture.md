@@ -6,9 +6,26 @@ Evolve the agent system from single-conversation to a sophisticated foreground/b
 
 ## Core Concepts
 
-### Two Conversation Types
-- **User Conversation**: Agent ↔ User interactions (shown in UI, foreground)
-- **Agent Conversation**: Agent ↔ LLM for background work (not shown to user)
+### Conversations vs Threads
+
+| Aspect | Conversation | Thread |
+|--------|--------------|--------|
+| Purpose | User ↔ Agent interaction | Agent background work session |
+| Lifecycle | One per agent, permanent | Many per agent, ephemeral |
+| Visibility | Shown in UI | Internal only |
+| Persistence | Long-lived, accumulates | Discarded after knowledge extraction |
+| Context | Grows over time | Fresh each session, compaction if needed |
+
+- **Conversation**: The user-facing chat history. One per agent. This is where briefings and user interactions live.
+- **Thread**: A single background work session. Agent creates new thread each time it processes its queue. Thread is used for agent ↔ LLM communication during work. Discarded after extracting knowledge.
+
+### Why This Model Works
+
+1. **No context overflow across sessions**: Each work session starts with a fresh thread
+2. **Mid-session compaction**: If thread exceeds context during work, compact and continue
+3. **Learning becomes critical**: Memories are the ONLY thing that persists between sessions
+4. **Professional growth**: Agent improves by extracting insights from work threads into memories
+5. **Clean separation**: Users see conversation, internal work happens in disposable threads
 
 ### Agent Types & Behavior
 
@@ -55,25 +72,50 @@ Team created → Team lead created
 
 ## Database Schema Changes
 
-### 1. Add `type` to conversations table
+### 1. Create threads table (NEW)
 
-```sql
-ALTER TABLE conversations ADD COLUMN type TEXT NOT NULL DEFAULT 'user';
--- Values: 'user', 'agent'
+Threads are ephemeral work sessions for background processing:
+
+```typescript
+export const threads = pgTable('threads', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  agentId: uuid('agent_id').notNull().references(() => agents.id, { onDelete: 'cascade' }),
+  status: text('status').notNull().default('active'), // 'active', 'completed', 'compacted'
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  completedAt: timestamp('completed_at'),
+});
 ```
 
-### 2. Extend agentTasks for self-queued tasks
+### 2. Create threadMessages table (NEW)
 
-Current schema has `assignedById` (who delegated) and `assignedToId` (who executes).
-For self-queued tasks, both would be the same agent.
+Messages within a work thread:
 
-Add `source` field to distinguish:
+```typescript
+export const threadMessages = pgTable('thread_messages', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  threadId: uuid('thread_id').notNull().references(() => threads.id, { onDelete: 'cascade' }),
+  role: text('role').notNull(), // 'user' (agent as user), 'assistant' (LLM response), 'system'
+  content: text('content').notNull(),
+  toolCalls: jsonb('tool_calls'), // Store tool call data if any
+  sequenceNumber: integer('sequence_number').notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+});
+```
+
+### 3. Conversations table (unchanged)
+
+Existing conversations table remains for user ↔ agent interactions. No changes needed.
+
+### 4. Extend agentTasks for self-queued tasks
+
+Add `source` field to distinguish task origins:
+
 ```sql
 ALTER TABLE agent_tasks ADD COLUMN source TEXT NOT NULL DEFAULT 'delegation';
 -- Values: 'delegation' (from another agent), 'user' (from user message), 'system' (bootstrap), 'self' (proactive)
 ```
 
-### 3. Add scheduling fields to agents table
+### 5. Add scheduling fields to agents table
 
 ```sql
 ALTER TABLE agents ADD COLUMN next_run_at TIMESTAMP;
@@ -86,12 +128,30 @@ ALTER TABLE agents ADD COLUMN last_completed_at TIMESTAMP;
 
 ### Phase 1: Schema & Database Layer
 
-#### Task 1.1: Update conversations schema
+#### Task 1.1: Create threads and threadMessages tables
 **File**: `src/lib/db/schema.ts`
 
-Add `type` field to conversations:
+Add new tables for background work sessions:
 ```typescript
-type: text('type').notNull().default('user'), // 'user' | 'agent'
+// Threads - ephemeral work sessions
+export const threads = pgTable('threads', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  agentId: uuid('agent_id').notNull().references(() => agents.id, { onDelete: 'cascade' }),
+  status: text('status').notNull().default('active'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  completedAt: timestamp('completed_at'),
+});
+
+// Thread messages
+export const threadMessages = pgTable('thread_messages', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  threadId: uuid('thread_id').notNull().references(() => threads.id, { onDelete: 'cascade' }),
+  role: text('role').notNull(),
+  content: text('content').notNull(),
+  toolCalls: jsonb('tool_calls'),
+  sequenceNumber: integer('sequence_number').notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+});
 ```
 
 #### Task 1.2: Update agentTasks schema
@@ -117,20 +177,29 @@ npx drizzle-kit generate
 npx drizzle-kit migrate
 ```
 
-### Phase 2: Conversation Management
+### Phase 2: Thread Management (NEW)
 
-#### Task 2.1: Update conversation queries
-**File**: `src/lib/db/queries/conversations.ts`
+#### Task 2.1: Create thread queries
+**File**: `src/lib/db/queries/threads.ts` (NEW)
 
-Add functions:
-- `getUserConversation(agentId)` - get/create user conversation
-- `getAgentConversation(agentId)` - get/create agent conversation
-- `clearAgentConversation(agentId)` - optionally clear after knowledge extraction
+Create functions for thread lifecycle:
+- `createThread(agentId)` - start new work session
+- `getActiveThread(agentId)` - get current active thread (if any)
+- `completeThread(threadId)` - mark thread as completed
+- `getThreadMessages(threadId)` - get all messages in thread
+- `appendThreadMessage(threadId, role, content, toolCalls?)` - add message
+- `compactThread(threadId, summary)` - replace messages with summary (mid-session compaction)
 
-#### Task 2.2: Update conversation.ts abstraction
-**File**: `src/lib/agents/conversation.ts`
+#### Task 2.2: Create thread abstraction
+**File**: `src/lib/agents/thread.ts` (NEW)
 
-Update `getActiveConversation()` to accept conversation type parameter.
+High-level thread management:
+- `startWorkSession(agentId)` - create thread, return thread context
+- `addToThread(threadId, role, content)` - append message
+- `buildThreadContext(threadId, maxTokens)` - get messages for LLM call
+- `shouldCompact(threadId)` - check if approaching context limit
+- `compactIfNeeded(threadId)` - summarize and replace if too long
+- `endWorkSession(threadId)` - mark complete
 
 ### Phase 3: Task Queue System
 
@@ -160,53 +229,61 @@ async queueUserTask(userMessage: string): Promise<void> {
 
 New `handleUserMessage()`:
 1. Add user message to USER conversation
-2. Generate minimal response ("I'll look into that" or smart acknowledgment)
-3. Queue task with source='user'
-4. Return response stream
-5. Trigger background worker
+2. Generate contextual acknowledgment via quick LLM call
+3. Add acknowledgment to USER conversation
+4. Queue task with source='user'
+5. Return response stream
+6. Trigger background worker
 
-#### Task 4.2: Create processTaskQueue method
+#### Task 4.2: Create runWorkSession method
 **File**: `src/lib/agents/agent.ts`
 
-New method for background processing:
+Main entry point for background processing:
 ```typescript
-async processTaskQueue(): Promise<void> {
-  // 1. Get pending tasks
-  // 2. For each task:
-  //    - Process via agent conversation
-  //    - Mark complete
-  // 3. When queue empty:
-  //    - Extract knowledge
+async runWorkSession(): Promise<void> {
+  // 1. Create new thread for this session
+  // 2. Load memories for context
+  // 3. Process all pending tasks in queue
+  // 4. When queue empty:
+  //    - Extract knowledge from thread → memories
+  //    - Mark thread completed
   //    - Team lead: decide briefing
-  //    - Schedule next run
+  //    - Schedule next run (team lead only)
 }
 ```
 
-#### Task 4.3: Create processTask method
+#### Task 4.3: Create processTaskInThread method
 **File**: `src/lib/agents/agent.ts`
 
-Process single task in agent conversation:
+Process single task within current thread:
 ```typescript
-async processTask(task: AgentTask): Promise<string> {
-  // 1. Ensure agent conversation exists
-  // 2. Build context from agent conversation + memories
+async processTaskInThread(threadId: string, task: AgentTask): Promise<string> {
+  // 1. Build context from thread messages + memories
+  // 2. Add task as "user" message to thread (agent is the user here)
   // 3. Call LLM with tools
-  // 4. Persist messages to agent conversation
-  // 5. Return result
+  // 4. Add response to thread
+  // 5. If tool calls, execute and continue conversation
+  // 6. Check if should compact thread (context limit)
+  // 7. Mark task complete
+  // 8. Return result
 }
 ```
 
-#### Task 4.4: Create extractKnowledge method
+#### Task 4.4: Create extractKnowledgeFromThread method
 **File**: `src/lib/agents/agent.ts` or `src/lib/agents/memory.ts`
 
-Extract insights from agent conversation after work:
+Extract professional learnings from work session:
 ```typescript
-async extractKnowledge(): Promise<void> {
-  // 1. Load agent conversation messages
-  // 2. Build prompt for knowledge extraction
-  // 3. Extract memories (insights about how to work, patterns, learnings)
-  // 4. Persist to memories
-  // 5. Optionally summarize/clear agent conversation
+async extractKnowledgeFromThread(threadId: string): Promise<void> {
+  // 1. Load all thread messages
+  // 2. Build extraction prompt focused on:
+  //    - What approaches worked/didn't work
+  //    - Patterns discovered
+  //    - Skills or techniques learned
+  //    - Information about the domain
+  // 3. Extract memories via LLM
+  // 4. Persist to memories with type 'insight' or 'fact'
+  // 5. This is how the agent "grows professionally"
 }
 ```
 
@@ -214,15 +291,19 @@ async extractKnowledge(): Promise<void> {
 **File**: `src/lib/agents/agent.ts`
 
 ```typescript
-async decideBriefing(): Promise<void> {
+async decideBriefing(threadId: string): Promise<void> {
   if (!this.isTeamLead()) return;
 
-  // 1. Review recent work and extracted knowledge
+  // 1. Review thread work and newly extracted knowledge
   // 2. LLM decides: is this worth briefing user?
+  //    - Significant discoveries?
+  //    - Actionable insights?
+  //    - Important alerts?
   // 3. If yes:
   //    - Generate briefing content
   //    - Create inbox item (summary)
   //    - Add full briefing to USER conversation
+  // 4. If no: complete silently (no noise)
 }
 ```
 
@@ -293,9 +374,9 @@ Only return USER conversation (not agent conversation).
 ├─────────────────────────────────────────────────────────────────┤
 │ 1. User sends: "Research NVIDIA stock"                          │
 │ 2. Agent receives in handleUserMessage()                        │
-│ 3. Add to USER conversation: user message                       │
-│ 4. Generate minimal response: "I'll research NVIDIA for you"    │
-│ 5. Add to USER conversation: assistant message                  │
+│ 3. Add to CONVERSATION: user message                            │
+│ 4. Quick LLM call for contextual ack                            │
+│ 5. Add to CONVERSATION: "I'll research NVIDIA's latest..."      │
 │ 6. Queue task: {task: "Research NVIDIA stock", source: 'user'}  │
 │ 7. Trigger background: notifyTaskQueued(agentId)                │
 │ 8. Return response to user                                      │
@@ -306,18 +387,24 @@ Only return USER conversation (not agent conversation).
 │ BACKGROUND (Worker Process)                                     │
 ├─────────────────────────────────────────────────────────────────┤
 │ 1. Worker picks up agent (has pending task)                     │
-│ 2. Load AGENT conversation (create if empty)                    │
-│ 3. Process task via LLM with tools                              │
-│    - tavilySearch("NVIDIA stock news")                          │
+│ 2. runWorkSession() starts                                      │
+│ 3. Create NEW THREAD for this session                           │
+│ 4. Load memories for context                                    │
+│ 5. Process task in thread:                                      │
+│    - Add task as "user" message to thread                       │
+│    - LLM responds with tool calls                               │
+│    - tavilySearch("NVIDIA stock news") → add result to thread   │
 │    - May delegate to workers                                    │
-│    - Builds up AGENT conversation with research                 │
-│ 4. Mark task complete                                           │
-│ 5. Check queue → empty                                          │
-│ 6. Extract knowledge from AGENT conversation → memories         │
-│ 7. Decide briefing: "Yes, found significant news"               │
-│ 8. Create inbox item (summary)                                  │
-│ 9. Add full briefing to USER conversation                       │
-│ 10. Schedule next run: now + 1 hour                             │
+│    - Thread grows with work conversation                        │
+│    - Compact if approaching context limit                       │
+│ 6. Mark task complete                                           │
+│ 7. Check queue → empty                                          │
+│ 8. Extract knowledge from THREAD → memories                     │
+│ 9. Mark thread completed (can be cleaned up later)              │
+│ 10. Decide briefing: "Yes, found significant news"              │
+│ 11. Create inbox item (summary)                                 │
+│ 12. Add full briefing to USER CONVERSATION                      │
+│ 13. Schedule next run: now + 1 hour                             │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -328,14 +415,17 @@ Only return USER conversation (not agent conversation).
 │ BACKGROUND (Worker Process - 1 Hour Timer)                      │
 ├─────────────────────────────────────────────────────────────────┤
 │ 1. Worker picks up team lead (nextRunAt <= now)                 │
-│ 2. Check queue → empty                                          │
-│ 3. Load mission + memories                                      │
-│ 4. LLM decides proactive work based on mission                  │
-│ 5. Queue self-tasks: {task: "...", source: 'self'}              │
-│ 6. May delegate tasks to workers                                │
-│ 7. Process queued tasks via AGENT conversation                  │
-│ 8. When done: extract knowledge, decide briefing                │
-│ 9. Schedule next run: now + 1 hour                              │
+│ 2. runWorkSession() starts                                      │
+│ 3. Create NEW THREAD for this session                           │
+│ 4. Check queue → empty                                          │
+│ 5. Load mission + memories                                      │
+│ 6. Add to thread: "What should I work on for my mission?"       │
+│ 7. LLM decides proactive work based on mission & learnings      │
+│ 8. Execute work in thread (search, delegate, etc.)              │
+│ 9. When done: extract knowledge from thread → memories          │
+│ 10. Mark thread completed                                       │
+│ 11. Decide briefing based on significance                       │
+│ 12. Schedule next run: now + 1 hour                             │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -346,14 +436,62 @@ Only return USER conversation (not agent conversation).
 │ BACKGROUND (Worker Process - Task Queued)                       │
 ├─────────────────────────────────────────────────────────────────┤
 │ 1. Task delegated by team lead → queue updated                  │
-│ 2. Worker picks up agent (has pending task)                     │
-│ 3. Process task via AGENT conversation                          │
-│ 4. Mark task complete, report to lead                           │
-│ 5. Check queue → empty                                          │
-│ 6. Extract knowledge → memories                                 │
-│ 7. NO briefing (workers can't send)                             │
-│ 8. NO scheduling (purely reactive)                              │
-│ 9. Go idle until next task queued                               │
+│ 2. notifyTaskQueued() triggers worker pickup                    │
+│ 3. runWorkSession() starts                                      │
+│ 4. Create NEW THREAD for this session                           │
+│ 5. Process task in thread                                       │
+│ 6. Mark task complete, report to lead                           │
+│ 7. Check queue → empty                                          │
+│ 8. Extract knowledge from thread → memories                     │
+│ 9. Mark thread completed                                        │
+│ 10. NO briefing (workers can't send)                            │
+│ 11. NO scheduling (purely reactive)                             │
+│ 12. Session ends, agent goes idle                               │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Thread Lifecycle
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│ THREAD LIFECYCLE                                                │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  ┌──────────┐    ┌──────────────────────────────────────┐       │
+│  │ Created  │───▶│ Active (processing tasks)            │       │
+│  └──────────┘    │                                      │       │
+│                  │  Messages accumulate:                │       │
+│                  │  - Agent adds task as "user"         │       │
+│                  │  - LLM responds as "assistant"       │       │
+│                  │  - Tool results added                │       │
+│                  │                                      │       │
+│                  │  If context limit approached:        │       │
+│                  │  ┌────────────────────────────┐      │       │
+│                  │  │ Compact: summarize history │      │       │
+│                  │  │ Replace with summary msg   │      │       │
+│                  │  │ Continue working           │      │       │
+│                  │  └────────────────────────────┘      │       │
+│                  └──────────────────────────────────────┘       │
+│                                    │                            │
+│                                    ▼                            │
+│                  ┌──────────────────────────────────────┐       │
+│                  │ Queue Empty → Extract Knowledge      │       │
+│                  │                                      │       │
+│                  │  - Review all thread messages        │       │
+│                  │  - Extract insights, learnings       │       │
+│                  │  - Persist to memories               │       │
+│                  │  - Agent "grows professionally"      │       │
+│                  └──────────────────────────────────────┘       │
+│                                    │                            │
+│                                    ▼                            │
+│                  ┌──────────────────────────────────────┐       │
+│                  │ Completed                            │       │
+│                  │                                      │       │
+│                  │  Thread marked completed             │       │
+│                  │  Can be cleaned up/archived later    │       │
+│                  │  Next session = NEW thread           │       │
+│                  └──────────────────────────────────────┘       │
+│                                                                 │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -363,24 +501,24 @@ Only return USER conversation (not agent conversation).
 
 | File | Changes |
 |------|---------|
-| `src/lib/db/schema.ts` | Add conversation type, task source, agent scheduling fields |
-| `src/lib/db/queries/conversations.ts` | getUserConversation, getAgentConversation |
+| `src/lib/db/schema.ts` | Add threads + threadMessages tables, task source, agent scheduling fields |
+| `src/lib/db/queries/threads.ts` | NEW: createThread, getThreadMessages, appendThreadMessage, compactThread, completeThread |
 | `src/lib/db/queries/agentTasks.ts` | queueTask, getOwnPendingTasks, hasQueuedWork |
 | `src/lib/db/queries/agents.ts` | scheduleNextRun, getAgentsDueToRun |
-| `src/lib/agents/agent.ts` | Major refactor: handleUserMessage, processTaskQueue, processTask, extractKnowledge, decideBriefing |
-| `src/lib/agents/conversation.ts` | Support for conversation types |
-| `src/lib/agents/memory.ts` | extractKnowledge function |
+| `src/lib/agents/agent.ts` | Major refactor: handleUserMessage, runWorkSession, processTaskInThread, extractKnowledgeFromThread, decideBriefing |
+| `src/lib/agents/thread.ts` | NEW: startWorkSession, addToThread, buildThreadContext, shouldCompact, compactIfNeeded |
+| `src/lib/agents/memory.ts` | extractKnowledgeFromThread function |
 | `src/worker/runner.ts` | Event-driven + timer-based scheduling |
 | `src/app/api/messages/route.ts` | Use handleUserMessage |
 | `src/app/api/teams/route.ts` | Bootstrap "get to work" task |
-| `src/app/api/conversations/[agentId]/route.ts` | Filter to user conversation |
+| `src/app/api/conversations/[agentId]/route.ts` | No changes needed (already returns user conversation)
 
 ---
 
 ## Implementation Order
 
 1. **Schema changes** (Tasks 1.1-1.4) - foundation for everything
-2. **Conversation management** (Tasks 2.1-2.2) - needed before agent refactor
+2. **Thread management** (Tasks 2.1-2.2) - new thread infrastructure
 3. **Task queue system** (Tasks 3.1-3.2) - needed before agent refactor
 4. **Agent lifecycle** (Tasks 4.1-4.5) - core behavior changes
 5. **Background worker** (Tasks 5.1-5.2) - execution infrastructure
@@ -395,43 +533,63 @@ Only return USER conversation (not agent conversation).
 ```bash
 npx drizzle-kit generate
 npx drizzle-kit migrate
-npx drizzle-kit studio  # Verify new columns
+npx drizzle-kit studio  # Verify new tables: threads, thread_messages
 ```
 
 ### 2. Unit Tests
+- Test `createThread()` creates new thread for agent
+- Test `appendThreadMessage()` adds message with correct sequence
+- Test `compactThread()` replaces messages with summary
 - Test `queueTask()` creates task with correct source
-- Test `getUserConversation()` vs `getAgentConversation()` return different records
-- Test `handleUserMessage()` queues task and returns minimal response
+- Test `handleUserMessage()` queues task and returns contextual ack
 
 ### 3. Integration Tests
 1. Create team → verify "get to work" task queued
-2. Send user message → verify task queued + minimal response
-3. Run worker → verify task processed via agent conversation
-4. Check queue empty → verify knowledge extracted
-5. Check team lead → verify briefing decision made
+2. Send user message → verify task queued + contextual response
+3. Run worker → verify NEW thread created for session
+4. Verify task processed via thread (not conversation)
+5. Check queue empty → verify knowledge extracted from thread
+6. Verify thread marked completed
+7. Check team lead → verify briefing decision made
+8. If briefing → verify inbox item + conversation message
 
 ### 4. End-to-End Test
 1. Start worker: `npx ts-node --project tsconfig.json src/worker/index.ts`
 2. Create new team via UI
-3. Verify team lead starts working (check logs)
+3. Verify team lead starts working (check logs for "new thread created")
 4. Send message to team lead
-5. Verify minimal response returned immediately
+5. Verify contextual response returned immediately
 6. Wait for background processing
-7. Check inbox for briefing (if significant)
-8. Check USER conversation has briefing content
-9. Check memories for extracted knowledge
+7. Verify thread completed and knowledge extracted
+8. Check inbox for briefing (if significant)
+9. Check USER conversation has briefing content
+10. Check memories for extracted professional learnings
+11. Wait 1 hour (or manually trigger) → verify team lead wakes up
+12. Verify NEW thread created for proactive work
+
+### 5. Thread Compaction Test
+1. Create task that requires many LLM exchanges
+2. Monitor thread message count
+3. Verify compaction triggers when approaching context limit
+4. Verify work continues after compaction
 
 ---
 
 ## Success Criteria
 
-- [ ] Conversations have type field (user/agent)
+- [ ] Threads table exists with proper schema
+- [ ] ThreadMessages table exists with proper schema
+- [ ] Each work session creates NEW thread
 - [ ] Tasks have source field (delegation/user/system/self)
-- [ ] User messages queue tasks, return minimal response
-- [ ] Background processes tasks via agent conversation
-- [ ] Knowledge extracted after queue cleared
+- [ ] User messages queue tasks, return contextual ack
+- [ ] Background processes tasks via thread (not conversation)
+- [ ] Mid-session compaction works when context limit approached
+- [ ] Knowledge extracted from thread after queue cleared
+- [ ] Thread marked completed after knowledge extraction
 - [ ] Team leads decide briefings (not automatic)
+- [ ] Briefings go to inbox (summary) + conversation (full)
 - [ ] Team leads have 1-hour proactive trigger
 - [ ] Workers are purely reactive (queue-triggered only)
 - [ ] New teams bootstrap with "get to work" task
-- [ ] UI shows only user conversation
+- [ ] Memories accumulate professional learnings over time
+- [ ] UI shows only user conversation (not threads)
