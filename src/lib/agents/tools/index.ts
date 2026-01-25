@@ -153,7 +153,8 @@ export const CreateInboxItemParamsSchema = z.object({
     .enum(['briefing', 'signal', 'alert'])
     .describe('The type of inbox item'),
   title: z.string().min(1).describe('The title of the inbox item'),
-  content: z.string().min(1).describe('The content of the inbox item'),
+  summary: z.string().min(1).describe('A brief summary for the inbox notification (1-2 sentences)'),
+  fullMessage: z.string().min(1).describe('The full message content to be added to the conversation'),
 });
 
 export const ReportToLeadParamsSchema = z.object({

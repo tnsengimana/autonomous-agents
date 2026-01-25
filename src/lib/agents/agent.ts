@@ -524,15 +524,29 @@ Keep the briefing concise (2-3 paragraphs max).`;
 
       const briefingContent = await this.handleMessageSync(briefingPrompt);
 
-      // Create inbox item
+      // Generate a summary for the inbox notification (first sentence or first 100 chars)
+      const summaryMatch = briefingContent.match(/^[^.!?]*[.!?]/);
+      const summary = summaryMatch
+        ? summaryMatch[0].trim()
+        : briefingContent.slice(0, 100) + '...';
+
+      // 1. Create inbox item with summary
       await createInboxItem({
         userId,
         teamId: this.teamId,
         agentId: this.id,
         type: 'briefing',
         title: `Daily Briefing from ${this.name}`,
-        content: briefingContent,
+        content: summary,
       });
+
+      // 2. Append full briefing to agent's conversation
+      const { getOrCreateConversation } = await import(
+        '@/lib/db/queries/conversations'
+      );
+      const { appendMessage } = await import('@/lib/db/queries/messages');
+      const conversation = await getOrCreateConversation(this.id);
+      await appendMessage(conversation.id, 'assistant', briefingContent);
 
       // Update last briefing time in memory
       const { createMemory, deleteMemory } = await import(

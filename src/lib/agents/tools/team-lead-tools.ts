@@ -14,6 +14,8 @@ import {
 import { createAgentTask } from '@/lib/db/queries/agentTasks';
 import { getChildAgents } from '@/lib/db/queries/agents';
 import { getTeamUserId } from '@/lib/db/queries/teams';
+import { getOrCreateConversation } from '@/lib/db/queries/conversations';
+import { appendMessage } from '@/lib/db/queries/messages';
 import { db } from '@/lib/db/client';
 import { inboxItems } from '@/lib/db/schema';
 
@@ -158,7 +160,7 @@ const createInboxItemTool: Tool = {
   schema: {
     name: 'createInboxItem',
     description:
-      "Push an item to the user's inbox. Use this to deliver briefings, signals, or alerts to the user.",
+      "Push a notification to the user's inbox and add the full message to your conversation. The inbox shows a summary that links to the conversation where the user can reply.",
     parameters: [
       {
         name: 'type',
@@ -174,9 +176,15 @@ const createInboxItemTool: Tool = {
         required: true,
       },
       {
-        name: 'content',
+        name: 'summary',
         type: 'string',
-        description: 'The full content/body of the inbox item',
+        description: 'A brief summary for the inbox notification (1-2 sentences)',
+        required: true,
+      },
+      {
+        name: 'fullMessage',
+        type: 'string',
+        description: 'The full message content to be added to the conversation',
         required: true,
       },
     ],
@@ -191,7 +199,7 @@ const createInboxItemTool: Tool = {
       };
     }
 
-    const { type, title, content } = parsed.data;
+    const { type, title, summary, fullMessage } = parsed.data;
 
     // Get the user ID for this team
     const userId = await getTeamUserId(context.teamId);
@@ -202,7 +210,7 @@ const createInboxItemTool: Tool = {
       };
     }
 
-    // Create the inbox item
+    // 1. Create the inbox item with summary
     const result = await db
       .insert(inboxItems)
       .values({
@@ -211,15 +219,19 @@ const createInboxItemTool: Tool = {
         agentId: context.agentId,
         type,
         title,
-        content,
+        content: summary,
       })
       .returning();
+
+    // 2. Append full message to agent's conversation
+    const conversation = await getOrCreateConversation(context.agentId);
+    await appendMessage(conversation.id, 'assistant', fullMessage);
 
     return {
       success: true,
       data: {
         inboxItemId: result[0].id,
-        message: `Created ${type} in user inbox: ${title}`,
+        message: `Created ${type} notification and added message to conversation: ${title}`,
       },
     };
   },
