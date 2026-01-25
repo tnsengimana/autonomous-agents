@@ -1,7 +1,7 @@
 import { createOpenAI } from '@ai-sdk/openai';
 import { createAnthropic } from '@ai-sdk/anthropic';
 import { createGoogleGenerativeAI } from '@ai-sdk/google';
-import { streamText, generateText, generateObject } from 'ai';
+import { streamText, generateText, generateObject, stepCountIs, type Tool as AITool } from 'ai';
 import { z } from 'zod';
 import {
   getUserApiKeyForProvider,
@@ -9,6 +9,12 @@ import {
 } from '@/lib/db/queries/userApiKeys';
 import { getTeamUserId } from '@/lib/db/queries/teams';
 import type { LLMProvider, LLMMessage } from '@/lib/types';
+import {
+  type Tool,
+  type ToolContext,
+  type ToolParameter,
+  executeTool,
+} from '@/lib/agents/tools';
 
 // ============================================================================
 // Configuration
@@ -131,6 +137,113 @@ export interface GenerateOptions extends StreamOptions {
   schema?: z.ZodType;
 }
 
+export interface StreamWithToolsOptions extends StreamOptions {
+  tools: Tool[];
+  toolContext: ToolContext;
+  maxSteps?: number;
+}
+
+export interface StreamWithToolsResult {
+  textStream: AsyncIterable<string>;
+  fullResponse: Promise<{
+    text: string;
+    toolCalls: Array<{
+      toolName: string;
+      args: Record<string, unknown>;
+    }>;
+    toolResults: Array<{
+      toolName: string;
+      result: unknown;
+    }>;
+  }>;
+}
+
+// ============================================================================
+// Tool Format Conversion
+// ============================================================================
+
+/**
+ * Convert a ToolParameter type to a Zod schema type
+ */
+function parameterTypeToZod(param: ToolParameter): z.ZodTypeAny {
+  let schema: z.ZodTypeAny;
+
+  switch (param.type) {
+    case 'string':
+      if (param.enum && param.enum.length > 0) {
+        // Create enum schema for parameters with enum values
+        schema = z.enum(param.enum as [string, ...string[]]);
+      } else {
+        schema = z.string();
+      }
+      break;
+    case 'number':
+      schema = z.number();
+      break;
+    case 'boolean':
+      schema = z.boolean();
+      break;
+    case 'object':
+      schema = z.record(z.string(), z.unknown());
+      break;
+    case 'array':
+      schema = z.array(z.unknown());
+      break;
+    default:
+      schema = z.unknown();
+  }
+
+  // Add description
+  schema = schema.describe(param.description);
+
+  // Make optional if not required
+  if (param.required === false) {
+    schema = schema.optional();
+  }
+
+  return schema;
+}
+
+/**
+ * Convert Tool[] to Vercel AI SDK's tool format
+ *
+ * The Vercel AI SDK expects tools as a Record<string, Tool> where each Tool has:
+ * - description: string (optional)
+ * - inputSchema: Zod schema or JSON schema
+ * - execute: async function
+ */
+function convertToolsToVercelFormat(
+  tools: Tool[],
+  toolContext: ToolContext
+): Record<string, AITool<Record<string, unknown>, unknown>> {
+  const vercelTools: Record<string, AITool<Record<string, unknown>, unknown>> = {};
+
+  for (const tool of tools) {
+    const { schema } = tool;
+
+    // Build Zod schema from parameters
+    const schemaShape: Record<string, z.ZodTypeAny> = {};
+    for (const param of schema.parameters) {
+      schemaShape[param.name] = parameterTypeToZod(param);
+    }
+
+    const parametersSchema = z.object(schemaShape);
+
+    // Create Tool with inputSchema and execute function
+    // The AITool type uses inputSchema (not parameters) in newer AI SDK versions
+    vercelTools[schema.name] = {
+      description: schema.description,
+      inputSchema: parametersSchema,
+      execute: async (args: Record<string, unknown>) => {
+        const result = await executeTool(schema.name, args, toolContext);
+        return result;
+      },
+    };
+  }
+
+  return vercelTools;
+}
+
 /**
  * Stream a response from the LLM
  */
@@ -198,6 +311,126 @@ export async function streamLLMResponse(
     });
 
     return result.textStream;
+  }
+
+  throw new Error(`Unsupported provider: ${provider}`);
+}
+
+/**
+ * Stream a response from the LLM with tool calling support
+ *
+ * This function enables multi-turn tool calling where the model can:
+ * 1. Call tools to gather information or take actions
+ * 2. Receive tool results and continue reasoning
+ * 3. Repeat until it produces a final text response
+ *
+ * @param messages - The conversation history
+ * @param systemPrompt - The system prompt for the agent (can be undefined)
+ * @param options - Configuration including tools and tool context
+ * @returns StreamWithToolsResult with both the text stream and a promise for the full response
+ */
+export async function streamLLMResponseWithTools(
+  messages: LLMMessage[],
+  systemPrompt: string | undefined,
+  options: StreamWithToolsOptions
+): Promise<StreamWithToolsResult> {
+  const { tools, toolContext, maxSteps = 5 } = options;
+
+  // Mock mode for development - just return text without tool calls
+  if (MOCK_ENABLED) {
+    const mockStream = mockStreamResponse();
+    return {
+      textStream: mockStream,
+      fullResponse: Promise.resolve({
+        text: getMockResponse(),
+        toolCalls: [],
+        toolResults: [],
+      }),
+    };
+  }
+
+  // Auto-detect provider if not specified
+  let provider = options.provider;
+  if (!provider) {
+    provider = await getDefaultProvider(options.userId);
+    if (!provider) {
+      throw new Error('No LLM provider available. Please configure an API key.');
+    }
+  }
+
+  // Get userId from teamId if not directly provided
+  let userId = options.userId;
+  if (!userId && options.teamId) {
+    userId = (await getTeamUserId(options.teamId)) ?? undefined;
+  }
+
+  const model = options.model ?? DEFAULT_MODEL[provider];
+
+  // Convert tools to Vercel AI SDK format
+  const vercelTools = convertToolsToVercelFormat(tools, toolContext);
+
+  // Helper to call streamText with tools for any provider
+  async function callStreamTextWithTools(
+    providerModel: ReturnType<
+      | ReturnType<typeof createOpenAI>
+      | ReturnType<typeof createAnthropic>
+      | ReturnType<typeof createGoogleGenerativeAI>
+    >
+  ) {
+    const result = streamText({
+      model: providerModel,
+      messages,
+      system: systemPrompt,
+      temperature: options.temperature,
+      maxOutputTokens: options.maxOutputTokens,
+      tools: vercelTools,
+      toolChoice: 'auto',
+      // stopWhen controls how many tool-calling rounds can happen
+      // Default is stepCountIs(1) which stops after first step
+      // We allow up to maxSteps for multi-turn tool calling
+      stopWhen: stepCountIs(maxSteps),
+    });
+
+    // Create a wrapper that extracts tool call information
+    const fullResponsePromise = (async () => {
+      // Wait for the stream to complete and get the full response
+      const response = await result;
+      const text = await response.text;
+      const toolCallsRaw = await response.toolCalls;
+      const toolResultsRaw = await response.toolResults;
+
+      return {
+        text,
+        toolCalls: (toolCallsRaw || []).map((tc) => ({
+          toolName: tc.toolName,
+          args: tc.input as Record<string, unknown>,
+        })),
+        toolResults: (toolResultsRaw || []).map((tr) => ({
+          toolName: tr.toolName,
+          result: tr.output,
+        })),
+      };
+    })();
+
+    return {
+      textStream: result.textStream,
+      fullResponse: fullResponsePromise,
+    };
+  }
+
+  if (provider === 'openai') {
+    const openai = await createOpenAIProvider(userId);
+    return callStreamTextWithTools(openai(model));
+  }
+
+  if (provider === 'anthropic') {
+    const anthropic = await createAnthropicProvider(userId);
+    return callStreamTextWithTools(anthropic(model));
+  }
+
+  if (provider === 'google') {
+    const google = await createGoogleProvider(userId);
+    return callStreamTextWithTools(google(model));
   }
 
   throw new Error(`Unsupported provider: ${provider}`);
