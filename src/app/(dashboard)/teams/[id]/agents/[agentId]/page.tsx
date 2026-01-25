@@ -4,14 +4,18 @@ import { Button } from '@/components/ui/button';
 import {
   Card,
   CardContent,
+  CardDescription,
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { auth } from '@/lib/auth/config';
 import { getTeamById } from '@/lib/db/queries/teams';
 import { getAgentById } from '@/lib/db/queries/agents';
+import { getRecentMemories } from '@/lib/db/queries/memories';
 import { Chat } from '@/components/chat';
+import type { MemoryType } from '@/lib/types';
 
 export default async function AgentDetailPage({
   params,
@@ -38,10 +42,42 @@ export default async function AgentDetailPage({
     notFound();
   }
 
+  // Get recent memories for this agent (limit to 20)
+  const memories = await getRecentMemories(agentId, 20);
+
   const agentType = agent.parentAgentId === null ? 'lead' : 'worker';
 
+  // Helper function to get badge variant for memory type
+  const getMemoryTypeBadgeVariant = (type: MemoryType) => {
+    switch (type) {
+      case 'insight':
+        return 'default';
+      case 'preference':
+        return 'secondary';
+      case 'fact':
+        return 'outline';
+      default:
+        return 'outline';
+    }
+  };
+
+  // Helper function to format date nicely
+  const formatDate = (date: Date) => {
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffMins = Math.floor(diffMs / (1000 * 60));
+    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+    if (diffMins < 1) return 'just now';
+    if (diffMins < 60) return `${diffMins}m ago`;
+    if (diffHours < 24) return `${diffHours}h ago`;
+    if (diffDays < 7) return `${diffDays}d ago`;
+    return date.toLocaleDateString();
+  };
+
   return (
-    <div className="flex h-[calc(100vh-8rem)] flex-col space-y-4">
+    <div className="flex flex-col space-y-4">
       <div className="flex items-center justify-between">
         <div>
           <Link
@@ -63,7 +99,7 @@ export default async function AgentDetailPage({
         <Button variant="outline">Edit Agent</Button>
       </div>
 
-      <div className="grid flex-1 gap-4 lg:grid-cols-2">
+      <div className="grid gap-4 lg:grid-cols-2">
         {/* Agent Info */}
         <Card>
           <CardHeader>
@@ -101,6 +137,47 @@ export default async function AgentDetailPage({
           description={`Chat directly with ${agent.name}`}
         />
       </div>
+
+      {/* Memories Section */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Memories</CardTitle>
+          <CardDescription>
+            What this agent has learned from conversations
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {memories.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              No memories yet. Start a conversation to help this agent learn.
+            </p>
+          ) : (
+            <ScrollArea className="h-[300px]">
+              <div className="space-y-3 pr-4">
+                {memories.map((memory) => (
+                  <div
+                    key={memory.id}
+                    className="rounded-lg border bg-muted/30 p-3"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <p className="flex-1 text-sm">{memory.content}</p>
+                      <Badge
+                        variant={getMemoryTypeBadgeVariant(memory.type as MemoryType)}
+                        className="shrink-0"
+                      >
+                        {memory.type}
+                      </Badge>
+                    </div>
+                    <p className="mt-2 text-xs text-muted-foreground">
+                      {formatDate(memory.createdAt)}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </ScrollArea>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }
