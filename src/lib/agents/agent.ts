@@ -7,7 +7,8 @@ import {
   addAssistantMessage,
   trimMessagesToTokenBudget,
 } from './conversation';
-import { streamLLMResponse, type StreamOptions } from './llm';
+import { streamLLMResponse, streamLLMResponseWithTools, type StreamOptions } from './llm';
+import { getTeamLeadTools, type ToolContext } from './tools';
 import {
   extractAndPersistMemories,
   buildMemoryContextBlock,
@@ -25,6 +26,10 @@ import type {
 
 const DEFAULT_MAX_CONTEXT_TOKENS = 8000;
 const DEFAULT_MAX_RESPONSE_TOKENS = 2000;
+
+// Proactive cycle intervals
+const BRIEFING_INTERVAL_HOURS = 1;
+const RESEARCH_INTERVAL_MINUTES = 60;
 
 // ============================================================================
 // Agent Class
@@ -320,8 +325,131 @@ Always be professional, concise, and focused on your role.`;
       await processWorkerPendingTasks(child.id);
     }
 
-    // 3. Check if we should generate a proactive briefing
+    // 3. Run research cycle to gather market insights
+    await this.runResearchCycle();
+
+    // 4. Check if we should generate a proactive briefing
     await this.maybeGenerateProactiveBriefing();
+  }
+
+  /**
+   * Run a research cycle to proactively gather market insights
+   *
+   * This method:
+   * 1. Loads user preferences from memories
+   * 2. Calls tavilySearch for relevant market news
+   * 3. If significant findings, delegates deep research to workers
+   * 4. Uses createInboxItem to push insights to the user
+   */
+  private async runResearchCycle(): Promise<void> {
+    // Import dynamically to avoid circular dependencies
+    const { getMemoriesByAgentId, createMemory, deleteMemory } = await import(
+      '@/lib/db/queries/memories'
+    );
+
+    // Check for last research time
+    const memories = await getMemoriesByAgentId(this.id);
+    const lastResearchMemory = memories.find(
+      (m) => m.type === 'fact' && m.content.startsWith('LAST_RESEARCH:')
+    );
+
+    // Parse the last research timestamp
+    let lastResearchTime: Date | null = null;
+    if (lastResearchMemory) {
+      const timestampStr = lastResearchMemory.content.replace(
+        'LAST_RESEARCH:',
+        ''
+      );
+      lastResearchTime = new Date(timestampStr);
+    }
+
+    // Calculate minutes since last research
+    const now = new Date();
+    const minutesSinceLastResearch = lastResearchTime
+      ? (now.getTime() - lastResearchTime.getTime()) / (1000 * 60)
+      : Infinity;
+
+    if (minutesSinceLastResearch < RESEARCH_INTERVAL_MINUTES) {
+      return; // Not time for research yet
+    }
+
+    console.log(`[Agent ${this.name}] Running research cycle...`);
+
+    try {
+      // Load memories to get user preferences
+      await this.loadMemories();
+
+      // Extract user preferences from memories
+      const userPreferences = this.memories
+        .filter(
+          (m) =>
+            m.type === 'preference' ||
+            (m.type === 'fact' && !m.content.startsWith('LAST_'))
+        )
+        .map((m) => m.content)
+        .join('\n');
+
+      // Create tool context
+      const toolContext: ToolContext = {
+        agentId: this.id,
+        teamId: this.teamId,
+        isTeamLead: true,
+      };
+
+      // Get team lead tools
+      const tools = getTeamLeadTools();
+
+      // Build research prompt based on user preferences
+      const researchPrompt = `You are conducting proactive research on behalf of the user. Based on the user's preferences and interests, search for relevant market news and insights.
+
+User preferences and context:
+${userPreferences || 'No specific preferences recorded yet. Focus on general market trends and news.'}
+
+Your role: ${this.role}
+
+Instructions:
+1. Use the tavilySearch tool to search for relevant news and information based on the user's interests
+2. If you find significant findings that warrant deeper investigation, use delegateToAgent to assign research to a worker (if available)
+3. If you find noteworthy insights, use createInboxItem to push a signal or alert to the user
+4. Keep your findings focused and actionable
+
+Be concise and only push insights that are truly valuable to the user. Do not create inbox items for routine or minor updates.`;
+
+      // Build message for tool-enabled LLM call
+      const messages: LLMMessage[] = [{ role: 'user', content: researchPrompt }];
+
+      // Call LLM with tools
+      const result = await streamLLMResponseWithTools(
+        messages,
+        this.buildSystemPrompt(),
+        {
+          ...this.llmOptions,
+          tools,
+          toolContext,
+          maxSteps: 5,
+        }
+      );
+
+      // Consume the stream to let tool calls execute
+      const fullResponse = await result.fullResponse;
+
+      console.log(
+        `[Agent ${this.name}] Research cycle completed. Tool calls: ${fullResponse.toolCalls.length}`
+      );
+
+      // Update last research time in memory
+      if (lastResearchMemory) {
+        await deleteMemory(lastResearchMemory.id);
+      }
+
+      await createMemory({
+        agentId: this.id,
+        type: 'fact',
+        content: `LAST_RESEARCH:${now.toISOString()}`,
+      });
+    } catch (error) {
+      console.error(`[Agent ${this.name}] Research cycle failed:`, error);
+    }
   }
 
   /**
@@ -354,9 +482,6 @@ Always be professional, concise, and focused on your role.`;
     const hoursSinceLastBriefing = lastBriefingTime
       ? (now.getTime() - lastBriefingTime.getTime()) / (1000 * 60 * 60)
       : Infinity;
-
-    // Generate a briefing every 24 hours (configurable)
-    const BRIEFING_INTERVAL_HOURS = 24;
 
     if (hoursSinceLastBriefing < BRIEFING_INTERVAL_HOURS) {
       return; // Not time for a briefing yet
