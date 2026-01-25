@@ -342,14 +342,16 @@ Always be professional, concise, and focused on your role.`;
    * 4. Uses createInboxItem to push insights to the user
    */
   private async runResearchCycle(): Promise<void> {
-    // Import dynamically to avoid circular dependencies
-    const { getMemoriesByAgentId, createMemory, deleteMemory } = await import(
+    // Import dynamically to avoid circular dependencies (createMemory, deleteMemory not imported at top)
+    const { createMemory, deleteMemory } = await import(
       '@/lib/db/queries/memories'
     );
 
+    // Load memories once and reuse for both timing check and preferences
+    await this.loadMemories();
+
     // Check for last research time
-    const memories = await getMemoriesByAgentId(this.id);
-    const lastResearchMemory = memories.find(
+    const lastResearchMemory = this.memories.find(
       (m) => m.type === 'fact' && m.content.startsWith('LAST_RESEARCH:')
     );
 
@@ -376,10 +378,7 @@ Always be professional, concise, and focused on your role.`;
     console.log(`[Agent ${this.name}] Running research cycle...`);
 
     try {
-      // Load memories to get user preferences
-      await this.loadMemories();
-
-      // Extract user preferences from memories
+      // Extract user preferences from memories (already loaded above)
       const userPreferences = this.memories
         .filter(
           (m) =>
@@ -398,6 +397,14 @@ Always be professional, concise, and focused on your role.`;
 
       // Get team lead tools
       const tools = getTeamLeadTools();
+
+      // Skip if no tools are registered (tools must be registered by worker runner)
+      if (tools.length === 0) {
+        console.warn(
+          `[Agent ${this.name}] No tools registered, skipping research cycle`
+        );
+        return;
+      }
 
       // Build research prompt based on user preferences
       const researchPrompt = `You are conducting proactive research on behalf of the user. Based on the user's preferences and interests, search for relevant market news and insights.
