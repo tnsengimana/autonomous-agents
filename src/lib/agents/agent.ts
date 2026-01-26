@@ -1,14 +1,17 @@
+import { eq } from 'drizzle-orm';
 import { getAgentById, updateAgentStatus } from '@/lib/db/queries/agents';
 import { getMemoriesByAgentId } from '@/lib/db/queries/memories';
 import { getOrCreateConversation } from '@/lib/db/queries/conversations';
 import {
   getConversationContext,
-  appendMessage,
+  createTurnMessages,
+  createTurnMessagesInTransaction,
 } from '@/lib/db/queries/messages';
+import { db } from '@/lib/db/client';
+import { agentTasks } from '@/lib/db/schema';
 import {
   getActiveConversation,
   buildMessageContext,
-  addUserMessage,
   addAssistantMessage,
   trimMessagesToTokenBudget,
   loadConversationHistory,
@@ -37,6 +40,7 @@ import {
 } from './knowledge-items';
 import { compactIfNeeded } from './compaction';
 import { queueUserTask, claimNextTask, getQueueStatus } from './taskQueue';
+import { clearAgentBackoff, setAgentBackoff } from '@/lib/db/queries/agents';
 import type {
   Agent as AgentData,
   AgentTask,
@@ -383,10 +387,7 @@ Examples:
     await this.loadMemories();
     const conversation = await this.ensureConversation();
 
-    // 2. Add user message to conversation
-    await addUserMessage(conversation.id, content);
-
-    // 3. Classify intent
+    // 2. Classify intent
     const intent = await this.classifyUserIntent(content);
 
     let response: string;
@@ -394,19 +395,28 @@ Examples:
     if (intent === 'work_request') {
       // 4a. Work request: Quick ack + queue task
       response = await this.generateWorkAcknowledgment(content);
-      await addAssistantMessage(conversation.id, response);
-      await queueUserTask(this.id, this.getOwnerInfo(), content);
     } else {
       // 4b. Regular chat: Full response with tools
       response = await this.generateChatResponse(content, conversation);
-      await addAssistantMessage(conversation.id, response);
       // No task queued
     }
 
-    // 5. Extract memories in background
-    this.extractMemoriesInBackground(content, response, '');
+    // 5. Persist full turn atomically
+    const { assistantMessage } = await createTurnMessages(
+      conversation.id,
+      { role: 'user', content },
+      { role: 'assistant', content: response }
+    );
 
-    // 6. Return response as stream
+    // 6. Queue background task only after persistence succeeds
+    if (intent === 'work_request') {
+      await queueUserTask(this.id, this.getOwnerInfo(), content);
+    }
+
+    // 7. Extract memories in background
+    this.extractMemoriesInBackground(content, response, assistantMessage.id);
+
+    // 8. Return response as stream
     return this.streamResponse(response);
   }
 
@@ -453,6 +463,9 @@ Examples:
 
     await this.setStatus('running');
 
+    let processedAnyTasks = false;
+    let encounteredFailure = false;
+
     try {
       // 1. Get or create background conversation for this agent
       const backgroundConversation = await getOrCreateConversation(this.id, 'background');
@@ -468,6 +481,8 @@ Examples:
 
         try {
           const result = await this.processTask(conversationId, task);
+          processedAnyTasks = true;
+          await clearAgentBackoff(this.id);
           console.log(
             `[Agent ${this.name}] Task ${task.id} completed: ${result.slice(0, 100)}...`
           );
@@ -476,19 +491,27 @@ Examples:
             `[Agent ${this.name}] Task ${task.id} failed:`,
             error
           );
-          // Mark task as failed
-          const { failTask } = await import('@/lib/db/queries/agentTasks');
-          const errorMessage =
-            error instanceof Error ? error.message : 'Unknown error';
-          await failTask(task.id, errorMessage);
+          await this.scheduleBackoff();
+          encounteredFailure = true;
+          break;
         }
 
         // Get next task
         task = await claimNextTask(this.id);
       }
 
-      // 4. Queue empty - wrap up the session
-      console.log(`[Agent ${this.name}] All tasks processed, wrapping up session`);
+      if (!processedAnyTasks) {
+        console.log(`[Agent ${this.name}] No tasks processed, skipping wrap-up`);
+        return;
+      }
+
+      if (encounteredFailure) {
+        console.log(
+          `[Agent ${this.name}] Task failed; backoff scheduled, leaving remaining tasks pending`
+        );
+      } else {
+        console.log(`[Agent ${this.name}] All tasks processed, wrapping up session`);
+      }
 
       // Extract knowledge from background conversation
       const conversationMessages = await getConversationContext(conversationId);
@@ -508,7 +531,7 @@ Examples:
       }
 
       // Schedule next run (team lead: 1 day, subordinate: none - triggered by delegation)
-      if (this.isTeamLead()) {
+      if (this.isTeamLead() && !encounteredFailure) {
         await this.scheduleNextRun(TEAM_LEAD_NEXT_RUN_HOURS);
       }
     } catch (error) {
@@ -524,11 +547,14 @@ Examples:
   async processTask(conversationId: string, task: AgentTask): Promise<string> {
     // 1. Add task as "user" message to conversation (agent is the user here)
     const taskMessage = `Task from ${task.source}: ${task.task}`;
-    await appendMessage(conversationId, 'user', taskMessage);
 
     // 2. Build context from conversation messages + KNOWLEDGE
     const contextMessages = await getConversationContext(conversationId);
     const systemPrompt = this.buildBackgroundSystemPrompt();
+    const contextWithTask: LLMMessage[] = [
+      ...this.messagesToLLMFormat(contextMessages),
+      { role: 'user', content: taskMessage },
+    ];
 
     // 3. Get tools for background work
     const tools = getBackgroundTools(this.isTeamLead());
@@ -541,7 +567,7 @@ Examples:
 
     // 4. Call LLM with tools
     const result = await streamLLMResponseWithTools(
-      this.messagesToLLMFormat(contextMessages),
+      contextWithTask,
       systemPrompt,
       {
         ...this.llmOptions,
@@ -555,21 +581,55 @@ Examples:
     // 5. Consume stream and get response
     const fullResponse = await result.fullResponse;
 
-    // 6. Add response to conversation
-    // Note: Tool calls and results are currently handled inline during the LLM call.
-    // The fullResponse.text contains the final response after tool execution.
-    // Tool call tracking with toolCallId will be enhanced in a future update
-    // when the LLM module supports returning toolCallIds.
-    await appendMessage(conversationId, 'assistant', fullResponse.text);
+    // 6. Persist task turn + completion atomically
+    await db.transaction(async (tx) => {
+      await createTurnMessagesInTransaction(
+        tx,
+        conversationId,
+        { role: 'user', content: taskMessage },
+        { role: 'assistant', content: fullResponse.text }
+      );
+      await tx
+        .update(agentTasks)
+        .set({
+          status: 'completed',
+          result: fullResponse.text,
+          completedAt: new Date(),
+        })
+        .where(eq(agentTasks.id, task.id));
+    });
 
     // 7. Check if should compact conversation
     await compactIfNeeded(conversationId, MAX_MESSAGES_BEFORE_COMPACT, this.llmOptions);
 
-    // 9. Mark task complete with result
-    const { completeTaskWithResult } = await import('@/lib/db/queries/agentTasks');
-    await completeTaskWithResult(task.id, fullResponse.text);
-
     return fullResponse.text;
+  }
+
+  /**
+   * Compute exponential backoff delay with jitter.
+   */
+  private computeBackoffDelayMs(attempt: number): number {
+    const baseDelayMs = 60 * 1000; // 1 minute
+    const maxDelayMs = 24 * 60 * 60 * 1000; // 24 hours
+    const exponential = baseDelayMs * Math.pow(2, Math.max(0, attempt - 1));
+    const jitter = Math.random() * (baseDelayMs * 0.2);
+    return Math.min(maxDelayMs, exponential + jitter);
+  }
+
+  /**
+   * Set agent backoff after a failed task attempt.
+   */
+  private async scheduleBackoff(): Promise<void> {
+    const agent = await getAgentById(this.id);
+    const nextAttempt = (agent?.backoffAttemptCount ?? 0) + 1;
+    const delayMs = this.computeBackoffDelayMs(nextAttempt);
+    const nextRun = new Date(Date.now() + delayMs);
+
+    await setAgentBackoff(this.id, nextAttempt, nextRun);
+
+    console.log(
+      `[Agent ${this.name}] Backing off until ${nextRun.toISOString()} (attempt ${nextAttempt})`
+    );
   }
 
   /**
@@ -771,9 +831,6 @@ If briefing is warranted, provide:
     await this.loadMemories();
     const conversation = await this.ensureConversation();
 
-    // Add user message to conversation
-    await addUserMessage(conversation.id, content);
-
     // Build context
     const context = await this.buildContext();
     const systemPrompt = this.buildSystemPrompt();
@@ -805,10 +862,11 @@ If briefing is warranted, provide:
         yield chunk;
       }
 
-      // After streaming completes, persist the response and extract memories
-      const assistantMessage = await addAssistantMessage(
+      // After streaming completes, persist the full turn and extract memories
+      const { assistantMessage } = await createTurnMessages(
         conversation.id,
-        fullResponse
+        { role: 'user', content },
+        { role: 'assistant', content: fullResponse }
       );
 
       // Extract and persist memories (async, don't block)

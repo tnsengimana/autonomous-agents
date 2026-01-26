@@ -122,11 +122,14 @@ export const agents = pgTable('agents', {
   systemPrompt: text('system_prompt'),
   status: text('status').notNull().default('idle'), // 'idle', 'running', 'paused'
   nextRunAt: timestamp('next_run_at', { mode: 'date' }),
+  backoffNextRunAt: timestamp('backoff_next_run_at', { mode: 'date' }),
+  backoffAttemptCount: integer('backoff_attempt_count').notNull().default(0),
   lastCompletedAt: timestamp('last_completed_at', { mode: 'date' }),
   createdAt: timestamp('created_at', { mode: 'date' }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { mode: 'date' }).defaultNow().notNull(),
 }, (table) => [
   index('agents_next_run_at_idx').on(table.nextRunAt),
+  index('agents_backoff_next_run_at_idx').on(table.backoffNextRunAt),
   index('agents_aide_id_idx').on(table.aideId),
 ]);
 
@@ -201,7 +204,7 @@ export const agentTasks = pgTable('agent_tasks', {
     .references(() => agents.id, { onDelete: 'cascade' }),
   task: text('task').notNull(),
   result: text('result'),
-  status: text('status').notNull().default('pending'), // 'pending', 'in_progress', 'completed', 'failed'
+  status: text('status').notNull().default('pending'), // 'pending', 'completed', 'failed'
   source: text('source').notNull().default('delegation'), // 'delegation' | 'user' | 'system' | 'self'
   createdAt: timestamp('created_at', { mode: 'date' }).defaultNow().notNull(),
   completedAt: timestamp('completed_at', { mode: 'date' }),

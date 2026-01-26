@@ -108,6 +108,8 @@ The system separates user interactions (foreground) from agent work (background)
 - **Conversation compaction**: Summary messages compress old context via linked list (`previousMessageId`). Context loading returns latest summary + recent messages.
 - **Professional growth**: Knowledge items accumulate as expertise from background work sessions
 - **Atomic turns + retries**: Persist user+assistant messages together; only complete tasks after turn is saved, with exponential backoff for task retries
+- **Worker assumption**: Single worker per agent queue; concurrent workers would require locking changes
+- **Backoff gating**: `agents.backoffNextRunAt` + `backoffAttemptCount` gate retries for queued tasks and scheduled runs
 
 ## Autonomous Operation
 

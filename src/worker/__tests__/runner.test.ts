@@ -114,7 +114,7 @@ async function cleanupTasks(taskIds: string[]) {
 // Helper to reset agent nextRunAt
 async function resetAgentNextRunAt(agentId: string) {
   await db.update(agents)
-    .set({ nextRunAt: null })
+    .set({ nextRunAt: null, backoffNextRunAt: null, backoffAttemptCount: 0 })
     .where(eq(agents.id, agentId));
 }
 
@@ -144,26 +144,27 @@ describe('getAgentsWithPendingTasks', () => {
     await cleanupTasks([task.id]);
   });
 
-  test('returns agent IDs with in_progress tasks', async () => {
-    const task = await queueUserTask(testSubordinateId, teamOwnerInfo(testTeamId), 'In progress task');
+  test('excludes agents in backoff', async () => {
+    const task = await queueUserTask(testSubordinateId, teamOwnerInfo(testTeamId), 'Pending task');
+    const futureDate = new Date(Date.now() + 60 * 60 * 1000);
 
-    // Start the task to make it in_progress
-    const { startTask } = await import('@/lib/db/queries/agentTasks');
-    await startTask(task.id);
+    await db.update(agents)
+      .set({ backoffNextRunAt: futureDate, backoffAttemptCount: 1 })
+      .where(eq(agents.id, testSubordinateId));
 
     const agentIds = await getAgentsWithPendingTasks();
 
-    expect(agentIds).toContain(testSubordinateId);
+    expect(agentIds).not.toContain(testSubordinateId);
 
     await cleanupTasks([task.id]);
+    await resetAgentNextRunAt(testSubordinateId);
   });
 
   test('does not return agents with only completed tasks', async () => {
     const task = await queueUserTask(testSubordinateId, teamOwnerInfo(testTeamId), 'Completed task');
 
     // Complete the task
-    const { startTask, completeTaskWithResult } = await import('@/lib/db/queries/agentTasks');
-    await startTask(task.id);
+    const { completeTaskWithResult } = await import('@/lib/db/queries/agentTasks');
     await completeTaskWithResult(task.id, 'Done');
 
     const agentIds = await getAgentsWithPendingTasks();
@@ -220,6 +221,20 @@ describe('getTeamLeadsDueToRun', () => {
     const teamLeadIds = await getTeamLeadsDueToRun();
 
     expect(teamLeadIds).toContain(testTeamLeadId);
+  });
+
+  test('excludes team leads in backoff', async () => {
+    const pastDate = new Date(Date.now() - 1000);
+    const futureBackoff = new Date(Date.now() + 60 * 60 * 1000);
+    await updateAgentNextRunAt(testTeamLeadId, pastDate);
+    await db.update(agents)
+      .set({ backoffNextRunAt: futureBackoff, backoffAttemptCount: 1 })
+      .where(eq(agents.id, testTeamLeadId));
+
+    const teamLeadIds = await getTeamLeadsDueToRun();
+    expect(teamLeadIds).not.toContain(testTeamLeadId);
+
+    await resetAgentNextRunAt(testTeamLeadId);
   });
 
   test('does not return subordinates even if they have nextRunAt set', async () => {

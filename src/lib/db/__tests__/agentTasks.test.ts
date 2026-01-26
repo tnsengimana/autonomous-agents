@@ -16,13 +16,10 @@ import {
   getOwnPendingTasks,
   hasQueuedWork,
   getNextTask,
-  startTask,
   completeTaskWithResult,
   failTask,
   createAgentTask,
   getAgentTaskById,
-  getInProgressTasksForAgent,
-  getActionableTasksForAgent,
   type TaskOwnerInfo,
 } from '@/lib/db/queries/agentTasks';
 
@@ -214,23 +211,9 @@ describe('getOwnPendingTasks', () => {
     await cleanupTasks([task1.id, task2.id, task3.id]);
   });
 
-  test('excludes in_progress tasks', async () => {
-    const pendingTask = await queueTask(testAgentId, teamOwnerInfo(testTeamId), 'Pending', 'user');
-    const inProgressTask = await queueTask(testAgentId, teamOwnerInfo(testTeamId), 'In progress', 'user');
-    await startTask(inProgressTask.id);
-
-    const tasks = await getOwnPendingTasks(testAgentId);
-
-    expect(tasks.some(t => t.id === pendingTask.id)).toBe(true);
-    expect(tasks.some(t => t.id === inProgressTask.id)).toBe(false);
-
-    await cleanupTasks([pendingTask.id, inProgressTask.id]);
-  });
-
   test('excludes completed tasks', async () => {
     const pendingTask = await queueTask(testAgentId, teamOwnerInfo(testTeamId), 'Pending', 'user');
     const completedTask = await queueTask(testAgentId, teamOwnerInfo(testTeamId), 'Completed', 'user');
-    await startTask(completedTask.id);
     await completeTaskWithResult(completedTask.id, 'Done');
 
     const tasks = await getOwnPendingTasks(testAgentId);
@@ -244,7 +227,6 @@ describe('getOwnPendingTasks', () => {
   test('excludes failed tasks', async () => {
     const pendingTask = await queueTask(testAgentId, teamOwnerInfo(testTeamId), 'Pending', 'user');
     const failedTask = await queueTask(testAgentId, teamOwnerInfo(testTeamId), 'Failed', 'user');
-    await startTask(failedTask.id);
     await failTask(failedTask.id, 'Error occurred');
 
     const tasks = await getOwnPendingTasks(testAgentId);
@@ -290,30 +272,8 @@ describe('hasQueuedWork', () => {
     await cleanupTasks([task.id]);
   });
 
-  test('returns true when in_progress tasks exist', async () => {
-    const task = await queueTask(testAgentId, teamOwnerInfo(testTeamId), 'In progress task', 'user');
-    await startTask(task.id);
-
-    const hasWork = await hasQueuedWork(testAgentId);
-    expect(hasWork).toBe(true);
-
-    await cleanupTasks([task.id]);
-  });
-
-  test('returns true when both pending and in_progress tasks exist', async () => {
-    const pendingTask = await queueTask(testAgentId, teamOwnerInfo(testTeamId), 'Pending', 'user');
-    const inProgressTask = await queueTask(testAgentId, teamOwnerInfo(testTeamId), 'In progress', 'user');
-    await startTask(inProgressTask.id);
-
-    const hasWork = await hasQueuedWork(testAgentId);
-    expect(hasWork).toBe(true);
-
-    await cleanupTasks([pendingTask.id, inProgressTask.id]);
-  });
-
   test('returns false when only completed tasks exist', async () => {
     const task = await queueTask(testAgentId, teamOwnerInfo(testTeamId), 'Completed task', 'user');
-    await startTask(task.id);
     await completeTaskWithResult(task.id, 'Done');
 
     const hasWork = await hasQueuedWork(testAgentId);
@@ -324,7 +284,6 @@ describe('hasQueuedWork', () => {
 
   test('returns false when only failed tasks exist', async () => {
     const task = await queueTask(testAgentId, teamOwnerInfo(testTeamId), 'Failed task', 'user');
-    await startTask(task.id);
     await failTask(task.id, 'Error');
 
     const hasWork = await hasQueuedWork(testAgentId);
@@ -347,7 +306,7 @@ describe('hasQueuedWork', () => {
 });
 
 // ============================================================================
-// Task Lifecycle Tests (pending -> in_progress -> completed/failed)
+// Task Lifecycle Tests (pending -> completed/failed)
 // ============================================================================
 
 describe('Task Lifecycle', () => {
@@ -361,19 +320,8 @@ describe('Task Lifecycle', () => {
     await cleanupTasks([task.id]);
   });
 
-  test('startTask transitions task to in_progress', async () => {
-    const task = await queueTask(testAgentId, teamOwnerInfo(testTeamId), 'Task to start', 'user');
-    const started = await startTask(task.id);
-
-    expect(started.status).toBe('in_progress');
-    expect(started.completedAt).toBeNull();
-
-    await cleanupTasks([task.id]);
-  });
-
   test('completeTaskWithResult transitions task to completed with result', async () => {
     const task = await queueTask(testAgentId, teamOwnerInfo(testTeamId), 'Task to complete', 'user');
-    await startTask(task.id);
     const completed = await completeTaskWithResult(task.id, 'Task completed successfully');
 
     expect(completed.status).toBe('completed');
@@ -385,7 +333,6 @@ describe('Task Lifecycle', () => {
 
   test('failTask transitions task to failed with error message', async () => {
     const task = await queueTask(testAgentId, teamOwnerInfo(testTeamId), 'Task to fail', 'user');
-    await startTask(task.id);
     const failed = await failTask(task.id, 'An error occurred');
 
     expect(failed.status).toBe('failed');
@@ -395,12 +342,9 @@ describe('Task Lifecycle', () => {
     await cleanupTasks([task.id]);
   });
 
-  test('full lifecycle: pending -> in_progress -> completed', async () => {
+  test('full lifecycle: pending -> completed', async () => {
     const task = await queueTask(testAgentId, teamOwnerInfo(testTeamId), 'Full lifecycle task', 'user');
     expect(task.status).toBe('pending');
-
-    const started = await startTask(task.id);
-    expect(started.status).toBe('in_progress');
 
     const completed = await completeTaskWithResult(task.id, 'Done');
     expect(completed.status).toBe('completed');
@@ -409,12 +353,9 @@ describe('Task Lifecycle', () => {
     await cleanupTasks([task.id]);
   });
 
-  test('full lifecycle: pending -> in_progress -> failed', async () => {
+  test('full lifecycle: pending -> failed', async () => {
     const task = await queueTask(testAgentId, teamOwnerInfo(testTeamId), 'Failing lifecycle task', 'user');
     expect(task.status).toBe('pending');
-
-    const started = await startTask(task.id);
-    expect(started.status).toBe('in_progress');
 
     const failed = await failTask(task.id, 'Something went wrong');
     expect(failed.status).toBe('failed');
@@ -447,23 +388,8 @@ describe('getNextTask', () => {
     await cleanupTasks([task1.id, task2.id]);
   });
 
-  test('skips in_progress tasks', async () => {
-    const inProgressTask = await queueTask(testAgentId, teamOwnerInfo(testTeamId), 'In progress', 'user');
-    await startTask(inProgressTask.id);
-    await new Promise(resolve => setTimeout(resolve, 10));
-    const pendingTask = await queueTask(testAgentId, teamOwnerInfo(testTeamId), 'Pending', 'user');
-
-    const nextTask = await getNextTask(testAgentId);
-
-    expect(nextTask).not.toBeNull();
-    expect(nextTask!.id).toBe(pendingTask.id);
-
-    await cleanupTasks([inProgressTask.id, pendingTask.id]);
-  });
-
   test('skips completed tasks', async () => {
     const completedTask = await queueTask(testAgentId, teamOwnerInfo(testTeamId), 'Completed', 'user');
-    await startTask(completedTask.id);
     await completeTaskWithResult(completedTask.id, 'Done');
     await new Promise(resolve => setTimeout(resolve, 10));
     const pendingTask = await queueTask(testAgentId, teamOwnerInfo(testTeamId), 'Pending', 'user');
@@ -513,58 +439,6 @@ describe('createAgentTask', () => {
 });
 
 // ============================================================================
-// getInProgressTasksForAgent Tests
-// ============================================================================
-
-describe('getInProgressTasksForAgent', () => {
-  test('returns empty array when no in_progress tasks', async () => {
-    const tasks = await getInProgressTasksForAgent(testAgentId);
-    expect(tasks).toEqual([]);
-  });
-
-  test('returns only in_progress tasks', async () => {
-    const pending = await queueTask(testAgentId, teamOwnerInfo(testTeamId), 'Pending', 'user');
-    const inProgress = await queueTask(testAgentId, teamOwnerInfo(testTeamId), 'In progress', 'user');
-    await startTask(inProgress.id);
-
-    const tasks = await getInProgressTasksForAgent(testAgentId);
-
-    expect(tasks.some(t => t.id === inProgress.id)).toBe(true);
-    expect(tasks.some(t => t.id === pending.id)).toBe(false);
-
-    await cleanupTasks([pending.id, inProgress.id]);
-  });
-});
-
-// ============================================================================
-// getActionableTasksForAgent Tests
-// ============================================================================
-
-describe('getActionableTasksForAgent', () => {
-  test('returns empty array when no actionable tasks', async () => {
-    const tasks = await getActionableTasksForAgent(testAgentId);
-    expect(tasks).toEqual([]);
-  });
-
-  test('returns both pending and in_progress tasks', async () => {
-    const pending = await queueTask(testAgentId, teamOwnerInfo(testTeamId), 'Pending', 'user');
-    const inProgress = await queueTask(testAgentId, teamOwnerInfo(testTeamId), 'In progress', 'user');
-    await startTask(inProgress.id);
-    const completed = await queueTask(testAgentId, teamOwnerInfo(testTeamId), 'Completed', 'user');
-    await startTask(completed.id);
-    await completeTaskWithResult(completed.id, 'Done');
-
-    const tasks = await getActionableTasksForAgent(testAgentId);
-
-    expect(tasks.some(t => t.id === pending.id)).toBe(true);
-    expect(tasks.some(t => t.id === inProgress.id)).toBe(true);
-    expect(tasks.some(t => t.id === completed.id)).toBe(false);
-
-    await cleanupTasks([pending.id, inProgress.id, completed.id]);
-  });
-});
-
-// ============================================================================
 // Edge Cases
 // ============================================================================
 
@@ -609,7 +483,6 @@ describe('Edge Cases', () => {
 
   test('handles empty result on complete', async () => {
     const task = await queueTask(testAgentId, teamOwnerInfo(testTeamId), 'Task', 'user');
-    await startTask(task.id);
     const completed = await completeTaskWithResult(task.id, '');
 
     expect(completed.result).toBe('');
@@ -619,7 +492,6 @@ describe('Edge Cases', () => {
 
   test('handles empty error on fail', async () => {
     const task = await queueTask(testAgentId, teamOwnerInfo(testTeamId), 'Task', 'user');
-    await startTask(task.id);
     const failed = await failTask(task.id, '');
 
     expect(failed.result).toBe('');
@@ -639,17 +511,19 @@ describe('Edge Cases', () => {
 
 describe('Concurrent Claims', () => {
   /**
-   * Note: The current implementation uses a simple getNextTask + startTask pattern
+   * Note: The current implementation uses a simple getNextTask pattern
    * which is NOT atomic. In a concurrent environment, two workers could potentially:
    * 1. Both call getNextTask and get the same task
-   * 2. Both try to start it
+   *
+   * The system assumes a single worker per agent queue, so this is acceptable
+   * for now. Introducing multiple workers would require locking changes.
    *
    * For production use with multiple workers, consider:
    * 1. Using database-level locking (SELECT FOR UPDATE SKIP LOCKED)
    * 2. Using atomic compare-and-swap updates (UPDATE WHERE status = 'pending')
    * 3. Using a distributed lock mechanism
    *
-   * Current behavior: Last writer wins, which may cause duplicate processing
+   * Current behavior: Both workers can see the same task, which may cause duplicate processing
    */
   test('documents non-atomic claim behavior', async () => {
     // This test documents the current behavior, not ideal behavior
@@ -662,14 +536,6 @@ describe('Concurrent Claims', () => {
     // Both see the same task
     expect(worker1Task!.id).toBe(task.id);
     expect(worker2Task!.id).toBe(task.id);
-
-    // Both can start it (last writer wins)
-    await startTask(worker1Task!.id);
-    await startTask(worker2Task!.id);
-
-    // Task is in_progress
-    const retrieved = await getAgentTaskById(task.id);
-    expect(retrieved!.status).toBe('in_progress');
 
     await cleanupTasks([task.id]);
   });

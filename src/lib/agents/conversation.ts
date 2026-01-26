@@ -3,20 +3,15 @@ import {
   getLatestConversation,
   createConversation as dbCreateConversation,
   touchConversation,
-} from '@/lib/db/queries/conversations';
+} from "@/lib/db/queries/conversations";
 import {
   getMessagesByConversationId,
-  appendMessage as dbAppendMessage,
+  appendMessage,
   getRecentMessages,
   getLastMessage,
   getConversationContext,
-} from '@/lib/db/queries/messages';
-import type {
-  Conversation,
-  Message,
-  MessageRole,
-  LLMMessage,
-} from '@/lib/types';
+} from "@/lib/db/queries/messages";
+import type { Conversation, Message, LLMMessage } from "@/lib/types";
 
 // ============================================================================
 // Conversation Management
@@ -26,7 +21,7 @@ import type {
  * Get or create the active conversation for an agent
  */
 export async function getActiveConversation(
-  agentId: string
+  agentId: string,
 ): Promise<Conversation> {
   return getOrCreateConversation(agentId);
 }
@@ -36,7 +31,7 @@ export async function getActiveConversation(
  * Use this to start a fresh conversation
  */
 export async function startNewConversation(
-  agentId: string
+  agentId: string,
 ): Promise<Conversation> {
   return dbCreateConversation(agentId);
 }
@@ -45,7 +40,7 @@ export async function startNewConversation(
  * Get the current conversation for an agent (may return null)
  */
 export async function getCurrentConversation(
-  agentId: string
+  agentId: string,
 ): Promise<Conversation | null> {
   return getLatestConversation(agentId);
 }
@@ -59,7 +54,7 @@ export async function getCurrentConversation(
  * Use loadConversationContext for compaction-aware loading
  */
 export async function loadConversationHistory(
-  conversationId: string
+  conversationId: string,
 ): Promise<Message[]> {
   return getMessagesByConversationId(conversationId);
 }
@@ -70,7 +65,7 @@ export async function loadConversationHistory(
  * If no summary exists, returns all messages
  */
 export async function loadConversationContext(
-  conversationId: string
+  conversationId: string,
 ): Promise<Message[]> {
   return getConversationContext(conversationId);
 }
@@ -80,51 +75,35 @@ export async function loadConversationContext(
  */
 export async function loadRecentHistory(
   conversationId: string,
-  limit: number = 50
+  limit: number = 50,
 ): Promise<Message[]> {
   return getRecentMessages(conversationId, limit);
 }
 
 /**
- * Add a message to a conversation
- */
-export async function appendMessage(
-  conversationId: string,
-  role: MessageRole,
-  content: string,
-  thinking?: string | null
-): Promise<Message> {
-  const message = await dbAppendMessage(conversationId, role, content, thinking ? { thinking } : undefined);
-  await touchConversation(conversationId);
-  return message;
-}
-
-/**
- * Add a user message to a conversation
- */
-export async function addUserMessage(
-  conversationId: string,
-  content: string
-): Promise<Message> {
-  return appendMessage(conversationId, 'user', content);
-}
-
-/**
- * Add an assistant message to a conversation
+ * Add an assistant message to a conversation. This should be called for
+ * special cases as we save the turn atomically.
  */
 export async function addAssistantMessage(
   conversationId: string,
   content: string,
-  thinking?: string | null
+  thinking?: string | null,
 ): Promise<Message> {
-  return appendMessage(conversationId, 'assistant', content, thinking);
+  const message = await appendMessage(
+    conversationId,
+    "assistant",
+    content,
+    thinking ? { thinking } : undefined,
+  );
+  await touchConversation(conversationId);
+  return message;
 }
 
 /**
  * Get the last message in a conversation
  */
 export async function getConversationLastMessage(
-  conversationId: string
+  conversationId: string,
 ): Promise<Message | null> {
   return getLastMessage(conversationId);
 }
@@ -151,16 +130,16 @@ export function messagesToLLMFormat(messages: Message[]): LLMMessage[] {
  * - summary -> assistant (summaries are context from the assistant's perspective)
  * - tool -> assistant (tool results are assistant-side context)
  */
-function mapRoleToLLMRole(role: string): 'user' | 'assistant' {
+function mapRoleToLLMRole(role: string): "user" | "assistant" {
   switch (role) {
-    case 'user':
-      return 'user';
-    case 'assistant':
-    case 'summary':
-    case 'tool':
-      return 'assistant';
+    case "user":
+      return "user";
+    case "assistant":
+    case "summary":
+    case "tool":
+      return "assistant";
     default:
-      return 'assistant';
+      return "assistant";
   }
 }
 
@@ -171,7 +150,7 @@ function mapRoleToLLMRole(role: string): 'user' | 'assistant' {
  */
 export async function buildMessageContext(
   conversationId: string,
-  maxMessages: number = 50
+  maxMessages: number = 50,
 ): Promise<LLMMessage[]> {
   // Use compaction-aware context loading
   const contextMessages = await getConversationContext(conversationId);
@@ -201,7 +180,7 @@ export function estimateTokenCount(messages: LLMMessage[]): number {
  */
 export function trimMessagesToTokenBudget(
   messages: LLMMessage[],
-  maxTokens: number
+  maxTokens: number,
 ): LLMMessage[] {
   const result: LLMMessage[] = [];
   let tokenCount = 0;
@@ -251,10 +230,11 @@ export interface ConversationSummary {
 }
 
 export async function getConversationSummary(
-  conversation: Conversation
+  conversation: Conversation,
 ): Promise<ConversationSummary> {
   const messages = await getMessagesByConversationId(conversation.id);
-  const lastMessage = messages.length > 0 ? messages[messages.length - 1] : null;
+  const lastMessage =
+    messages.length > 0 ? messages[messages.length - 1] : null;
 
   return {
     conversationId: conversation.id,

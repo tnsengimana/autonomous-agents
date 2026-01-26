@@ -324,7 +324,6 @@ describe('runWorkSession', () => {
     // All tasks should be processed (no pending)
     const statusAfter = await getQueueStatus(testTeamLeadId);
     expect(statusAfter.pendingCount).toBe(0);
-    expect(statusAfter.inProgressCount).toBe(0);
   });
 
   test('loads knowledge items not memories for background work', async () => {
@@ -392,12 +391,8 @@ describe('processTask', () => {
     // Queue a task
     const task = await queueUserTask(testTeamLeadId, teamOwnerInfo(testTeamId), 'Analyze TSLA stock');
 
-    // Claim the task
-    const { startTask } = await import('@/lib/db/queries/agentTasks');
-    const claimedTask = await startTask(task.id);
-
     const agent = await createAgent(testTeamLeadId);
-    await agent!.processTask(bgConversation.id, claimedTask);
+    await agent!.processTask(bgConversation.id, task);
 
     // Verify conversation has messages
     const conversationMsgs = await db.select().from(messages)
@@ -419,11 +414,8 @@ describe('processTask', () => {
     const bgConversation = await getOrCreateConversation(testTeamLeadId, 'background');
     const task = await queueUserTask(testTeamLeadId, teamOwnerInfo(testTeamId), 'Complete this');
 
-    const { startTask } = await import('@/lib/db/queries/agentTasks');
-    const claimedTask = await startTask(task.id);
-
     const agent = await createAgent(testTeamLeadId);
-    const result = await agent!.processTask(bgConversation.id, claimedTask);
+    const result = await agent!.processTask(bgConversation.id, task);
 
     // Result should be non-empty (mock response)
     expect(result.length).toBeGreaterThan(0);

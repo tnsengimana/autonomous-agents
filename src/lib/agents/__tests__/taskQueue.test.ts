@@ -22,11 +22,7 @@ import {
 } from '@/lib/agents/taskQueue';
 
 // Import lower-level functions for verification
-import {
-  startTask,
-  completeTaskWithResult,
-  failTask,
-} from '@/lib/db/queries/agentTasks';
+import { completeTaskWithResult, failTask } from '@/lib/db/queries/agentTasks';
 
 // Helper to create ownerInfo for teams
 function teamOwnerInfo(teamId: string): TaskOwnerInfo {
@@ -231,7 +227,6 @@ describe('getQueueStatus', () => {
 
     expect(status.hasPendingWork).toBe(false);
     expect(status.pendingCount).toBe(0);
-    expect(status.inProgressCount).toBe(0);
   });
 
   test('counts pending tasks correctly', async () => {
@@ -243,35 +238,18 @@ describe('getQueueStatus', () => {
 
     expect(status.hasPendingWork).toBe(true);
     expect(status.pendingCount).toBe(3);
-    expect(status.inProgressCount).toBe(0);
 
     await cleanupTasks([task1.id, task2.id, task3.id]);
-  });
-
-  test('counts in_progress tasks correctly', async () => {
-    const task1 = await queueUserTask(testAgentId, teamOwnerInfo(testTeamId), 'Task 1');
-    const task2 = await queueUserTask(testAgentId, teamOwnerInfo(testTeamId), 'Task 2');
-    await startTask(task1.id);
-
-    const status = await getQueueStatus(testAgentId);
-
-    expect(status.hasPendingWork).toBe(true);
-    expect(status.pendingCount).toBe(1);
-    expect(status.inProgressCount).toBe(1);
-
-    await cleanupTasks([task1.id, task2.id]);
   });
 
   test('excludes completed tasks from counts', async () => {
     const pending = await queueUserTask(testAgentId, teamOwnerInfo(testTeamId), 'Pending');
     const completed = await queueUserTask(testAgentId, teamOwnerInfo(testTeamId), 'Completed');
-    await startTask(completed.id);
     await completeTaskWithResult(completed.id, 'Done');
 
     const status = await getQueueStatus(testAgentId);
 
     expect(status.pendingCount).toBe(1);
-    expect(status.inProgressCount).toBe(0);
 
     await cleanupTasks([pending.id, completed.id]);
   });
@@ -279,31 +257,20 @@ describe('getQueueStatus', () => {
   test('excludes failed tasks from counts', async () => {
     const pending = await queueUserTask(testAgentId, teamOwnerInfo(testTeamId), 'Pending');
     const failed = await queueUserTask(testAgentId, teamOwnerInfo(testTeamId), 'Failed');
-    await startTask(failed.id);
     await failTask(failed.id, 'Error');
 
     const status = await getQueueStatus(testAgentId);
 
     expect(status.pendingCount).toBe(1);
-    expect(status.inProgressCount).toBe(0);
 
     await cleanupTasks([pending.id, failed.id]);
   });
 
   test('hasPendingWork is true with any actionable task', async () => {
-    // Only in_progress
-    const inProgress = await queueUserTask(testAgentId, teamOwnerInfo(testTeamId), 'In progress');
-    await startTask(inProgress.id);
-
-    let status = await getQueueStatus(testAgentId);
-    expect(status.hasPendingWork).toBe(true);
-
-    await cleanupTasks([inProgress.id]);
-
     // Only pending
     const pending = await queueUserTask(testAgentId, teamOwnerInfo(testTeamId), 'Pending');
 
-    status = await getQueueStatus(testAgentId);
+    const status = await getQueueStatus(testAgentId);
     expect(status.hasPendingWork).toBe(true);
 
     await cleanupTasks([pending.id]);
@@ -342,19 +309,8 @@ describe('claimNextTask', () => {
 
     expect(claimed).not.toBeNull();
     expect(claimed!.id).toBe(task1.id);
-    expect(claimed!.status).toBe('in_progress');
 
     await cleanupTasks([task1.id, task2.id]);
-  });
-
-  test('marks claimed task as in_progress', async () => {
-    const task = await queueUserTask(testAgentId, teamOwnerInfo(testTeamId), 'Task to claim');
-
-    const claimed = await claimNextTask(testAgentId);
-
-    expect(claimed!.status).toBe('in_progress');
-
-    await cleanupTasks([task.id]);
   });
 
   test('subsequent claims get next pending task', async () => {
@@ -366,12 +322,15 @@ describe('claimNextTask', () => {
 
     const claimed1 = await claimNextTask(testAgentId);
     expect(claimed1!.id).toBe(task1.id);
+    await completeTaskWithResult(task1.id, 'Done 1');
 
     const claimed2 = await claimNextTask(testAgentId);
     expect(claimed2!.id).toBe(task2.id);
+    await completeTaskWithResult(task2.id, 'Done 2');
 
     const claimed3 = await claimNextTask(testAgentId);
     expect(claimed3!.id).toBe(task3.id);
+    await completeTaskWithResult(task3.id, 'Done 3');
 
     const claimed4 = await claimNextTask(testAgentId);
     expect(claimed4).toBeNull();
@@ -381,7 +340,6 @@ describe('claimNextTask', () => {
 
   test('does not claim completed tasks', async () => {
     const completed = await queueUserTask(testAgentId, teamOwnerInfo(testTeamId), 'Completed');
-    await startTask(completed.id);
     await completeTaskWithResult(completed.id, 'Done');
 
     const pending = await queueUserTask(testAgentId, teamOwnerInfo(testTeamId), 'Pending');
@@ -426,12 +384,10 @@ describe('Full Workflow', () => {
     // 3. Claim task
     const claimed = await claimNextTask(testAgentId);
     expect(claimed!.id).toBe(task.id);
-    expect(claimed!.status).toBe('in_progress');
 
     // 4. Check status during processing
     status = await getQueueStatus(testAgentId);
-    expect(status.pendingCount).toBe(0);
-    expect(status.inProgressCount).toBe(1);
+    expect(status.pendingCount).toBe(1);
     expect(status.hasPendingWork).toBe(true);
 
     // 5. Complete task
@@ -508,12 +464,15 @@ describe('Full Workflow', () => {
     // Claim in FIFO order regardless of source
     const claim1 = await claimNextTask(testAgentId);
     expect(claim1!.id).toBe(userTask.id);
+    await completeTaskWithResult(userTask.id, 'Done user');
 
     const claim2 = await claimNextTask(testAgentId);
     expect(claim2!.id).toBe(systemTask.id);
+    await completeTaskWithResult(systemTask.id, 'Done system');
 
     const claim3 = await claimNextTask(testAgentId);
     expect(claim3!.id).toBe(selfTask.id);
+    await completeTaskWithResult(selfTask.id, 'Done self');
 
     await cleanupTasks([userTask.id, systemTask.id, selfTask.id]);
   });
@@ -526,7 +485,6 @@ describe('Full Workflow', () => {
 
     const status = await getQueueStatus(testAgentId);
     expect(status.hasPendingWork).toBe(false);
-    expect(status.inProgressCount).toBe(0);
 
     await cleanupTasks([task.id]);
   });

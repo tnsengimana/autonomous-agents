@@ -1,4 +1,4 @@
-import { eq, and, or, asc } from 'drizzle-orm';
+import { eq, and, asc } from 'drizzle-orm';
 import { db } from '../client';
 import { agentTasks } from '../schema';
 import type { AgentTask, AgentTaskStatus, AgentTaskSource } from '@/lib/types';
@@ -108,7 +108,7 @@ export async function getOwnPendingTasks(agentId: string): Promise<AgentTask[]> 
 }
 
 /**
- * Check if agent has any queued work (pending or in_progress tasks)
+ * Check if agent has any queued work (pending tasks)
  */
 export async function hasQueuedWork(agentId: string): Promise<boolean> {
   const result = await db
@@ -117,10 +117,7 @@ export async function hasQueuedWork(agentId: string): Promise<boolean> {
     .where(
       and(
         eq(agentTasks.assignedToId, agentId),
-        or(
-          eq(agentTasks.status, 'pending'),
-          eq(agentTasks.status, 'in_progress')
-        )
+        eq(agentTasks.status, 'pending')
       )
     )
     .limit(1);
@@ -130,6 +127,7 @@ export async function hasQueuedWork(agentId: string): Promise<boolean> {
 
 /**
  * Get next task to process (oldest pending task) - FIFO
+ * Assumes a single worker per agent queue; no concurrent claim locking.
  */
 export async function getNextTask(agentId: string): Promise<AgentTask | null> {
   const result = await db
@@ -145,19 +143,6 @@ export async function getNextTask(agentId: string): Promise<AgentTask | null> {
     .limit(1);
 
   return result[0] ?? null;
-}
-
-/**
- * Mark task as in_progress
- */
-export async function startTask(taskId: string): Promise<AgentTask> {
-  const result = await db
-    .update(agentTasks)
-    .set({ status: 'in_progress' })
-    .where(eq(agentTasks.id, taskId))
-    .returning();
-
-  return result[0];
 }
 
 /**
@@ -198,24 +183,7 @@ export async function failTask(taskId: string, error: string): Promise<AgentTask
 }
 
 /**
- * Get all in-progress tasks for an agent
- */
-export async function getInProgressTasksForAgent(
-  agentId: string
-): Promise<AgentTask[]> {
-  return db
-    .select()
-    .from(agentTasks)
-    .where(
-      and(
-        eq(agentTasks.assignedToId, agentId),
-        eq(agentTasks.status, 'in_progress')
-      )
-    );
-}
-
-/**
- * Get all actionable tasks for an agent (pending or in_progress)
+ * Get all actionable tasks for an agent (pending)
  */
 export async function getActionableTasksForAgent(
   agentId: string
@@ -226,10 +194,7 @@ export async function getActionableTasksForAgent(
     .where(
       and(
         eq(agentTasks.assignedToId, agentId),
-        or(
-          eq(agentTasks.status, 'pending'),
-          eq(agentTasks.status, 'in_progress')
-        )
+        eq(agentTasks.status, 'pending')
       )
     );
 }

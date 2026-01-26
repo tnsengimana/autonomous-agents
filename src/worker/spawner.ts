@@ -10,7 +10,6 @@ import { Agent } from '@/lib/agents/agent';
 import { getAgentById, updateAgentStatus } from '@/lib/db/queries/agents';
 import {
   getPendingTasksForAgent,
-  updateTaskStatus,
   completeTask,
 } from '@/lib/db/queries/agentTasks';
 
@@ -111,9 +110,6 @@ export async function processSubordinatePendingTasks(
     // Process tasks sequentially
     for (const task of pendingTasks) {
       log(`Starting task: ${task.id}`);
-
-      // Mark as in progress
-      await updateTaskStatus(task.id, 'in_progress');
 
       // Execute the task
       const result = await spawnSubordinate(agentId, task.task);

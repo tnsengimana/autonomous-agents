@@ -11,9 +11,7 @@
 import {
   queueTask,
   getOwnPendingTasks,
-  getInProgressTasksForAgent,
   getNextTask,
-  startTask,
   type TaskOwnerInfo,
 } from '@/lib/db/queries/agentTasks';
 import type { AgentTask } from '@/lib/types';
@@ -105,23 +103,19 @@ export async function queueDelegationTask(
 export async function getQueueStatus(agentId: string): Promise<{
   hasPendingWork: boolean;
   pendingCount: number;
-  inProgressCount: number;
 }> {
-  const [pendingTasks, inProgressTasks] = await Promise.all([
-    getOwnPendingTasks(agentId),
-    getInProgressTasksForAgent(agentId),
-  ]);
+  const pendingTasks = await getOwnPendingTasks(agentId);
 
   return {
-    hasPendingWork: pendingTasks.length > 0 || inProgressTasks.length > 0,
+    hasPendingWork: pendingTasks.length > 0,
     pendingCount: pendingTasks.length,
-    inProgressCount: inProgressTasks.length,
   };
 }
 
 /**
  * Process next task in queue (returns task if available, null if empty)
- * Claims the task by marking it as in_progress
+ * Assumes a single worker per agent queue; no cross-worker locking.
+ * Returns the oldest pending task without mutating status.
  */
 export async function claimNextTask(agentId: string): Promise<AgentTask | null> {
   const nextTask = await getNextTask(agentId);
@@ -130,6 +124,5 @@ export async function claimNextTask(agentId: string): Promise<AgentTask | null> 
     return null;
   }
 
-  // Mark as in_progress and return the updated task
-  return startTask(nextTask.id);
+  return nextTask;
 }

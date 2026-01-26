@@ -1,4 +1,4 @@
-import { eq, isNull, and } from 'drizzle-orm';
+import { eq, isNull, and, or, lte, inArray } from 'drizzle-orm';
 import { db } from '../client';
 import { agents, teams, aides } from '../schema';
 import type { Agent, AgentStatus } from '@/lib/types';
@@ -52,6 +52,8 @@ export async function getActiveTeamLeads(): Promise<Agent[]> {
       systemPrompt: agents.systemPrompt,
       status: agents.status,
       nextRunAt: agents.nextRunAt,
+      backoffNextRunAt: agents.backoffNextRunAt,
+      backoffAttemptCount: agents.backoffAttemptCount,
       lastCompletedAt: agents.lastCompletedAt,
       createdAt: agents.createdAt,
       updatedAt: agents.updatedAt,
@@ -146,6 +148,38 @@ export async function updateAgentNextRunAt(
 }
 
 /**
+ * Set agent backoff state
+ */
+export async function setAgentBackoff(
+  agentId: string,
+  backoffAttemptCount: number,
+  backoffNextRunAt: Date
+): Promise<void> {
+  await db
+    .update(agents)
+    .set({
+      backoffAttemptCount,
+      backoffNextRunAt,
+      updatedAt: new Date(),
+    })
+    .where(eq(agents.id, agentId));
+}
+
+/**
+ * Clear agent backoff state
+ */
+export async function clearAgentBackoff(agentId: string): Promise<void> {
+  await db
+    .update(agents)
+    .set({
+      backoffAttemptCount: 0,
+      backoffNextRunAt: null,
+      updatedAt: new Date(),
+    })
+    .where(eq(agents.id, agentId));
+}
+
+/**
  * Update agent's last completed timestamp
  */
 export async function updateAgentLastCompletedAt(
@@ -159,21 +193,25 @@ export async function updateAgentLastCompletedAt(
 }
 
 /**
- * Get all agent IDs that have pending or in_progress tasks
+ * Get all agent IDs that have pending tasks
  * Used by the worker runner to find agents with queued work
  */
 export async function getAgentsWithPendingTasks(): Promise<string[]> {
   // Import agentTasks dynamically to avoid circular dependencies
   const { agentTasks } = await import('../schema');
-  const { or } = await import('drizzle-orm');
+  const now = new Date();
 
   const result = await db
     .selectDistinct({ agentId: agentTasks.assignedToId })
     .from(agentTasks)
+    .innerJoin(agents, eq(agentTasks.assignedToId, agents.id))
     .where(
-      or(
+      and(
         eq(agentTasks.status, 'pending'),
-        eq(agentTasks.status, 'in_progress')
+        or(
+          isNull(agents.backoffNextRunAt),
+          lte(agents.backoffNextRunAt, now)
+        )
       )
     );
 
@@ -185,8 +223,6 @@ export async function getAgentsWithPendingTasks(): Promise<string[]> {
  * Only includes team leads from active teams
  */
 export async function getTeamLeadsDueToRun(): Promise<string[]> {
-  const { lte } = await import('drizzle-orm');
-
   const now = new Date();
   const result = await db
     .select({ id: agents.id })
@@ -196,7 +232,11 @@ export async function getTeamLeadsDueToRun(): Promise<string[]> {
       and(
         isNull(agents.parentAgentId), // Team leads only
         eq(teams.status, 'active'),   // Active teams only
-        lte(agents.nextRunAt, now)    // Due to run
+        lte(agents.nextRunAt, now),   // Due to run
+        or(
+          isNull(agents.backoffNextRunAt),
+          lte(agents.backoffNextRunAt, now)
+        )
       )
     );
 
@@ -257,6 +297,8 @@ export async function getActiveAideLeads(): Promise<Agent[]> {
       systemPrompt: agents.systemPrompt,
       status: agents.status,
       nextRunAt: agents.nextRunAt,
+      backoffNextRunAt: agents.backoffNextRunAt,
+      backoffAttemptCount: agents.backoffAttemptCount,
       lastCompletedAt: agents.lastCompletedAt,
       createdAt: agents.createdAt,
       updatedAt: agents.updatedAt,
@@ -276,8 +318,6 @@ export async function getActiveAideLeads(): Promise<Agent[]> {
  * Only includes aide leads from active aides
  */
 export async function getAideLeadsDueToRun(): Promise<string[]> {
-  const { lte } = await import('drizzle-orm');
-
   const now = new Date();
   const result = await db
     .select({ id: agents.id })
@@ -287,7 +327,11 @@ export async function getAideLeadsDueToRun(): Promise<string[]> {
       and(
         isNull(agents.parentAgentId), // Aide leads only
         eq(aides.status, 'active'),   // Active aides only
-        lte(agents.nextRunAt, now)    // Due to run
+        lte(agents.nextRunAt, now),   // Due to run
+        or(
+          isNull(agents.backoffNextRunAt),
+          lte(agents.backoffNextRunAt, now)
+        )
       )
     );
 
@@ -304,4 +348,29 @@ export async function getAllLeadsDueToRun(): Promise<string[]> {
     getAideLeadsDueToRun(),
   ]);
   return [...teamLeads, ...aideLeads];
+}
+
+/**
+ * Filter agent IDs to those not currently in backoff
+ */
+export async function getAgentsReadyForWork(
+  agentIds: string[]
+): Promise<string[]> {
+  if (agentIds.length === 0) return [];
+
+  const now = new Date();
+  const result = await db
+    .select({ id: agents.id })
+    .from(agents)
+    .where(
+      and(
+        inArray(agents.id, agentIds),
+        or(
+          isNull(agents.backoffNextRunAt),
+          lte(agents.backoffNextRunAt, now)
+        )
+      )
+    );
+
+  return result.map((r) => r.id);
 }

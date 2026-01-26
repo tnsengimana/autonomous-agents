@@ -678,6 +678,28 @@ describe('getAideLeadsDueToRun', () => {
     await cleanupAides([aide.id]);
   });
 
+  test('excludes aide leads in backoff', async () => {
+    const aide = await createAide({ userId: testUserId, name: 'Active', status: 'active' });
+    const lead = await createAgentForAide({
+      aideId: aide.id,
+      name: 'Backoff Lead',
+      role: 'Lead',
+      parentAgentId: null,
+    });
+
+    const pastDate = new Date(Date.now() - 1000);
+    const futureBackoff = new Date(Date.now() + 60 * 60 * 1000);
+    await db.update(agents)
+      .set({ nextRunAt: pastDate, backoffNextRunAt: futureBackoff, backoffAttemptCount: 1 })
+      .where(eq(agents.id, lead.id));
+
+    const dueLeads = await getAideLeadsDueToRun();
+
+    expect(dueLeads).not.toContain(lead.id);
+
+    await cleanupAides([aide.id]);
+  });
+
   test('excludes aide leads with future nextRunAt', async () => {
     const aide = await createAide({ userId: testUserId, name: 'Active', status: 'active' });
     const lead = await createAgentForAide({

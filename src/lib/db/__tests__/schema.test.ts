@@ -384,21 +384,13 @@ describe('agentTasks schema', () => {
 
     expect(task.status).toBe('pending');
 
-    // Transition to in_progress
-    await db.update(agentTasks)
-      .set({ status: 'in_progress' })
-      .where(eq(agentTasks.id, task.id));
-
-    let [updated] = await db.select().from(agentTasks).where(eq(agentTasks.id, task.id));
-    expect(updated.status).toBe('in_progress');
-
     // Transition to completed
     const completedAt = new Date();
     await db.update(agentTasks)
       .set({ status: 'completed', completedAt, result: 'Task completed successfully' })
       .where(eq(agentTasks.id, task.id));
 
-    [updated] = await db.select().from(agentTasks).where(eq(agentTasks.id, task.id));
+    const [updated] = await db.select().from(agentTasks).where(eq(agentTasks.id, task.id));
     expect(updated.status).toBe('completed');
     expect(updated.completedAt).toBeDefined();
     expect(updated.result).toBe('Task completed successfully');
@@ -409,21 +401,33 @@ describe('agentTasks schema', () => {
 });
 
 describe('agents schema', () => {
-  test('has nextRunAt and lastCompletedAt fields', async () => {
+  test('has scheduling and backoff fields', async () => {
     const now = new Date();
 
     await db.update(agents)
-      .set({ nextRunAt: now, lastCompletedAt: now })
+      .set({
+        nextRunAt: now,
+        backoffNextRunAt: now,
+        backoffAttemptCount: 2,
+        lastCompletedAt: now,
+      })
       .where(eq(agents.id, testAgentId));
 
     const [updated] = await db.select().from(agents).where(eq(agents.id, testAgentId));
 
     expect(updated.nextRunAt).toBeDefined();
+    expect(updated.backoffNextRunAt).toBeDefined();
+    expect(updated.backoffAttemptCount).toBe(2);
     expect(updated.lastCompletedAt).toBeDefined();
 
     // Reset
     await db.update(agents)
-      .set({ nextRunAt: null, lastCompletedAt: null })
+      .set({
+        nextRunAt: null,
+        backoffNextRunAt: null,
+        backoffAttemptCount: 0,
+        lastCompletedAt: null,
+      })
       .where(eq(agents.id, testAgentId));
   });
 });

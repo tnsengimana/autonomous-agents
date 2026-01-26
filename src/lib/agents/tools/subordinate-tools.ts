@@ -11,10 +11,7 @@ import {
   ReportToLeadParamsSchema,
   RequestInputParamsSchema,
 } from './index';
-import {
-  getInProgressTasksForAgent,
-  completeTask,
-} from '@/lib/db/queries/agentTasks';
+import { getOwnPendingTasks, completeTask } from '@/lib/db/queries/agentTasks';
 import { getAgentById } from '@/lib/db/queries/agents';
 import { getOrCreateConversation } from '@/lib/db/queries/conversations';
 import { appendMessage } from '@/lib/db/queries/messages';
@@ -65,13 +62,13 @@ const reportToLeadTool: Tool = {
       };
     }
 
-    // Get the current in-progress task for this agent
-    const tasks = await getInProgressTasksForAgent(context.agentId);
+    // Get the oldest pending task for this agent
+    const tasks = await getOwnPendingTasks(context.agentId);
 
     if (tasks.length === 0) {
       return {
         success: false,
-        error: 'No in-progress task found to report on',
+        error: 'No pending task found to report on',
       };
     }
 

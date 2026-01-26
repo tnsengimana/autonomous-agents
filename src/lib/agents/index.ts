@@ -3,7 +3,7 @@
  */
 
 // Agent class and factory
-export { Agent, createAgent, createAgentFromData } from './agent';
+export { Agent, createAgent, createAgentFromData } from "./agent";
 
 // LLM provider abstraction
 export {
@@ -14,7 +14,7 @@ export {
   getDefaultProvider,
   type StreamOptions,
   type GenerateOptions,
-} from './llm';
+} from "./llm";
 
 // Memory management
 export {
@@ -22,7 +22,7 @@ export {
   extractAndPersistMemories,
   formatMemoriesForContext,
   buildMemoryContextBlock,
-} from './memory';
+} from "./memory";
 
 // Conversation management
 export {
@@ -31,8 +31,6 @@ export {
   getCurrentConversation,
   loadConversationHistory,
   loadRecentHistory,
-  appendMessage,
-  addUserMessage,
   addAssistantMessage,
   getConversationLastMessage,
   messagesToLLMFormat,
@@ -43,7 +41,7 @@ export {
   getMessageCount,
   getConversationSummary,
   type ConversationSummary,
-} from './conversation';
+} from "./conversation";
 
 // Conversation compaction
 export {
@@ -51,7 +49,7 @@ export {
   compactIfNeeded,
   compactConversation,
   generateConversationSummary,
-} from './compaction';
+} from "./compaction";
 
 // Tools infrastructure
 export {
@@ -69,7 +67,7 @@ export {
   type ToolResult,
   type ToolHandler,
   type ToolParameter,
-} from './tools';
+} from "./tools";
 
 // Team lead tools
 export {
@@ -77,14 +75,14 @@ export {
   delegateToAgentTool,
   getTeamStatusTool,
   createInboxItemTool,
-} from './tools/team-lead-tools';
+} from "./tools/team-lead-tools";
 
 // Subordinate tools
 export {
   registerSubordinateTools,
   reportToLeadTool,
   requestInputTool,
-} from './tools/subordinate-tools';
+} from "./tools/subordinate-tools";
 
 // Knowledge extraction and management
 export {
@@ -95,4 +93,4 @@ export {
   loadKnowledgeContext,
   loadKnowledge,
   type ExtractedKnowledgeItem,
-} from './knowledge-items';
+} from "./knowledge-items";

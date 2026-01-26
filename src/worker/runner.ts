@@ -15,6 +15,7 @@ import { Agent } from '@/lib/agents/agent';
 import {
   getAgentsWithPendingTasks,
   getAllLeadsDueToRun,
+  getAgentsReadyForWork,
 } from '@/lib/db/queries/agents';
 
 // ============================================================================
@@ -123,7 +124,7 @@ async function getAgentsNeedingWork(): Promise<string[]> {
     ...notifiedAgents,
   ]);
 
-  return Array.from(allAgentIds);
+  return getAgentsReadyForWork(Array.from(allAgentIds));
 }
 
 /**
@@ -134,6 +135,9 @@ async function getAgentsNeedingWork(): Promise<string[]> {
  * - Check for team leads where nextRunAt <= now
  * - Process each agent's work session
  * - Sleep with longer interval since we have event-driven triggers
+ *
+ * NOTE: This runner assumes a single worker process per agent queue.
+ * Introducing multiple workers would require coordination/locking changes.
  */
 export async function startRunner(): Promise<void> {
   log('Worker runner started (event-driven + timer-based)');

@@ -1,6 +1,8 @@
 import { eq, asc, desc, and, gt } from 'drizzle-orm';
+import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import { db } from '../client';
-import { messages } from '../schema';
+import * as schema from '../schema';
+import { messages, conversations } from '../schema';
 import type { Message } from '@/lib/types';
 
 // Message role type for the new schema (no 'system', added 'tool' and 'summary')
@@ -23,6 +25,9 @@ export interface CreateMessageParams {
   toolCallId?: string | null;
   previousMessageId?: string | null;
 }
+
+type DbClient = PostgresJsDatabase<typeof schema>;
+type TurnMessageParams = Omit<CreateMessageParams, 'conversationId' | 'previousMessageId'>;
 
 /**
  * Get a message by ID
@@ -86,6 +91,72 @@ export async function createMessage(data: CreateMessageParams): Promise<Message>
     .returning();
 
   return result[0];
+}
+
+/**
+ * Create a full turn (user + assistant) in a single transaction.
+ * Links user -> last message, assistant -> user message.
+ */
+export async function createTurnMessages(
+  conversationId: string,
+  user: TurnMessageParams,
+  assistant: TurnMessageParams
+): Promise<{ userMessage: Message; assistantMessage: Message }> {
+  return db.transaction(async (tx) =>
+    createTurnMessagesInTransaction(tx, conversationId, user, assistant)
+  );
+}
+
+/**
+ * Create a full turn using an existing transaction.
+ */
+export async function createTurnMessagesInTransaction(
+  tx: DbClient,
+  conversationId: string,
+  user: TurnMessageParams,
+  assistant: TurnMessageParams
+): Promise<{ userMessage: Message; assistantMessage: Message }> {
+  const lastMessage = await tx
+    .select()
+    .from(messages)
+    .where(eq(messages.conversationId, conversationId))
+    .orderBy(desc(messages.createdAt))
+    .limit(1);
+
+  const previousMessageId = lastMessage[0]?.id ?? null;
+
+  const [userMessage] = await tx
+    .insert(messages)
+    .values({
+      conversationId,
+      role: user.role,
+      content: user.content,
+      thinking: user.thinking ?? null,
+      toolCalls: user.toolCalls ?? null,
+      toolCallId: user.toolCallId ?? null,
+      previousMessageId,
+    })
+    .returning();
+
+  const [assistantMessage] = await tx
+    .insert(messages)
+    .values({
+      conversationId,
+      role: assistant.role,
+      content: assistant.content,
+      thinking: assistant.thinking ?? null,
+      toolCalls: assistant.toolCalls ?? null,
+      toolCallId: assistant.toolCallId ?? null,
+      previousMessageId: userMessage.id,
+    })
+    .returning();
+
+  await tx
+    .update(conversations)
+    .set({ updatedAt: new Date() })
+    .where(eq(conversations.id, conversationId));
+
+  return { userMessage, assistantMessage };
 }
 
 /**

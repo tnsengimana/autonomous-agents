@@ -143,10 +143,10 @@ const getTeamStatusTool: Tool = {
     // Get task counts for each agent
     const agentStatuses = await Promise.all(
       childAgents.map(async (agent) => {
-        const { getActionableTasksForAgent } = await import(
+        const { getPendingTasksForAgent } = await import(
           '@/lib/db/queries/agentTasks'
         );
-        const tasks = await getActionableTasksForAgent(agent.id);
+        const tasks = await getPendingTasksForAgent(agent.id);
 
         return {
           agentId: agent.id,
@@ -154,8 +154,7 @@ const getTeamStatusTool: Tool = {
           role: agent.role,
           status: agent.status,
           pendingTasks: tasks.filter((t) => t.status === 'pending').length,
-          inProgressTasks: tasks.filter((t) => t.status === 'in_progress')
-            .length,
+          inProgressTasks: 0,
         };
       })
     );

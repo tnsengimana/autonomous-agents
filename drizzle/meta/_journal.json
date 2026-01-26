@@ -15,6 +15,13 @@
       "when": 1769408766012,
       "tag": "0001_bumpy_luckman",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1769421694754,
+      "tag": "0002_add_agent_backoff",
+      "breakpoints": true
     }
   ]
 }
