@@ -87,6 +87,8 @@ export function getLeadTools(): Tool[] {
       "getTeamStatus",
       "createBriefing",
       "requestUserInput",
+      "listBriefings",
+      "getBriefing",
       "tavilySearch",
       "tavilyExtract",
       "tavilyResearch",
@@ -227,6 +229,24 @@ export const RequestLeadInputParamsSchema = z.object({
   question: z.string().min(1).describe("The question to ask the lead"),
 });
 
+export const ListBriefingsParamsSchema = z.object({
+  query: z
+    .string()
+    .min(1)
+    .optional()
+    .describe("Optional search query for briefing title or summary"),
+  limit: z
+    .number()
+    .min(1)
+    .max(50)
+    .optional()
+    .describe("Maximum number of briefings to return (default: 20)"),
+});
+
+export const GetBriefingParamsSchema = z.object({
+  briefingId: z.string().uuid().describe("The briefing ID to retrieve"),
+});
+
 export type DelegateToAgentParams = z.infer<typeof DelegateToAgentParamsSchema>;
 export type CreateBriefingParams = z.infer<typeof CreateBriefingParamsSchema>;
 export type RequestUserInputParams = z.infer<
@@ -236,6 +256,8 @@ export type ReportToLeadParams = z.infer<typeof ReportToLeadParamsSchema>;
 export type RequestLeadInputParams = z.infer<
   typeof RequestLeadInputParamsSchema
 >;
+export type ListBriefingsParams = z.infer<typeof ListBriefingsParamsSchema>;
+export type GetBriefingParams = z.infer<typeof GetBriefingParamsSchema>;
 
 // ============================================================================
 // Tool Format Conversion

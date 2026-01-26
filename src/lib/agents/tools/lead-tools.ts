@@ -12,6 +12,8 @@ import {
   DelegateToAgentParamsSchema,
   CreateBriefingParamsSchema,
   RequestUserInputParamsSchema,
+  ListBriefingsParamsSchema,
+  GetBriefingParamsSchema,
 } from './index';
 import { createAgentTask } from '@/lib/db/queries/agentTasks';
 import { getChildAgents } from '@/lib/db/queries/agents';
@@ -21,6 +23,10 @@ import { getOrCreateConversation } from '@/lib/db/queries/conversations';
 import { appendMessage } from '@/lib/db/queries/messages';
 import { db } from '@/lib/db/client';
 import { briefings, inboxItems } from '@/lib/db/schema';
+import {
+  listBriefingsByOwner,
+  getBriefingByIdForOwner,
+} from '@/lib/db/queries/briefings';
 
 /**
  * Helper to get owner info from context
@@ -42,6 +48,28 @@ async function getOwnerUserId(context: ToolContext): Promise<string | null> {
     return getAideUserId(context.aideId);
   }
   return null;
+}
+
+function formatBriefingMetadata(briefing: {
+  id: string;
+  title: string;
+  summary: string;
+  createdAt: Date;
+  updatedAt: Date;
+  agentId: string;
+  teamId: string | null;
+  aideId: string | null;
+}) {
+  return {
+    id: briefing.id,
+    title: briefing.title,
+    summary: briefing.summary,
+    createdAt: briefing.createdAt,
+    updatedAt: briefing.updatedAt,
+    agentId: briefing.agentId,
+    teamId: briefing.teamId,
+    aideId: briefing.aideId,
+  };
 }
 
 // ============================================================================
@@ -358,6 +386,139 @@ const requestUserInputTool: Tool = {
 };
 
 // ============================================================================
+// listBriefings
+// ============================================================================
+
+const listBriefingsTool: Tool = {
+  schema: {
+    name: 'listBriefings',
+    description:
+      'List recent briefings for the current team or aide. Returns metadata only (no content).',
+    parameters: [
+      {
+        name: 'query',
+        type: 'string',
+        description: 'Optional search query for briefing title or summary',
+        required: false,
+      },
+      {
+        name: 'limit',
+        type: 'number',
+        description: 'Maximum number of briefings to return (default: 20)',
+        required: false,
+      },
+    ],
+  },
+  handler: async (params, context): Promise<ToolResult> => {
+    const parsed = ListBriefingsParamsSchema.safeParse(params);
+    if (!parsed.success) {
+      return {
+        success: false,
+        error: `Invalid parameters: ${parsed.error.message}`,
+      };
+    }
+
+    if (!context.isLead) {
+      return {
+        success: false,
+        error: 'Only leads can list briefings',
+      };
+    }
+
+    const { query, limit } = parsed.data;
+    const userId = await getOwnerUserId(context);
+    if (!userId) {
+      return {
+        success: false,
+        error: 'Could not find user for this team/aide',
+      };
+    }
+
+    const ownerInfo = getOwnerInfo(context);
+    const briefings = await listBriefingsByOwner(
+      { userId, ...ownerInfo, query },
+      limit ?? 20
+    );
+
+    return {
+      success: true,
+      data: {
+        query: query ?? null,
+        count: briefings.length,
+        briefings: briefings.map(formatBriefingMetadata),
+      },
+    };
+  },
+};
+
+// ============================================================================
+// getBriefing
+// ============================================================================
+
+const getBriefingTool: Tool = {
+  schema: {
+    name: 'getBriefing',
+    description: 'Retrieve a single briefing by ID, including full content.',
+    parameters: [
+      {
+        name: 'briefingId',
+        type: 'string',
+        description: 'The briefing ID to retrieve',
+        required: true,
+      },
+    ],
+  },
+  handler: async (params, context): Promise<ToolResult> => {
+    const parsed = GetBriefingParamsSchema.safeParse(params);
+    if (!parsed.success) {
+      return {
+        success: false,
+        error: `Invalid parameters: ${parsed.error.message}`,
+      };
+    }
+
+    if (!context.isLead) {
+      return {
+        success: false,
+        error: 'Only leads can fetch briefings',
+      };
+    }
+
+    const userId = await getOwnerUserId(context);
+    if (!userId) {
+      return {
+        success: false,
+        error: 'Could not find user for this team/aide',
+      };
+    }
+
+    const ownerInfo = getOwnerInfo(context);
+    const briefing = await getBriefingByIdForOwner({
+      briefingId: parsed.data.briefingId,
+      userId,
+      ...ownerInfo,
+    });
+
+    if (!briefing) {
+      return {
+        success: false,
+        error: 'Briefing not found',
+      };
+    }
+
+    return {
+      success: true,
+      data: {
+        briefing: {
+          ...formatBriefingMetadata(briefing),
+          content: briefing.content,
+        },
+      },
+    };
+  },
+};
+
+// ============================================================================
 // Registration
 // ============================================================================
 
@@ -369,6 +530,8 @@ export function registerLeadTools(): void {
   registerTool(getTeamStatusTool);
   registerTool(createBriefingTool);
   registerTool(requestUserInputTool);
+  registerTool(listBriefingsTool);
+  registerTool(getBriefingTool);
 }
 
 // Export individual tools for testing
@@ -377,4 +540,6 @@ export {
   getTeamStatusTool,
   createBriefingTool,
   requestUserInputTool,
+  listBriefingsTool,
+  getBriefingTool,
 };

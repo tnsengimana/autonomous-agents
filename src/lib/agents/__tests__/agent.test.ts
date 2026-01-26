@@ -554,6 +554,81 @@ describe('createBriefing tool', () => {
 });
 
 // ============================================================================
+// briefing query tools
+// ============================================================================
+
+describe('briefing query tools', () => {
+  test('listBriefings returns metadata only and supports search', async () => {
+    const [briefingA] = await db.insert(briefings).values({
+      userId: testUserId,
+      teamId: testTeamId,
+      aideId: null,
+      agentId: testTeamLeadId,
+      title: 'Market Update: Chips',
+      summary: 'A notable shift in chip stocks.',
+      content: 'Full details about chip stocks.',
+    }).returning();
+    await db.insert(briefings).values({
+      userId: testUserId,
+      teamId: testTeamId,
+      aideId: null,
+      agentId: testTeamLeadId,
+      title: 'Energy Briefing',
+      summary: 'Energy sector summary.',
+      content: 'Full details about energy.',
+    }).returning();
+
+    const toolContext: ToolContext = {
+      agentId: testTeamLeadId,
+      teamId: testTeamId,
+      aideId: null,
+      isLead: true,
+    };
+
+    const result = await executeTool(
+      'listBriefings',
+      { query: 'chips', limit: 10 },
+      toolContext
+    );
+
+    expect(result.success).toBe(true);
+    const data = result.data as { briefings: Array<Record<string, unknown>> };
+    expect(data.briefings.length).toBe(1);
+    expect(data.briefings[0].id).toBe(briefingA.id);
+    expect(data.briefings[0]).not.toHaveProperty('content');
+  });
+
+  test('getBriefing returns full content for a matching briefing', async () => {
+    const [briefing] = await db.insert(briefings).values({
+      userId: testUserId,
+      teamId: testTeamId,
+      aideId: null,
+      agentId: testTeamLeadId,
+      title: 'Research Briefing',
+      summary: 'A concise summary.',
+      content: 'Full briefing content.',
+    }).returning();
+
+    const toolContext: ToolContext = {
+      agentId: testTeamLeadId,
+      teamId: testTeamId,
+      aideId: null,
+      isLead: true,
+    };
+
+    const result = await executeTool(
+      'getBriefing',
+      { briefingId: briefing.id },
+      toolContext
+    );
+
+    expect(result.success).toBe(true);
+    const data = result.data as { briefing: { content: string } };
+    expect(data.briefing.content).toBe('Full briefing content.');
+  });
+});
+
+// ============================================================================
 // requestUserInput Tool Tests
 // ============================================================================
 

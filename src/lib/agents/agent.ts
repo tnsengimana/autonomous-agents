@@ -202,7 +202,7 @@ export class Agent {
    * Get the default system prompt for this agent
    */
   private getDefaultSystemPrompt(): string {
-    return `You are ${this.name}, a ${this.type}.
+    return `You are ${this.name}.
 
 Your primary responsibilities are to:
 1. Understand and respond to user queries relevant to your role
@@ -743,9 +743,8 @@ Examples:
       return;
     }
 
-    const { getRecentBriefingsByOwner } = await import(
-      "@/lib/db/queries/briefings",
-    );
+    const { getRecentBriefingsByOwner } =
+      await import("@/lib/db/queries/briefings");
     const recentBriefings = await getRecentBriefingsByOwner(
       { userId, ...this.getOwnerInfo() },
       5,
@@ -755,9 +754,7 @@ Examples:
         ? "None."
         : recentBriefings
             .map((briefing) => {
-              const dateLabel = briefing.createdAt
-                .toISOString()
-                .slice(0, 10);
+              const dateLabel = briefing.createdAt.toISOString().slice(0, 10);
               return `- ${dateLabel}: ${briefing.title} — ${briefing.summary}`;
             })
             .join("\n");

@@ -98,8 +98,9 @@ The system separates user interactions (foreground) from agent work (background)
 5. After queue empty: lead appends a briefing-decision turn in the background conversation
 6. Lead only: may call `createBriefing` (writes `briefings` + inbox item; no foreground message)
 7. Leads can call `requestUserInput` to create a `feedback` inbox item and append the full message to the foreground conversation
-8. After briefing-decision turn: extracts knowledge from conversation
-9. Next run scheduled
+8. Leads can call `listBriefings` (metadata only) and `getBriefing` (full content) in foreground conversations to answer user questions about briefings
+9. After briefing-decision turn: extracts knowledge from conversation
+10. Next run scheduled
 
 ### Key Patterns
 

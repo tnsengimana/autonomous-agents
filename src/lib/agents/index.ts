@@ -76,6 +76,8 @@ export {
   getTeamStatusTool,
   createBriefingTool,
   requestUserInputTool,
+  listBriefingsTool,
+  getBriefingTool,
 } from "./tools/lead-tools";
 
 // Subordinate tools

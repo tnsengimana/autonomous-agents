@@ -2,7 +2,7 @@
  * Briefings Database Queries
  */
 
-import { and, desc, eq } from 'drizzle-orm';
+import { and, desc, eq, ilike, or } from 'drizzle-orm';
 import { db } from '../client';
 import { briefings, teams, aides } from '../schema';
 import type { Briefing } from '@/lib/types';
@@ -89,4 +89,60 @@ export async function getRecentBriefingsByOwner(
     .limit(limit);
 
   return result as Briefing[];
+}
+
+export async function listBriefingsByOwner(
+  data: { userId: string; query?: string } & BriefingOwnerInfo,
+  limit = 20
+): Promise<Briefing[]> {
+  const ownerFilter =
+    'teamId' in data
+      ? eq(briefings.teamId, data.teamId)
+      : eq(briefings.aideId, data.aideId);
+
+  const searchQuery = data.query?.trim();
+  const searchFilter = searchQuery
+    ? or(
+        ilike(briefings.title, `%${searchQuery}%`),
+        ilike(briefings.summary, `%${searchQuery}%`)
+      )
+    : null;
+
+  const filters = [eq(briefings.userId, data.userId), ownerFilter];
+  if (searchFilter) {
+    filters.push(searchFilter);
+  }
+
+  const result = await db
+    .select()
+    .from(briefings)
+    .where(and(...filters))
+    .orderBy(desc(briefings.createdAt))
+    .limit(limit);
+
+  return result as Briefing[];
+}
+
+export async function getBriefingByIdForOwner(data: {
+  briefingId: string;
+  userId: string;
+} & BriefingOwnerInfo): Promise<Briefing | null> {
+  const ownerFilter =
+    'teamId' in data
+      ? eq(briefings.teamId, data.teamId)
+      : eq(briefings.aideId, data.aideId);
+
+  const result = await db
+    .select()
+    .from(briefings)
+    .where(
+      and(
+        eq(briefings.id, data.briefingId),
+        eq(briefings.userId, data.userId),
+        ownerFilter
+      )
+    )
+    .limit(1);
+
+  return (result[0] as Briefing) ?? null;
 }
