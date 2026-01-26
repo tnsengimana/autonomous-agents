@@ -117,7 +117,7 @@ For teams to run autonomously and deliver proactive insights:
 
 ## Workflow Preferences
 
-**IMPORTANT - Plans Location**: ALL implementation plans go in `docs/plans/` with naming `YYYY-MM-DD-<topic>.md`. Never use `.claude/plans/` or any other location. This is non-negotiable.
+**IMPORTANT - Plans Location**: ALL implementation plans go in `docs/plans/` with naming `<next-incrementing-number>-<topic>.md`. Never use `.claude/plans/` or any other location. This is non-negotiable. The incrementing number in front of the plan document is important must be the next line; this allows sorting plans in order they were applied to repositories, effectively being able to track changes made over time.
 
 **Subagent Usage**: Always prefer to use subagents for implementation tasks:
 1. **Implementation subagent** - Writes code, creates files, installs dependencies
