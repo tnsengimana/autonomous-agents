@@ -90,6 +90,23 @@ export async function updateAgentStatus(
 }
 
 /**
+ * Update agent details (name, role, systemPrompt)
+ */
+export async function updateAgent(
+  agentId: string,
+  data: {
+    name?: string;
+    role?: string;
+    systemPrompt?: string;
+  }
+): Promise<void> {
+  await db
+    .update(agents)
+    .set({ ...data, updatedAt: new Date() })
+    .where(eq(agents.id, agentId));
+}
+
+/**
  * Create a new agent
  */
 export async function createAgent(data: {
