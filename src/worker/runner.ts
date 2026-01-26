@@ -72,8 +72,11 @@ export function notifyTaskQueued(agentId: string): void {
 // ============================================================================
 
 /**
- * Process one agent's work session
- * Uses the new thread-based runWorkSession method
+ * Process one agent's work session.
+ *
+ * Work sessions use the agent's background conversation (mode='background')
+ * for all LLM interactions. Tasks are processed sequentially, knowledge is
+ * extracted, and team leads may decide to brief the user.
  */
 async function processAgentWorkSession(agentId: string): Promise<void> {
   log(`Processing work session for agent: ${agentId}`);
