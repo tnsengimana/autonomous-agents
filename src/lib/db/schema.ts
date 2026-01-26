@@ -176,10 +176,6 @@ export const inboxItems = pgTable('inbox_items', {
   userId: uuid('user_id')
     .notNull()
     .references(() => users.id, { onDelete: 'cascade' }),
-  teamId: uuid('team_id')
-    .references(() => teams.id, { onDelete: 'cascade' }), // NOW NULLABLE - inbox item from team OR aide
-  aideId: uuid('aide_id')
-    .references(() => aides.id, { onDelete: 'cascade' }), // NEW - inbox item from team OR aide
   agentId: uuid('agent_id')
     .notNull()
     .references(() => agents.id, { onDelete: 'cascade' }),
@@ -301,7 +297,6 @@ export const teamsRelations = relations(teams, ({ one, many }) => ({
     references: [users.id],
   }),
   agents: many(agents),
-  inboxItems: many(inboxItems),
   briefings: many(briefings),
   agentTasks: many(agentTasks),
 }));
@@ -312,7 +307,6 @@ export const aidesRelations = relations(aides, ({ one, many }) => ({
     references: [users.id],
   }),
   agents: many(agents),
-  inboxItems: many(inboxItems),
   briefings: many(briefings),
   agentTasks: many(agentTasks),
 }));
@@ -387,14 +381,6 @@ export const inboxItemsRelations = relations(inboxItems, ({ one }) => ({
   user: one(users, {
     fields: [inboxItems.userId],
     references: [users.id],
-  }),
-  team: one(teams, {
-    fields: [inboxItems.teamId],
-    references: [teams.id],
-  }),
-  aide: one(aides, {
-    fields: [inboxItems.aideId],
-    references: [aides.id],
   }),
   agent: one(agents, {
     fields: [inboxItems.agentId],

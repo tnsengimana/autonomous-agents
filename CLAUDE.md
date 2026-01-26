@@ -66,6 +66,7 @@ The system separates user interactions (foreground) from agent work (background)
 - PostgreSQL with Drizzle ORM
 - Schema: users, teams, agents, conversations (with mode), messages (with toolCalls, previousMessageId), memories, knowledgeItems (with sourceConversationId), agentTasks, inboxItems
 - `drizzle.config.ts` points to `src/lib/db/schema.ts`
+ - `inbox_items` stores `userId` and `agentId` only; owner (team/aide) is derived via the agent relation
 
 **Background Worker** (`src/worker/runner.ts`)
 - Event-driven + timer-based execution:

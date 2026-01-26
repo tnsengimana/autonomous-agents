@@ -255,8 +255,6 @@ const createBriefingTool: Tool = {
         .insert(inboxItems)
         .values({
           userId,
-          teamId: 'teamId' in ownerInfo ? ownerInfo.teamId : null,
-          aideId: 'aideId' in ownerInfo ? ownerInfo.aideId : null,
           agentId: context.agentId,
           briefingId: briefing.id,
           type: 'briefing',
@@ -337,14 +335,11 @@ const createInboxItemTool: Tool = {
       };
     }
 
-    // 1. Create the inbox item with summary and appropriate owner
-    const ownerInfo = getOwnerInfo(context);
+    // 1. Create the inbox item with summary
     const result = await db
       .insert(inboxItems)
       .values({
         userId,
-        teamId: 'teamId' in ownerInfo ? ownerInfo.teamId : null,
-        aideId: 'aideId' in ownerInfo ? ownerInfo.aideId : null,
         agentId: context.agentId,
         type,
         title,

@@ -24,21 +24,23 @@ export async function GET() {
     const unreadCount = await getUnreadCount(userId);
 
     // 3. Format response
-    const items = itemsWithSources.map(({ item, teamName, aideName }) => ({
+    const items = itemsWithSources.map(
+      ({ item, teamName, aideName, teamId, aideId }) => ({
       id: item.id,
       type: item.type,
       title: item.title,
       content: item.content,
-      teamId: item.teamId,
+      teamId,
       teamName,
-      aideId: item.aideId,
+      aideId,
       aideName,
       agentId: item.agentId,
       briefingId: item.briefingId,
       read: item.readAt !== null,
       readAt: item.readAt,
       createdAt: item.createdAt,
-    }));
+      })
+    );
 
     return NextResponse.json({
       items,

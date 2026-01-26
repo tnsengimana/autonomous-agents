@@ -124,8 +124,6 @@ export type InboxItemType = 'insight' | 'question' | 'alert' | 'briefing' | 'sig
 export interface InboxItem {
   id: string;
   userId: string;
-  teamId: string | null;
-  aideId: string | null;
   agentId: string;
   briefingId: string | null;
   type: InboxItemType;
