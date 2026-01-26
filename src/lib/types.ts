@@ -10,7 +10,7 @@ import type {
   agents,
   agentTasks,
   conversations,
-  insights,
+  knowledgeItems,
   memories,
   messages,
   teams,
@@ -26,7 +26,7 @@ import type {
 export type Agent = InferSelectModel<typeof agents>;
 export type AgentTask = InferSelectModel<typeof agentTasks>;
 export type Conversation = InferSelectModel<typeof conversations>;
-export type Insight = InferSelectModel<typeof insights>;
+export type KnowledgeItem = InferSelectModel<typeof knowledgeItems>;
 export type Memory = InferSelectModel<typeof memories>;
 export type Message = InferSelectModel<typeof messages>;
 export type Team = InferSelectModel<typeof teams>;
@@ -45,7 +45,7 @@ export type TeamStatus = 'active' | 'paused' | 'archived';
 export type MemoryType = 'preference' | 'insight' | 'fact';
 export type MessageRole = 'user' | 'assistant' | 'system';
 export type ThreadStatus = 'active' | 'completed' | 'compacted';
-export type InsightType = 'fact' | 'technique' | 'pattern' | 'lesson';
+export type KnowledgeItemType = 'fact' | 'technique' | 'pattern' | 'lesson';
 
 // ============================================================================
 // Extended Types

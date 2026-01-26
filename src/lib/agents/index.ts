@@ -106,3 +106,14 @@ export {
   reportToLeadTool,
   requestInputTool,
 } from './tools/subordinate-tools';
+
+// Knowledge extraction and management
+export {
+  extractKnowledgeFromMessages,
+  extractKnowledgeFromThread,
+  formatKnowledgeForContext,
+  buildKnowledgeContextBlock,
+  loadKnowledgeContext,
+  loadKnowledge,
+  type ExtractedKnowledgeItem,
+} from './knowledge-items';

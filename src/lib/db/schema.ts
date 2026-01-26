@@ -216,8 +216,8 @@ export const threadMessages = pgTable('thread_messages', {
   index('thread_messages_thread_id_idx').on(table.threadId),
 ]);
 
-// Insights - professional knowledge extracted from work threads
-export const insights = pgTable('insights', {
+// Knowledge Items - professional knowledge extracted from work threads
+export const knowledgeItems = pgTable('knowledge_items', {
   id: uuid('id').primaryKey().defaultRandom(),
   agentId: uuid('agent_id').notNull().references(() => agents.id, { onDelete: 'cascade' }),
   type: text('type').notNull(), // 'fact', 'technique', 'pattern', 'lesson'
@@ -226,7 +226,7 @@ export const insights = pgTable('insights', {
   confidence: real('confidence'),
   createdAt: timestamp('created_at', { mode: 'date' }).defaultNow().notNull(),
 }, (table) => [
-  index('insights_agent_id_idx').on(table.agentId),
+  index('knowledge_items_agent_id_idx').on(table.agentId),
 ]);
 
 // ============================================================================
@@ -295,7 +295,7 @@ export const agentsRelations = relations(agents, ({ one, many }) => ({
     relationName: 'delegatedTasks',
   }),
   threads: many(threads),
-  insights: many(insights),
+  knowledgeItems: many(knowledgeItems),
 }));
 
 export const conversationsRelations = relations(conversations, ({ one, many }) => ({
@@ -363,7 +363,7 @@ export const threadsRelations = relations(threads, ({ one, many }) => ({
     references: [agents.id],
   }),
   messages: many(threadMessages),
-  insights: many(insights),
+  knowledgeItems: many(knowledgeItems),
 }));
 
 export const threadMessagesRelations = relations(threadMessages, ({ one }) => ({
@@ -373,13 +373,13 @@ export const threadMessagesRelations = relations(threadMessages, ({ one }) => ({
   }),
 }));
 
-export const insightsRelations = relations(insights, ({ one }) => ({
+export const knowledgeItemsRelations = relations(knowledgeItems, ({ one }) => ({
   agent: one(agents, {
-    fields: [insights.agentId],
+    fields: [knowledgeItems.agentId],
     references: [agents.id],
   }),
   sourceThread: one(threads, {
-    fields: [insights.sourceThreadId],
+    fields: [knowledgeItems.sourceThreadId],
     references: [threads.id],
   }),
 }));

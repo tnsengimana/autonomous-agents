@@ -93,11 +93,11 @@ export function getTeamLeadTools(): Tool[] {
 }
 
 /**
- * Get insight management tools (available in user conversations)
+ * Get knowledge item management tools (available in user conversations)
  */
-export function getInsightTools(): Tool[] {
+export function getKnowledgeItemTools(): Tool[] {
   return getAllTools().filter((tool) =>
-    ['addInsight', 'listInsights', 'removeInsight'].includes(tool.schema.name)
+    ['addKnowledgeItem', 'listKnowledgeItems', 'removeKnowledgeItem'].includes(tool.schema.name)
   );
 }
 
@@ -106,7 +106,7 @@ export function getInsightTools(): Tool[] {
  * These help agents manage knowledge shared by users
  */
 export function getForegroundTools(): Tool[] {
-  return getInsightTools();
+  return getKnowledgeItemTools();
 }
 
 /**
@@ -117,12 +117,12 @@ export function getBackgroundTools(isTeamLead: boolean): Tool[] {
   if (isTeamLead) {
     return [
       ...getTeamLeadTools(),
-      ...getInsightTools(),
+      ...getKnowledgeItemTools(),
     ];
   }
   return [
     ...getSubordinateTools(),
-    ...getInsightTools(),
+    ...getKnowledgeItemTools(),
   ];
 }
 

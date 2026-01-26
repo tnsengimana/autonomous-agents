@@ -139,15 +139,15 @@ export async function startRunner(): Promise<void> {
   const { registerTeamLeadTools } = await import(
     '@/lib/agents/tools/team-lead-tools'
   );
-  const { registerWorkerTools } = await import(
-    '@/lib/agents/tools/worker-tools'
+  const { registerSubordinateTools } = await import(
+    '@/lib/agents/tools/subordinate-tools'
   );
   const { registerTavilyTools } = await import(
     '@/lib/agents/tools/tavily-tools'
   );
 
   registerTeamLeadTools();
-  registerWorkerTools();
+  registerSubordinateTools();
   registerTavilyTools();
   log('Tools registered');
 

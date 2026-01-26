@@ -23,10 +23,10 @@ import {
   buildMemoryContextBlock,
 } from './memory';
 import {
-  extractInsightsFromThread,
-  buildInsightsContextBlock,
-  loadInsights,
-} from './insights';
+  extractKnowledgeFromThread,
+  buildKnowledgeContextBlock,
+  loadKnowledge,
+} from './knowledge-items';
 import {
   startWorkSession,
   endWorkSession,
@@ -42,7 +42,7 @@ import type {
   Agent as AgentData,
   AgentTask,
   Memory,
-  Insight,
+  KnowledgeItem,
   Conversation,
   LLMMessage,
 } from '@/lib/types';
@@ -73,7 +73,7 @@ export class Agent {
 
   private conversation: Conversation | null = null;
   private memories: Memory[] = [];
-  private insights: Insight[] = [];
+  private knowledgeItems: KnowledgeItem[] = [];
   private llmOptions: StreamOptions;
 
   constructor(data: AgentData, llmOptions: StreamOptions = {}) {
@@ -130,22 +130,22 @@ export class Agent {
   }
 
   // ============================================================================
-  // Insight Management (for background/work sessions)
+  // Knowledge Management (for background/work sessions)
   // ============================================================================
 
   /**
-   * Load insights from the database
+   * Load knowledge items from the database
    */
-  async loadInsights(): Promise<Insight[]> {
-    this.insights = await loadInsights(this.id);
-    return this.insights;
+  async loadKnowledge(): Promise<KnowledgeItem[]> {
+    this.knowledgeItems = await loadKnowledge(this.id);
+    return this.knowledgeItems;
   }
 
   /**
-   * Get currently loaded insights
+   * Get currently loaded knowledge items
    */
-  getInsights(): Insight[] {
-    return this.insights;
+  getKnowledge(): KnowledgeItem[] {
+    return this.knowledgeItems;
   }
 
   // ============================================================================
@@ -201,13 +201,13 @@ Always be professional, concise, and focused on your role.`;
   }
 
   /**
-   * Build the system prompt with insights context (for background work)
+   * Build the system prompt with knowledge context (for background work)
    */
   buildBackgroundSystemPrompt(): string {
-    const insightsBlock = buildInsightsContextBlock(this.insights);
+    const knowledgeBlock = buildKnowledgeContextBlock(this.knowledgeItems);
 
-    if (insightsBlock) {
-      return `${this.systemPrompt}\n\n${insightsBlock}`;
+    if (knowledgeBlock) {
+      return `${this.systemPrompt}\n\n${knowledgeBlock}`;
     }
 
     return this.systemPrompt;
@@ -304,10 +304,10 @@ Examples:
    *
    * This is the main entry point for background processing:
    * 1. Creates a new thread for this session
-   * 2. Loads INSIGHTS for work context (not memories)
+   * 2. Loads KNOWLEDGE for work context (not memories)
    * 3. Processes all pending tasks in queue
    * 4. When queue empty:
-   *    - Extracts insights from thread
+   *    - Extracts knowledge from thread
    *    - Marks thread completed
    *    - Team lead: decides on briefing
    *    - Schedules next run
@@ -330,8 +330,8 @@ Examples:
       // 1. Create new thread for this session
       const { threadId } = await startWorkSession(this.id);
 
-      // 2. Load INSIGHTS for work context (not memories)
-      await this.loadInsights();
+      // 2. Load KNOWLEDGE for work context (not memories)
+      await this.loadKnowledge();
 
       // 3. Process all pending tasks in queue (loop)
       let task = await claimNextTask(this.id);
@@ -362,15 +362,15 @@ Examples:
       // 4. Queue empty - wrap up the session
       console.log(`[Agent ${this.name}] All tasks processed, wrapping up session`);
 
-      // Extract insights from thread
-      const newInsights = await extractInsightsFromThread(
+      // Extract knowledge from thread
+      const newKnowledge = await extractKnowledgeFromThread(
         threadId,
         this.id,
         this.role,
         this.llmOptions
       );
       console.log(
-        `[Agent ${this.name}] Extracted ${newInsights.length} insights from session`
+        `[Agent ${this.name}] Extracted ${newKnowledge.length} knowledge items from session`
       );
 
       // Mark thread completed
@@ -400,7 +400,7 @@ Examples:
     const taskMessage = `Task from ${task.source}: ${task.task}`;
     await addToThread(threadId, 'user', taskMessage);
 
-    // 2. Build context from thread messages + INSIGHTS
+    // 2. Build context from thread messages + KNOWLEDGE
     // Note: threadContext is used implicitly when we fetch messages below for the LLM call
     await buildThreadContext(threadId);
     const systemPrompt = this.buildBackgroundSystemPrompt();

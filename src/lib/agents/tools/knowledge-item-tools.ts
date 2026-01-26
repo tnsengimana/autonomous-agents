@@ -1,8 +1,8 @@
 /**
- * Insight Management Tools
+ * Knowledge Item Management Tools
  *
  * Tools available during user conversations for managing professional knowledge.
- * Insights are facts, techniques, patterns, and lessons learned during work.
+ * Knowledge items are facts, techniques, patterns, and lessons learned during work.
  */
 
 import {
@@ -11,62 +11,62 @@ import {
   type ToolResult,
 } from './index';
 import {
-  createInsight,
-  deleteInsight,
-  getRecentInsights,
-} from '@/lib/db/queries/insights';
+  createKnowledgeItem,
+  deleteKnowledgeItem,
+  getRecentKnowledgeItems,
+} from '@/lib/db/queries/knowledge-items';
 import { z } from 'zod';
-import type { InsightType } from '@/lib/types';
+import type { KnowledgeItemType } from '@/lib/types';
 
 // ============================================================================
 // Parameter Schemas
 // ============================================================================
 
-export const AddInsightParamsSchema = z.object({
+export const AddKnowledgeItemParamsSchema = z.object({
   type: z
     .enum(['fact', 'technique', 'pattern', 'lesson'])
-    .describe('The type of insight'),
-  content: z.string().min(1).describe('The insight content to store'),
+    .describe('The type of knowledge item'),
+  content: z.string().min(1).describe('The knowledge item content to store'),
   confidence: z.number().min(0).max(1).optional().describe('Confidence level (0-1)'),
 });
 
-export const ListInsightsParamsSchema = z.object({
+export const ListKnowledgeItemsParamsSchema = z.object({
   type: z
     .enum(['fact', 'technique', 'pattern', 'lesson'])
     .optional()
-    .describe('Filter by insight type'),
-  limit: z.number().min(1).max(50).optional().describe('Maximum number of insights to return'),
+    .describe('Filter by knowledge item type'),
+  limit: z.number().min(1).max(50).optional().describe('Maximum number of knowledge items to return'),
 });
 
-export const RemoveInsightParamsSchema = z.object({
-  insightId: z.string().uuid().describe('The ID of the insight to remove'),
+export const RemoveKnowledgeItemParamsSchema = z.object({
+  knowledgeItemId: z.string().uuid().describe('The ID of the knowledge item to remove'),
 });
 
-export type AddInsightParams = z.infer<typeof AddInsightParamsSchema>;
-export type ListInsightsParams = z.infer<typeof ListInsightsParamsSchema>;
-export type RemoveInsightParams = z.infer<typeof RemoveInsightParamsSchema>;
+export type AddKnowledgeItemParams = z.infer<typeof AddKnowledgeItemParamsSchema>;
+export type ListKnowledgeItemsParams = z.infer<typeof ListKnowledgeItemsParamsSchema>;
+export type RemoveKnowledgeItemParams = z.infer<typeof RemoveKnowledgeItemParamsSchema>;
 
 // ============================================================================
-// addInsight Tool
+// addKnowledgeItem Tool
 // ============================================================================
 
-const addInsightTool: Tool = {
+const addKnowledgeItemTool: Tool = {
   schema: {
-    name: 'addInsight',
+    name: 'addKnowledgeItem',
     description:
       'Store professional knowledge or a learning. Use this when the user shares valuable information about their domain, techniques that work, patterns observed, or lessons learned.',
     parameters: [
       {
         name: 'type',
         type: 'string',
-        description: 'The type of insight: fact (domain knowledge), technique (how to do something), pattern (observed trend), lesson (learning from experience)',
+        description: 'The type of knowledge item: fact (domain knowledge), technique (how to do something), pattern (observed trend), lesson (learning from experience)',
         required: true,
         enum: ['fact', 'technique', 'pattern', 'lesson'],
       },
       {
         name: 'content',
         type: 'string',
-        description: 'The insight content to store',
+        description: 'The knowledge item content to store',
         required: true,
       },
       {
@@ -78,7 +78,7 @@ const addInsightTool: Tool = {
     ],
   },
   handler: async (params, context): Promise<ToolResult> => {
-    const parsed = AddInsightParamsSchema.safeParse(params);
+    const parsed = AddKnowledgeItemParamsSchema.safeParse(params);
     if (!parsed.success) {
       return {
         success: false,
@@ -89,9 +89,9 @@ const addInsightTool: Tool = {
     const { type, content, confidence } = parsed.data;
 
     try {
-      const insight = await createInsight(
+      const knowledgeItem = await createKnowledgeItem(
         context.agentId,
-        type as InsightType,
+        type as KnowledgeItemType,
         content,
         undefined, // sourceThreadId - not available in foreground
         confidence
@@ -100,46 +100,46 @@ const addInsightTool: Tool = {
       return {
         success: true,
         data: {
-          insightId: insight.id,
-          message: `Stored ${type} insight successfully`,
+          knowledgeItemId: knowledgeItem.id,
+          message: `Stored ${type} knowledge item successfully`,
         },
       };
     } catch (error) {
       return {
         success: false,
-        error: error instanceof Error ? error.message : 'Failed to store insight',
+        error: error instanceof Error ? error.message : 'Failed to store knowledge item',
       };
     }
   },
 };
 
 // ============================================================================
-// listInsights Tool
+// listKnowledgeItems Tool
 // ============================================================================
 
-const listInsightsTool: Tool = {
+const listKnowledgeItemsTool: Tool = {
   schema: {
-    name: 'listInsights',
+    name: 'listKnowledgeItems',
     description:
-      'List stored insights for this agent. Useful for reviewing what professional knowledge has been accumulated.',
+      'List stored knowledge items for this agent. Useful for reviewing what professional knowledge has been accumulated.',
     parameters: [
       {
         name: 'type',
         type: 'string',
-        description: 'Filter by insight type (optional)',
+        description: 'Filter by knowledge item type (optional)',
         required: false,
         enum: ['fact', 'technique', 'pattern', 'lesson'],
       },
       {
         name: 'limit',
         type: 'number',
-        description: 'Maximum number of insights to return (default: 20)',
+        description: 'Maximum number of knowledge items to return (default: 20)',
         required: false,
       },
     ],
   },
   handler: async (params, context): Promise<ToolResult> => {
-    const parsed = ListInsightsParamsSchema.safeParse(params);
+    const parsed = ListKnowledgeItemsParamsSchema.safeParse(params);
     if (!parsed.success) {
       return {
         success: false,
@@ -150,20 +150,20 @@ const listInsightsTool: Tool = {
     const { type, limit = 20 } = parsed.data;
 
     try {
-      let insights;
+      let knowledgeItems;
       if (type) {
-        const { getInsightsByType } = await import('@/lib/db/queries/insights');
-        insights = await getInsightsByType(context.agentId, type as InsightType);
-        insights = insights.slice(0, limit);
+        const { getKnowledgeItemsByType } = await import('@/lib/db/queries/knowledge-items');
+        knowledgeItems = await getKnowledgeItemsByType(context.agentId, type as KnowledgeItemType);
+        knowledgeItems = knowledgeItems.slice(0, limit);
       } else {
-        insights = await getRecentInsights(context.agentId, limit);
+        knowledgeItems = await getRecentKnowledgeItems(context.agentId, limit);
       }
 
       return {
         success: true,
         data: {
-          count: insights.length,
-          insights: insights.map((i) => ({
+          count: knowledgeItems.length,
+          knowledgeItems: knowledgeItems.map((i) => ({
             id: i.id,
             type: i.type,
             content: i.content,
@@ -175,32 +175,32 @@ const listInsightsTool: Tool = {
     } catch (error) {
       return {
         success: false,
-        error: error instanceof Error ? error.message : 'Failed to list insights',
+        error: error instanceof Error ? error.message : 'Failed to list knowledge items',
       };
     }
   },
 };
 
 // ============================================================================
-// removeInsight Tool
+// removeKnowledgeItem Tool
 // ============================================================================
 
-const removeInsightTool: Tool = {
+const removeKnowledgeItemTool: Tool = {
   schema: {
-    name: 'removeInsight',
+    name: 'removeKnowledgeItem',
     description:
-      'Remove an insight that is no longer accurate or relevant.',
+      'Remove a knowledge item that is no longer accurate or relevant.',
     parameters: [
       {
-        name: 'insightId',
+        name: 'knowledgeItemId',
         type: 'string',
-        description: 'The UUID of the insight to remove',
+        description: 'The UUID of the knowledge item to remove',
         required: true,
       },
     ],
   },
   handler: async (params, context): Promise<ToolResult> => {
-    const parsed = RemoveInsightParamsSchema.safeParse(params);
+    const parsed = RemoveKnowledgeItemParamsSchema.safeParse(params);
     if (!parsed.success) {
       return {
         success: false,
@@ -208,39 +208,39 @@ const removeInsightTool: Tool = {
       };
     }
 
-    const { insightId } = parsed.data;
+    const { knowledgeItemId } = parsed.data;
 
     try {
-      // Verify the insight belongs to this agent
-      const { getInsightById } = await import('@/lib/db/queries/insights');
-      const insight = await getInsightById(insightId);
+      // Verify the knowledge item belongs to this agent
+      const { getKnowledgeItemById } = await import('@/lib/db/queries/knowledge-items');
+      const knowledgeItem = await getKnowledgeItemById(knowledgeItemId);
 
-      if (!insight) {
+      if (!knowledgeItem) {
         return {
           success: false,
-          error: 'Insight not found',
+          error: 'Knowledge item not found',
         };
       }
 
-      if (insight.agentId !== context.agentId) {
+      if (knowledgeItem.agentId !== context.agentId) {
         return {
           success: false,
-          error: 'Cannot remove insights belonging to other agents',
+          error: 'Cannot remove knowledge items belonging to other agents',
         };
       }
 
-      await deleteInsight(insightId);
+      await deleteKnowledgeItem(knowledgeItemId);
 
       return {
         success: true,
         data: {
-          message: 'Insight removed successfully',
+          message: 'Knowledge item removed successfully',
         },
       };
     } catch (error) {
       return {
         success: false,
-        error: error instanceof Error ? error.message : 'Failed to remove insight',
+        error: error instanceof Error ? error.message : 'Failed to remove knowledge item',
       };
     }
   },
@@ -251,13 +251,13 @@ const removeInsightTool: Tool = {
 // ============================================================================
 
 /**
- * Register all insight management tools
+ * Register all knowledge item management tools
  */
-export function registerInsightTools(): void {
-  registerTool(addInsightTool);
-  registerTool(listInsightsTool);
-  registerTool(removeInsightTool);
+export function registerKnowledgeItemTools(): void {
+  registerTool(addKnowledgeItemTool);
+  registerTool(listKnowledgeItemsTool);
+  registerTool(removeKnowledgeItemTool);
 }
 
 // Export individual tools for testing
-export { addInsightTool, listInsightsTool, removeInsightTool };
+export { addKnowledgeItemTool, listKnowledgeItemsTool, removeKnowledgeItemTool };
