@@ -94,7 +94,7 @@ export async function appendMessage(
   content: string,
   thinking?: string | null
 ): Promise<Message> {
-  const message = await dbAppendMessage(conversationId, role, content, thinking);
+  const message = await dbAppendMessage(conversationId, role, content, thinking ? { thinking } : undefined);
   await touchConversation(conversationId);
   return message;
 }
@@ -121,16 +121,6 @@ export async function addAssistantMessage(
 }
 
 /**
- * Add a system message to a conversation
- */
-export async function addSystemMessage(
-  conversationId: string,
-  content: string
-): Promise<Message> {
-  return appendMessage(conversationId, 'system', content);
-}
-
-/**
  * Get the last message in a conversation
  */
 export async function getConversationLastMessage(
@@ -148,12 +138,10 @@ export async function getConversationLastMessage(
  * Handles new roles: tool and summary are mapped to appropriate LLM roles
  */
 export function messagesToLLMFormat(messages: Message[]): LLMMessage[] {
-  return messages
-    .filter((m) => m.role !== 'system') // System messages are handled separately
-    .map((m) => ({
-      role: mapRoleToLLMRole(m.role),
-      content: m.content,
-    }));
+  return messages.map((m) => ({
+    role: mapRoleToLLMRole(m.role),
+    content: m.content,
+  }));
 }
 
 /**

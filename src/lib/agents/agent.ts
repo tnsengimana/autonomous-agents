@@ -595,19 +595,9 @@ Examples:
       return [];
     }
 
-    // Convert Message[] to the format expected by extractKnowledgeFromMessages
-    // extractKnowledgeFromMessages only uses role and content properties
-    const messagesForExtraction = messages.map((m) => ({
-      id: m.id,
-      threadId: conversationId, // Use conversationId in place of threadId
-      role: m.role,
-      content: m.content,
-      toolCalls: m.toolCalls,
-      createdAt: m.createdAt,
-    })) as { id: string; threadId: string; role: string; content: string; toolCalls: unknown; createdAt: Date }[];
-
+    // extractKnowledgeFromMessages accepts Message[] directly (only uses role and content)
     const extractedKnowledge = await extractKnowledgeFromMessages(
-      messagesForExtraction as Parameters<typeof extractKnowledgeFromMessages>[0],
+      messages,
       this.role,
       this.llmOptions
     );

@@ -32,32 +32,32 @@ npx drizzle-kit studio            # Open Drizzle Studio UI
 
 The system separates user interactions (foreground) from agent work (background):
 
-**Conversations vs Threads**:
-- **Conversations**: User-Agent interaction (permanent, UI-visible, one per agent). Used for foreground communication.
-- **Threads**: Background work sessions (ephemeral, internal only, many per agent). Created when processing tasks, discarded after knowledge extraction.
+**Conversation Modes**:
+- **Foreground** (`mode='foreground'`): User-Agent interaction (permanent, UI-visible, one per agent). Human user sends messages, agent responds.
+- **Background** (`mode='background'`): Agent work sessions (persistent, internal only, one per agent). Agent processes tasks, uses tools, extracts knowledge. Automatic compaction via summary messages.
 
 **Memories vs Knowledge Items**:
-- **Memories**: User interaction context (preferences, past requests). Extracted from user conversations. Sent to LLM in **foreground only**.
-- **Knowledge Items**: Professional knowledge base (domain expertise, techniques, patterns, facts). Extracted from work threads. Sent to LLM in **background only**.
+- **Memories**: User interaction context (preferences, past requests). Extracted from foreground conversations. Sent to LLM in **foreground only**.
+- **Knowledge Items**: Professional knowledge base (domain expertise, techniques, patterns, facts). Extracted from background conversations (`sourceConversationId`). Sent to LLM in **background only**.
 
 ### Core Components
 
 **Agent Runtime** (`src/lib/agents/`)
 - `agent.ts` - Agent class with foreground/background separation:
   - `handleUserMessage()` - Foreground: quick ack + queue task, returns immediately
-  - `runWorkSession()` - Background: process queue in thread, extract knowledge, decide briefing
-  - `processTaskInThread()` - Per-task processing with tools within a thread
-  - `extractKnowledgeFromThread()` - Post-session professional learning (via `knowledge-items.ts`)
+  - `runWorkSession()` - Background: process queue in background conversation, extract knowledge, decide briefing
+  - `processTask()` - Per-task processing with tools in background conversation
+  - `extractKnowledgeFromConversation()` - Post-session professional learning (via `knowledge-items.ts`)
   - `decideBriefing()` - Team lead briefing decision after work session
 - `memory.ts` - Memory extraction from user conversations using `generateObject()`
-- `knowledge-items.ts` - Knowledge extraction from work threads (professional knowledge)
-- `thread.ts` - Thread lifecycle management (create, add messages, compact, complete)
+- `knowledge-items.ts` - Knowledge extraction from background conversations (professional knowledge)
+- `compaction.ts` - Conversation compaction via summary messages
 - `taskQueue.ts` - Task queue operations (queue, claim, complete)
 - `llm.ts` - Provider abstraction (OpenAI, Anthropic, Gemini). Looks up user's encrypted API keys, falls back to env vars
 
 **Database** (`src/lib/db/`)
 - PostgreSQL with Drizzle ORM
-- Schema: users, teams, agents, conversations, messages, memories, threads, threadMessages, knowledgeItems, agentTasks, inboxItems
+- Schema: users, teams, agents, conversations (with mode), messages (with toolCalls, previousMessageId), memories, knowledgeItems (with sourceConversationId), agentTasks, inboxItems
 - `drizzle.config.ts` points to `src/lib/db/schema.ts`
 
 **Background Worker** (`src/worker/runner.ts`)
@@ -66,7 +66,7 @@ The system separates user interactions (foreground) from agent work (background)
   - **Timer-based**: Team leads scheduled for daily proactive runs via `nextRunAt`
 - Subordinates are purely reactive (only triggered when work in queue)
 - Team leads are proactive (daily trigger to further mission)
-- Calls `agent.runWorkSession()` for thread-based task processing
+- Calls `agent.runWorkSession()` for background conversation task processing
 
 **Authentication** (`src/lib/auth/config.ts`)
 - NextAuth.js with passwordless magic links
@@ -84,12 +84,12 @@ The system separates user interactions (foreground) from agent work (background)
 
 **Background (Work Session)**:
 1. Task picked up from queue (event-driven or scheduled)
-2. New thread created for work session
+2. Agent uses background conversation (persistent, with automatic compaction)
 3. Agent loads KNOWLEDGE ITEMS (professional knowledge)
-4. Processes task with tools in thread
-5. After queue empty: extracts knowledge from thread
+4. Processes task with tools in background conversation
+5. After queue empty: extracts knowledge from conversation
 6. Team lead only: decides whether to brief user
-7. Thread marked completed, next run scheduled
+7. Next run scheduled
 
 ### Key Patterns
 
@@ -98,9 +98,8 @@ The system separates user interactions (foreground) from agent work (background)
 - **Encrypted API keys**: User API keys stored encrypted in `userApiKeys` table
 - **Team hierarchy**: Team leads have `parentAgentId = null`, subordinates reference their lead
 - **Memories vs Knowledge Items**: Memories store user interaction context. Knowledge items are the agent's professional knowledge base.
-- **Thread lifecycle**: created -> active -> knowledge extraction -> completed
-- **Thread compaction**: Mid-session context management when thread exceeds 50 messages
-- **Professional growth**: Knowledge items accumulate as expertise from work sessions
+- **Conversation compaction**: Summary messages compress old context via linked list (`previousMessageId`). Context loading returns latest summary + recent messages.
+- **Professional growth**: Knowledge items accumulate as expertise from background work sessions
 
 ## Autonomous Operation
 

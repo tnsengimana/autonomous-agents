@@ -34,7 +34,6 @@ export {
   appendMessage,
   addUserMessage,
   addAssistantMessage,
-  addSystemMessage,
   getConversationLastMessage,
   messagesToLLMFormat,
   buildMessageContext,
