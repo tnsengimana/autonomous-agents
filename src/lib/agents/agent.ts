@@ -61,7 +61,7 @@ const DEFAULT_MAX_RESPONSE_TOKENS = 2000;
 
 // Work session configuration
 const MAX_MESSAGES_BEFORE_COMPACT = 50;
-const TEAM_LEAD_NEXT_RUN_HOURS = 24; // 1 day
+const LEAD_NEXT_RUN_HOURS = 24; // 1 day
 
 // ============================================================================
 // User Intent Classification
@@ -83,7 +83,7 @@ export class Agent {
   readonly teamId: string | null;
   readonly aideId: string | null;
   readonly name: string;
-  readonly role: string;
+  readonly type: string;
   readonly systemPrompt: string;
   readonly parentAgentId: string | null;
 
@@ -97,7 +97,7 @@ export class Agent {
     this.teamId = data.teamId;
     this.aideId = data.aideId;
     this.name = data.name;
-    this.role = data.role;
+    this.type = data.type;
     this.systemPrompt = data.systemPrompt ?? this.getDefaultSystemPrompt();
     this.parentAgentId = data.parentAgentId;
     this.llmOptions = {
@@ -132,9 +132,9 @@ export class Agent {
   }
 
   /**
-   * Check if this agent is a team lead (no parent)
+   * Check if this agent is a lead (no parent)
    */
-  isTeamLead(): boolean {
+  isLead(): boolean {
     return this.parentAgentId === null;
   }
 
@@ -205,7 +205,7 @@ export class Agent {
    * Get the default system prompt for this agent
    */
   private getDefaultSystemPrompt(): string {
-    return `You are ${this.name}, a ${this.role}.
+    return `You are ${this.name}, a ${this.type}.
 
 Your primary responsibilities are to:
 1. Understand and respond to user queries relevant to your role
@@ -346,7 +346,7 @@ Examples:
       agentId: this.id,
       teamId: this.teamId,
       aideId: this.aideId,
-      isLead: this.isTeamLead(),
+      isLead: this.isLead(),
     };
 
     const result = await streamLLMResponseWithTools(
@@ -444,7 +444,7 @@ Examples:
    * 3. Processes all pending tasks in queue
    * 4. When queue empty:
    *    - Extracts knowledge from conversation
-   *    - Team lead: decides on briefing
+   *    - Lead: decides on briefing
    *    - Schedules next run
    *
    * Note: Background conversation is persistent across work sessions (unlike the old session model)
@@ -525,14 +525,14 @@ Examples:
 
       // No session to end - conversation persists across sessions
 
-      // Team lead: decide on briefing
-      if (this.isTeamLead()) {
+      // Lead: decide on briefing
+      if (this.isLead()) {
         await this.decideBriefing(conversationId);
       }
 
-      // Schedule next run (team lead: 1 day, subordinate: none - triggered by delegation)
-      if (this.isTeamLead() && !encounteredFailure) {
-        await this.scheduleNextRun(TEAM_LEAD_NEXT_RUN_HOURS);
+      // Schedule next run (lead: 1 day, subordinate: none - triggered by delegation)
+      if (this.isLead() && !encounteredFailure) {
+        await this.scheduleNextRun(LEAD_NEXT_RUN_HOURS);
       }
     } catch (error) {
       console.error(`[Agent ${this.name}] Work session failed:`, error);
@@ -557,12 +557,12 @@ Examples:
     ];
 
     // 3. Get tools for background work
-    const tools = getBackgroundTools(this.isTeamLead());
+    const tools = getBackgroundTools(this.isLead());
     const toolContext: ToolContext = {
       agentId: this.id,
       teamId: this.teamId,
       aideId: this.aideId,
-      isLead: this.isTeamLead(),
+      isLead: this.isLead(),
     };
 
     // 4. Call LLM with tools
@@ -673,7 +673,7 @@ Examples:
     // extractKnowledgeFromMessages accepts Message[] directly (only uses role and content)
     const extractedKnowledge = await extractKnowledgeFromMessages(
       messages,
-      this.role,
+      this.type,
       this.llmOptions
     );
 
@@ -699,14 +699,14 @@ Examples:
   }
 
   // ============================================================================
-  // NEW: Briefing Decision (Team Lead Only)
+  // NEW: Briefing Decision (Lead Only)
   // ============================================================================
 
   /**
    * Decide whether to brief the user based on work session results
    */
   async decideBriefing(conversationId: string): Promise<void> {
-    if (!this.isTeamLead()) return;
+    if (!this.isLead()) return;
 
     // Get conversation context for review
     const messages = await getConversationContext(conversationId);
@@ -807,7 +807,7 @@ If briefing is warranted, provide:
   }
 
   /**
-   * Schedule the next work session run (for lead agents only)
+   * Schedule the next work session run (for leads only)
    */
   private async scheduleNextRun(hours: number): Promise<void> {
     const { updateAgentLeadNextRunAt } = await import('@/lib/db/queries/agents');
@@ -904,7 +904,7 @@ If briefing is warranted, provide:
       this.id,
       userMessage,
       assistantResponse,
-      this.role,
+      this.type,
       sourceMessageId,
       this.llmOptions
     ).catch((error) => {
