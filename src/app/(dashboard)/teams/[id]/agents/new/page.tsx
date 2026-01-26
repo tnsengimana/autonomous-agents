@@ -54,7 +54,7 @@ export default function NewSubordinatePage() {
   };
 
   const handleChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
+    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>,
   ) => {
     setFormData((prev) => ({
       ...prev,
@@ -66,10 +66,10 @@ export default function NewSubordinatePage() {
     <div className="mx-auto max-w-2xl space-y-6">
       <div>
         <Link
-          href={`/teams/${teamId}/agents`}
+          href={`/teams/${teamId}`}
           className="text-sm text-muted-foreground hover:underline"
         >
-          Back to Agents
+          Back to team
         </Link>
         <h1 className="mt-2 text-3xl font-bold">Add Subordinate</h1>
         <p className="text-muted-foreground">
@@ -115,7 +115,8 @@ export default function NewSubordinatePage() {
                 required
               />
               <p className="text-xs text-muted-foreground">
-                Describe what this agent specializes in and its primary function.
+                Describe what this agent specializes in and its primary
+                function.
               </p>
             </div>
 
@@ -131,9 +132,9 @@ export default function NewSubordinatePage() {
                 required
               />
               <p className="text-xs text-muted-foreground">
-                Example: &quot;You are a data analyst expert skilled in statistical
-                analysis and data visualization. You provide clear, actionable
-                insights from complex datasets.&quot;
+                Example: &quot;You are a data analyst expert skilled in
+                statistical analysis and data visualization. You provide clear,
+                actionable insights from complex datasets.&quot;
               </p>
             </div>
           </CardContent>

@@ -101,10 +101,10 @@ export default async function AideAgentDetailPage({
       <div className="flex items-center justify-between">
         <div>
           <Link
-            href={`/aides/${aide.id}/agents`}
+            href={`/aides/${aide.id}`}
             className="text-sm text-muted-foreground hover:underline"
           >
-            Back to Agents
+            Back to aide
           </Link>
           <div className="flex items-center gap-3 mt-2">
             <h1 className="text-3xl font-bold">{agent.name}</h1>

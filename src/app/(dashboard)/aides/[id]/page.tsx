@@ -41,70 +41,19 @@ export default async function AideDetailPage({
 
   return (
     <div className="space-y-6">
-      <div className="flex items-start justify-between">
-        <div>
-          <Link
-            href="/aides"
-            className="text-sm text-muted-foreground hover:underline"
-          >
-            Back to Aides
-          </Link>
-          <h1 className="mt-2 text-3xl font-bold">{aide.name}</h1>
-          <p className="text-muted-foreground">Personal AI assistant</p>
-        </div>
-        <div className="flex items-center gap-2">
-          {leadAgent && (
-            <Link href={`/aides/${aide.id}/agents/${leadAgent.id}/chat`}>
-              <Button>Chat with Aide</Button>
-            </Link>
-          )}
-        </div>
-      </div>
-
-      <div className="grid gap-6 lg:grid-cols-3">
-        {/* Purpose */}
-        <Card className="lg:col-span-2">
-          <CardHeader>
-            <CardTitle>Purpose</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p>{purpose}</p>
-          </CardContent>
-        </Card>
-
-        {/* Quick Stats + Action Buttons */}
-        <div className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Stats</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div>
-                <div className="text-2xl font-bold">{aide.agents.length}</div>
-                <div className="text-sm text-muted-foreground">Agents</div>
-              </div>
-              <Separator />
-              <div>
-                <div className="text-sm font-medium">Created</div>
-                <div className="text-sm text-muted-foreground">
-                  {new Date(aide.createdAt).toLocaleDateString()}
-                </div>
-              </div>
-              <Separator />
-              <div>
-                <div className="text-sm font-medium">Status</div>
-                <Badge
-                  variant={aide.status === "active" ? "default" : "secondary"}
-                  className="mt-1"
-                >
-                  {aide.status}
-                </Badge>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Action Buttons */}
-          <div className="flex flex-wrap gap-2">
+      <div>
+        <Link
+          href="/aides"
+          className="text-sm text-muted-foreground hover:underline"
+        >
+          Back to Aides
+        </Link>
+        <div className="mt-2 flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold">{aide.name}</h1>
+            <p className="text-muted-foreground">Personal AI assistant</p>
+          </div>
+          <div className="flex items-center gap-2">
             <Button variant="outline" size="sm">
               Edit Aide
             </Button>
@@ -124,14 +73,52 @@ export default async function AideDetailPage({
         </div>
       </div>
 
+      <div className="grid gap-6 md:grid-cols-3">
+        {/* Purpose */}
+        <Card className="md:col-span-2">
+          <CardHeader>
+            <CardTitle>Purpose</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p>{purpose}</p>
+          </CardContent>
+        </Card>
+
+        {/* Stats */}
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">Stats</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-muted-foreground">Agents</span>
+              <span className="text-sm font-medium">{aide.agents.length}</span>
+            </div>
+            <Separator />
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-muted-foreground">Status</span>
+              <Badge variant="secondary">{aide.status}</Badge>
+            </div>
+            <Separator />
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-muted-foreground">Created</span>
+              <span className="text-sm">
+                {new Date(aide.createdAt).toLocaleDateString()}
+              </span>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
       {/* Lead Agent */}
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between">
             <div>
-              <CardTitle>Agents</CardTitle>
+              <CardTitle>Lead Agent</CardTitle>
               <CardDescription>
-                Aide agents and their current status
+                The lead agent runs continuously and coordinates subordinate
+                agents
               </CardDescription>
             </div>
           </div>
@@ -148,9 +135,6 @@ export default async function AideDetailPage({
                 <div>
                   <div className="flex items-center gap-2">
                     <span className="font-medium">{leadAgent.name}</span>
-                    <Badge variant="outline" className="text-xs">
-                      lead
-                    </Badge>
                   </div>
                   <div className="text-sm text-muted-foreground">
                     {leadAgent.role}
