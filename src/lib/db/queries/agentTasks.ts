@@ -4,19 +4,24 @@ import { agentTasks } from '../schema';
 import type { AgentTask, AgentTaskStatus, AgentTaskSource } from '@/lib/types';
 
 /**
+ * Owner info type for tasks - exactly one of teamId or aideId must be set
+ */
+export type TaskOwnerInfo = { teamId: string } | { aideId: string };
+
+/**
  * Create a new agent task
  */
 export async function createAgentTask(data: {
-  teamId: string;
   assignedToId: string;
   assignedById: string;
   task: string;
   source?: AgentTaskSource;
-}): Promise<AgentTask> {
+} & TaskOwnerInfo): Promise<AgentTask> {
   const result = await db
     .insert(agentTasks)
     .values({
-      teamId: data.teamId,
+      teamId: 'teamId' in data ? data.teamId : null,
+      aideId: 'aideId' in data ? data.aideId : null,
       assignedToId: data.assignedToId,
       assignedById: data.assignedById,
       task: data.task,
@@ -34,14 +39,15 @@ export async function createAgentTask(data: {
  */
 export async function queueTask(
   agentId: string,
-  teamId: string,
+  ownerInfo: TaskOwnerInfo,
   task: string,
   source: AgentTaskSource
 ): Promise<AgentTask> {
   const result = await db
     .insert(agentTasks)
     .values({
-      teamId,
+      teamId: 'teamId' in ownerInfo ? ownerInfo.teamId : null,
+      aideId: 'aideId' in ownerInfo ? ownerInfo.aideId : null,
       assignedToId: agentId,
       assignedById: agentId,
       task,
@@ -250,6 +256,13 @@ export async function getCompletedTasksDelegatedBy(
  */
 export async function getTasksByTeamId(teamId: string): Promise<AgentTask[]> {
   return db.select().from(agentTasks).where(eq(agentTasks.teamId, teamId));
+}
+
+/**
+ * Get all tasks for an aide
+ */
+export async function getTasksByAideId(aideId: string): Promise<AgentTask[]> {
+  return db.select().from(agentTasks).where(eq(agentTasks.aideId, aideId));
 }
 
 /**

@@ -1,6 +1,6 @@
 import { eq, isNull, and } from 'drizzle-orm';
 import { db } from '../client';
-import { agents, teams } from '../schema';
+import { agents, teams, aides } from '../schema';
 import type { Agent, AgentStatus } from '@/lib/types';
 
 /**
@@ -45,6 +45,7 @@ export async function getActiveTeamLeads(): Promise<Agent[]> {
     .select({
       id: agents.id,
       teamId: agents.teamId,
+      aideId: agents.aideId,
       parentAgentId: agents.parentAgentId,
       name: agents.name,
       role: agents.role,
@@ -183,4 +184,107 @@ export async function getTeamLeadsDueToRun(): Promise<string[]> {
     );
 
   return result.map((r) => r.id);
+}
+
+// ============================================================================
+// Aide-Related Functions
+// ============================================================================
+
+/**
+ * Create a new agent for an aide
+ */
+export async function createAgentForAide(data: {
+  aideId: string;
+  parentAgentId: string | null;
+  name: string;
+  role: string;
+  systemPrompt?: string | null;
+  status?: AgentStatus;
+}): Promise<Agent> {
+  const result = await db
+    .insert(agents)
+    .values({
+      aideId: data.aideId,
+      teamId: null, // Explicitly null for aide agents
+      parentAgentId: data.parentAgentId,
+      name: data.name,
+      role: data.role,
+      systemPrompt: data.systemPrompt ?? null,
+      status: data.status ?? 'idle',
+    })
+    .returning();
+
+  return result[0];
+}
+
+/**
+ * Get all agents for an aide
+ */
+export async function getAgentsByAideId(aideId: string): Promise<Agent[]> {
+  return db.select().from(agents).where(eq(agents.aideId, aideId));
+}
+
+/**
+ * Get all active aide leads (for worker runner)
+ * Returns aide leads for active aides regardless of agent status
+ */
+export async function getActiveAideLeads(): Promise<Agent[]> {
+  return db
+    .select({
+      id: agents.id,
+      teamId: agents.teamId,
+      aideId: agents.aideId,
+      parentAgentId: agents.parentAgentId,
+      name: agents.name,
+      role: agents.role,
+      systemPrompt: agents.systemPrompt,
+      status: agents.status,
+      nextRunAt: agents.nextRunAt,
+      lastCompletedAt: agents.lastCompletedAt,
+      createdAt: agents.createdAt,
+      updatedAt: agents.updatedAt,
+    })
+    .from(agents)
+    .innerJoin(aides, eq(agents.aideId, aides.id))
+    .where(
+      and(
+        isNull(agents.parentAgentId),
+        eq(aides.status, 'active')
+      )
+    );
+}
+
+/**
+ * Get aide lead agent IDs where nextRunAt <= now
+ * Only includes aide leads from active aides
+ */
+export async function getAideLeadsDueToRun(): Promise<string[]> {
+  const { lte } = await import('drizzle-orm');
+
+  const now = new Date();
+  const result = await db
+    .select({ id: agents.id })
+    .from(agents)
+    .innerJoin(aides, eq(agents.aideId, aides.id))
+    .where(
+      and(
+        isNull(agents.parentAgentId), // Aide leads only
+        eq(aides.status, 'active'),   // Active aides only
+        lte(agents.nextRunAt, now)    // Due to run
+      )
+    );
+
+  return result.map((r) => r.id);
+}
+
+/**
+ * Get all leads (team and aide) due to run
+ * Used by the worker runner to find leads that need scheduled proactive runs
+ */
+export async function getAllLeadsDueToRun(): Promise<string[]> {
+  const [teamLeads, aideLeads] = await Promise.all([
+    getTeamLeadsDueToRun(),
+    getAideLeadsDueToRun(),
+  ]);
+  return [...teamLeads, ...aideLeads];
 }

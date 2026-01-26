@@ -6,8 +6,13 @@
 
 import { eq, desc, and, isNull, count } from 'drizzle-orm';
 import { db } from '../client';
-import { inboxItems, teams } from '../schema';
+import { inboxItems, teams, aides } from '../schema';
 import type { InboxItem } from '@/lib/types';
+
+/**
+ * Owner info type for inbox items - exactly one of teamId or aideId must be set
+ */
+export type InboxItemOwnerInfo = { teamId: string } | { aideId: string };
 
 /**
  * Get all inbox items for a user, sorted by creation date (newest first)
@@ -39,6 +44,22 @@ export async function getInboxItemsByTeamId(
 }
 
 /**
+ * Get inbox items for a specific aide
+ */
+export async function getInboxItemsByAideId(
+  userId: string,
+  aideId: string
+): Promise<InboxItem[]> {
+  const result = await db
+    .select()
+    .from(inboxItems)
+    .where(and(eq(inboxItems.userId, userId), eq(inboxItems.aideId, aideId)))
+    .orderBy(desc(inboxItems.createdAt));
+
+  return result as InboxItem[];
+}
+
+/**
  * Get unread inbox items count for a user
  */
 export async function getUnreadCount(userId: string): Promise<number> {
@@ -64,7 +85,39 @@ export async function getInboxItemById(itemId: string): Promise<InboxItem | null
 }
 
 /**
+ * Get an inbox item with its team/aide info
+ */
+export async function getInboxItemWithSource(itemId: string): Promise<{
+  item: InboxItem;
+  teamName: string | null;
+  aideName: string | null;
+} | null> {
+  const result = await db
+    .select({
+      item: inboxItems,
+      teamName: teams.name,
+      aideName: aides.name,
+    })
+    .from(inboxItems)
+    .leftJoin(teams, eq(inboxItems.teamId, teams.id))
+    .leftJoin(aides, eq(inboxItems.aideId, aides.id))
+    .where(eq(inboxItems.id, itemId))
+    .limit(1);
+
+  if (!result[0]) {
+    return null;
+  }
+
+  return {
+    item: result[0].item as InboxItem,
+    teamName: result[0].teamName,
+    aideName: result[0].aideName,
+  };
+}
+
+/**
  * Get an inbox item with its team info
+ * @deprecated Use getInboxItemWithSource instead
  */
 export async function getInboxItemWithTeam(itemId: string): Promise<{
   item: InboxItem;
@@ -95,17 +148,17 @@ export async function getInboxItemWithTeam(itemId: string): Promise<{
  */
 export async function createInboxItem(data: {
   userId: string;
-  teamId: string;
   agentId: string;
   type: string;
   title: string;
   content: string;
-}): Promise<InboxItem> {
+} & InboxItemOwnerInfo): Promise<InboxItem> {
   const result = await db
     .insert(inboxItems)
     .values({
       userId: data.userId,
-      teamId: data.teamId,
+      teamId: 'teamId' in data ? data.teamId : null,
+      aideId: 'aideId' in data ? data.aideId : null,
       agentId: data.agentId,
       type: data.type,
       title: data.title,
@@ -171,7 +224,38 @@ export async function getRecentInboxItems(
 }
 
 /**
+ * Get inbox items with team/aide names
+ * Uses LEFT JOINs to support items from both teams and aides
+ */
+export async function getInboxItemsWithSources(userId: string): Promise<
+  Array<{
+    item: InboxItem;
+    teamName: string | null;
+    aideName: string | null;
+  }>
+> {
+  const result = await db
+    .select({
+      item: inboxItems,
+      teamName: teams.name,
+      aideName: aides.name,
+    })
+    .from(inboxItems)
+    .leftJoin(teams, eq(inboxItems.teamId, teams.id))
+    .leftJoin(aides, eq(inboxItems.aideId, aides.id))
+    .where(eq(inboxItems.userId, userId))
+    .orderBy(desc(inboxItems.createdAt));
+
+  return result.map((r) => ({
+    item: r.item as InboxItem,
+    teamName: r.teamName,
+    aideName: r.aideName,
+  }));
+}
+
+/**
  * Get inbox items with team names
+ * @deprecated Use getInboxItemsWithSources instead
  */
 export async function getInboxItemsWithTeams(userId: string): Promise<
   Array<{
