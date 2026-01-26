@@ -5,7 +5,7 @@
  *
  * Execution triggers:
  * 1. Event-driven: When tasks are queued to any agent
- * 2. Timer-based: Lead agents (team leads AND aide leads) run once per day (scheduled via nextRunAt)
+ * 2. Timer-based: Lead agents (team leads AND aide leads) run once per day (scheduled via leadNextRunAt)
  *
  * Subordinates are purely reactive - they only run when they have queued tasks.
  * Lead agents get scheduled for 1 day after each work session completion.
@@ -132,7 +132,7 @@ async function getAgentsNeedingWork(): Promise<string[]> {
  *
  * Polling strategy:
  * - Check for agents with pending work (hasQueuedWork)
- * - Check for team leads where nextRunAt <= now
+ * - Check for lead agents where leadNextRunAt <= now
  * - Process each agent's work session
  * - Sleep with longer interval since we have event-driven triggers
  *

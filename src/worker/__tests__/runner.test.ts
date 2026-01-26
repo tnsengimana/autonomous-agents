@@ -27,7 +27,7 @@ import {
 } from '@/lib/db/queries/agents';
 
 import { queueUserTask, type TaskOwnerInfo } from '@/lib/agents/taskQueue';
-import { updateAgentNextRunAt } from '@/lib/db/queries/agents';
+import { updateAgentLeadNextRunAt } from '@/lib/db/queries/agents';
 
 // Helper to create ownerInfo for teams
 function teamOwnerInfo(teamId: string): TaskOwnerInfo {
@@ -111,10 +111,10 @@ async function cleanupTasks(taskIds: string[]) {
   }
 }
 
-// Helper to reset agent nextRunAt
+// Helper to reset agent leadNextRunAt
 async function resetAgentNextRunAt(agentId: string) {
   await db.update(agents)
-    .set({ nextRunAt: null, backoffNextRunAt: null, backoffAttemptCount: 0 })
+    .set({ leadNextRunAt: null, backoffNextRunAt: null, backoffAttemptCount: 0 })
     .where(eq(agents.id, agentId));
 }
 
@@ -197,26 +197,26 @@ describe('getAgentsWithPendingTasks', () => {
 
 describe('getTeamLeadsDueToRun', () => {
   beforeEach(async () => {
-    // Reset nextRunAt for all test agents
+    // Reset leadNextRunAt for all test agents
     await resetAgentNextRunAt(testTeamLeadId);
     await resetAgentNextRunAt(testSubordinateId);
     await resetAgentNextRunAt(inactiveTeamLeadId);
   });
 
   test('returns empty array when no team leads are due', async () => {
-    // Set nextRunAt to future
+    // Set leadNextRunAt to future
     const futureDate = new Date(Date.now() + 86400000); // 1 day from now
-    await updateAgentNextRunAt(testTeamLeadId, futureDate);
+    await updateAgentLeadNextRunAt(testTeamLeadId, futureDate);
 
     const teamLeadIds = await getTeamLeadsDueToRun();
 
     expect(teamLeadIds).not.toContain(testTeamLeadId);
   });
 
-  test('returns team leads where nextRunAt <= now', async () => {
-    // Set nextRunAt to past
+  test('returns team leads where leadNextRunAt <= now', async () => {
+    // Set leadNextRunAt to past
     const pastDate = new Date(Date.now() - 1000); // 1 second ago
-    await updateAgentNextRunAt(testTeamLeadId, pastDate);
+    await updateAgentLeadNextRunAt(testTeamLeadId, pastDate);
 
     const teamLeadIds = await getTeamLeadsDueToRun();
 
@@ -226,7 +226,7 @@ describe('getTeamLeadsDueToRun', () => {
   test('excludes team leads in backoff', async () => {
     const pastDate = new Date(Date.now() - 1000);
     const futureBackoff = new Date(Date.now() + 60 * 60 * 1000);
-    await updateAgentNextRunAt(testTeamLeadId, pastDate);
+    await updateAgentLeadNextRunAt(testTeamLeadId, pastDate);
     await db.update(agents)
       .set({ backoffNextRunAt: futureBackoff, backoffAttemptCount: 1 })
       .where(eq(agents.id, testTeamLeadId));
@@ -237,10 +237,10 @@ describe('getTeamLeadsDueToRun', () => {
     await resetAgentNextRunAt(testTeamLeadId);
   });
 
-  test('does not return subordinates even if they have nextRunAt set', async () => {
-    // Set nextRunAt on subordinate (shouldn't happen, but test the guard)
+  test('does not return subordinates even if they have leadNextRunAt set', async () => {
+    // Set leadNextRunAt on subordinate (shouldn't happen, but test the guard)
     const pastDate = new Date(Date.now() - 1000);
-    await updateAgentNextRunAt(testSubordinateId, pastDate);
+    await updateAgentLeadNextRunAt(testSubordinateId, pastDate);
 
     const teamLeadIds = await getTeamLeadsDueToRun();
 
@@ -248,22 +248,22 @@ describe('getTeamLeadsDueToRun', () => {
   });
 
   test('only returns team leads from active teams', async () => {
-    // Set nextRunAt on inactive team's lead
+    // Set leadNextRunAt on inactive team's lead
     const pastDate = new Date(Date.now() - 1000);
-    await updateAgentNextRunAt(inactiveTeamLeadId, pastDate);
+    await updateAgentLeadNextRunAt(inactiveTeamLeadId, pastDate);
 
     const teamLeadIds = await getTeamLeadsDueToRun();
 
     expect(teamLeadIds).not.toContain(inactiveTeamLeadId);
   });
 
-  test('returns team leads with null nextRunAt if first run', async () => {
-    // nextRunAt is null by default - this means never run yet
+  test('returns team leads with null leadNextRunAt if first run', async () => {
+    // leadNextRunAt is null by default - this means never run yet
     // The query uses lte which doesn't include null, so this should NOT be returned
     // This is the expected behavior - agents need to be scheduled first
     const teamLeadIds = await getTeamLeadsDueToRun();
 
-    // With null nextRunAt, team lead should NOT be in the due list
+    // With null leadNextRunAt, team lead should NOT be in the due list
     expect(teamLeadIds).not.toContain(testTeamLeadId);
   });
 });
@@ -341,15 +341,15 @@ describe('Agent Scheduling', () => {
     expect(subordinate.parentAgentId).toBe(testTeamLeadId);
   });
 
-  test('team lead can have nextRunAt updated', async () => {
+  test('team lead can have leadNextRunAt updated', async () => {
     const futureDate = new Date(Date.now() + 86400000); // 1 day from now
-    await updateAgentNextRunAt(testTeamLeadId, futureDate);
+    await updateAgentLeadNextRunAt(testTeamLeadId, futureDate);
 
     const [teamLead] = await db.select()
       .from(agents)
       .where(eq(agents.id, testTeamLeadId));
 
-    expect(teamLead.nextRunAt).toEqual(futureDate);
+    expect(teamLead.leadNextRunAt).toEqual(futureDate);
 
     // Reset
     await resetAgentNextRunAt(testTeamLeadId);
@@ -377,7 +377,7 @@ describe('Combined Agent Selection', () => {
 
   test('due team leads are selected', async () => {
     const pastDate = new Date(Date.now() - 1000);
-    await updateAgentNextRunAt(testTeamLeadId, pastDate);
+    await updateAgentLeadNextRunAt(testTeamLeadId, pastDate);
 
     const dueTeamLeads = await getTeamLeadsDueToRun();
     expect(dueTeamLeads).toContain(testTeamLeadId);
@@ -389,7 +389,7 @@ describe('Combined Agent Selection', () => {
 
     // Team lead is due to run
     const pastDate = new Date(Date.now() - 1000);
-    await updateAgentNextRunAt(testTeamLeadId, pastDate);
+    await updateAgentLeadNextRunAt(testTeamLeadId, pastDate);
 
     const agentsWithTasks = await getAgentsWithPendingTasks();
     const dueTeamLeads = await getTeamLeadsDueToRun();
@@ -449,7 +449,7 @@ describe('Edge Cases', () => {
     // Team lead has both: pending task AND is due to run
     const task = await queueUserTask(testTeamLeadId, teamOwnerInfo(testTeamId), 'Team lead task');
     const pastDate = new Date(Date.now() - 1000);
-    await updateAgentNextRunAt(testTeamLeadId, pastDate);
+    await updateAgentLeadNextRunAt(testTeamLeadId, pastDate);
 
     const agentsWithTasks = await getAgentsWithPendingTasks();
     const dueTeamLeads = await getTeamLeadsDueToRun();

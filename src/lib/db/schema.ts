@@ -121,14 +121,14 @@ export const agents = pgTable('agents', {
   role: text('role').notNull(),
   systemPrompt: text('system_prompt'),
   status: text('status').notNull().default('idle'), // 'idle', 'running', 'paused'
-  nextRunAt: timestamp('next_run_at', { mode: 'date' }),
+  leadNextRunAt: timestamp('lead_next_run_at', { mode: 'date' }), // Only used for lead agents (team leads, aide leads)
   backoffNextRunAt: timestamp('backoff_next_run_at', { mode: 'date' }),
   backoffAttemptCount: integer('backoff_attempt_count').notNull().default(0),
   lastCompletedAt: timestamp('last_completed_at', { mode: 'date' }),
   createdAt: timestamp('created_at', { mode: 'date' }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { mode: 'date' }).defaultNow().notNull(),
 }, (table) => [
-  index('agents_next_run_at_idx').on(table.nextRunAt),
+  index('agents_lead_next_run_at_idx').on(table.leadNextRunAt),
   index('agents_backoff_next_run_at_idx').on(table.backoffNextRunAt),
   index('agents_aide_id_idx').on(table.aideId),
 ]);

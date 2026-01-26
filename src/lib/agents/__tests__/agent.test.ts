@@ -139,7 +139,7 @@ describe('Agent Class', () => {
       parentAgentId: null,
       systemPrompt: null,
       status: 'idle' as const,
-      nextRunAt: null,
+      leadNextRunAt: null,
       lastCompletedAt: null,
       createdAt: new Date(),
       updatedAt: new Date(),
@@ -352,13 +352,13 @@ describe('runWorkSession', () => {
     const agent = await createAgent(testTeamLeadId);
     await agent!.runWorkSession();
 
-    // Check that nextRunAt was set
+    // Check that leadNextRunAt was set
     const [updatedAgent] = await db.select().from(agents)
       .where(eq(agents.id, testTeamLeadId));
-    expect(updatedAgent.nextRunAt).not.toBeNull();
+    expect(updatedAgent.leadNextRunAt).not.toBeNull();
 
     // Should be approximately 1 day (24 hours) in the future
-    const nextRun = new Date(updatedAgent.nextRunAt!);
+    const nextRun = new Date(updatedAgent.leadNextRunAt!);
     const now = new Date();
     const diffHours = (nextRun.getTime() - now.getTime()) / (1000 * 60 * 60);
     expect(diffHours).toBeGreaterThan(23.9);
@@ -372,10 +372,10 @@ describe('runWorkSession', () => {
     const agent = await createAgent(testSubordinateId);
     await agent!.runWorkSession();
 
-    // Subordinate should not have nextRunAt set
+    // Subordinate should not have leadNextRunAt set
     const [updatedAgent] = await db.select().from(agents)
       .where(eq(agents.id, testSubordinateId));
-    expect(updatedAgent.nextRunAt).toBeNull();
+    expect(updatedAgent.leadNextRunAt).toBeNull();
   });
 });
 
@@ -1142,7 +1142,7 @@ describe('Aide Support', () => {
       parentAgentId: null,
       systemPrompt: null,
       status: 'idle' as const,
-      nextRunAt: null,
+      leadNextRunAt: null,
       lastCompletedAt: null,
       createdAt: new Date(),
       updatedAt: new Date(),
@@ -1247,10 +1247,10 @@ describe('Aide Support', () => {
     const agent = await createAgent(testAideAgentId);
     await agent!.runWorkSession();
 
-    // Check that nextRunAt was set (aide lead is like team lead)
+    // Check that leadNextRunAt was set (aide lead is like team lead)
     const [updatedAgent] = await db.select().from(agents)
       .where(eq(agents.id, testAideAgentId));
-    expect(updatedAgent.nextRunAt).not.toBeNull();
+    expect(updatedAgent.leadNextRunAt).not.toBeNull();
   });
 
   test('ToolContext includes aideId for aide agents', async () => {

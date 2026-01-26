@@ -406,7 +406,7 @@ describe('agents schema', () => {
 
     await db.update(agents)
       .set({
-        nextRunAt: now,
+        leadNextRunAt: now,
         backoffNextRunAt: now,
         backoffAttemptCount: 2,
         lastCompletedAt: now,
@@ -415,7 +415,7 @@ describe('agents schema', () => {
 
     const [updated] = await db.select().from(agents).where(eq(agents.id, testAgentId));
 
-    expect(updated.nextRunAt).toBeDefined();
+    expect(updated.leadNextRunAt).toBeDefined();
     expect(updated.backoffNextRunAt).toBeDefined();
     expect(updated.backoffAttemptCount).toBe(2);
     expect(updated.lastCompletedAt).toBeDefined();
@@ -423,7 +423,7 @@ describe('agents schema', () => {
     // Reset
     await db.update(agents)
       .set({
-        nextRunAt: null,
+        leadNextRunAt: null,
         backoffNextRunAt: null,
         backoffAttemptCount: 0,
         lastCompletedAt: null,

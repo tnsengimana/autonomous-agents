@@ -51,7 +51,7 @@ export async function getActiveTeamLeads(): Promise<Agent[]> {
       role: agents.role,
       systemPrompt: agents.systemPrompt,
       status: agents.status,
-      nextRunAt: agents.nextRunAt,
+      leadNextRunAt: agents.leadNextRunAt,
       backoffNextRunAt: agents.backoffNextRunAt,
       backoffAttemptCount: agents.backoffAttemptCount,
       lastCompletedAt: agents.lastCompletedAt,
@@ -135,15 +135,15 @@ export async function createAgent(data: {
 }
 
 /**
- * Update agent's next scheduled run time
+ * Update lead agent's next scheduled run time
  */
-export async function updateAgentNextRunAt(
+export async function updateAgentLeadNextRunAt(
   agentId: string,
-  nextRunAt: Date
+  leadNextRunAt: Date
 ): Promise<void> {
   await db
     .update(agents)
-    .set({ nextRunAt, updatedAt: new Date() })
+    .set({ leadNextRunAt, updatedAt: new Date() })
     .where(eq(agents.id, agentId));
 }
 
@@ -219,7 +219,7 @@ export async function getAgentsWithPendingTasks(): Promise<string[]> {
 }
 
 /**
- * Get team lead agent IDs where nextRunAt <= now
+ * Get team lead agent IDs where leadNextRunAt <= now
  * Only includes team leads from active teams
  */
 export async function getTeamLeadsDueToRun(): Promise<string[]> {
@@ -232,7 +232,7 @@ export async function getTeamLeadsDueToRun(): Promise<string[]> {
       and(
         isNull(agents.parentAgentId), // Team leads only
         eq(teams.status, 'active'),   // Active teams only
-        lte(agents.nextRunAt, now),   // Due to run
+        lte(agents.leadNextRunAt, now),   // Due to run
         or(
           isNull(agents.backoffNextRunAt),
           lte(agents.backoffNextRunAt, now)
@@ -296,7 +296,7 @@ export async function getActiveAideLeads(): Promise<Agent[]> {
       role: agents.role,
       systemPrompt: agents.systemPrompt,
       status: agents.status,
-      nextRunAt: agents.nextRunAt,
+      leadNextRunAt: agents.leadNextRunAt,
       backoffNextRunAt: agents.backoffNextRunAt,
       backoffAttemptCount: agents.backoffAttemptCount,
       lastCompletedAt: agents.lastCompletedAt,
@@ -314,7 +314,7 @@ export async function getActiveAideLeads(): Promise<Agent[]> {
 }
 
 /**
- * Get aide lead agent IDs where nextRunAt <= now
+ * Get aide lead agent IDs where leadNextRunAt <= now
  * Only includes aide leads from active aides
  */
 export async function getAideLeadsDueToRun(): Promise<string[]> {
@@ -327,7 +327,7 @@ export async function getAideLeadsDueToRun(): Promise<string[]> {
       and(
         isNull(agents.parentAgentId), // Aide leads only
         eq(aides.status, 'active'),   // Active aides only
-        lte(agents.nextRunAt, now),   // Due to run
+        lte(agents.leadNextRunAt, now),   // Due to run
         or(
           isNull(agents.backoffNextRunAt),
           lte(agents.backoffNextRunAt, now)

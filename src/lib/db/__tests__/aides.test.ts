@@ -656,7 +656,7 @@ describe('getActiveAideLeads', () => {
 // ============================================================================
 
 describe('getAideLeadsDueToRun', () => {
-  test('returns aide leads where nextRunAt <= now', async () => {
+  test('returns aide leads where leadNextRunAt <= now', async () => {
     const aide = await createAide({ userId: testUserId, name: 'Active', status: 'active' });
     const lead = await createAgentForAide({
       aideId: aide.id,
@@ -665,10 +665,10 @@ describe('getAideLeadsDueToRun', () => {
       parentAgentId: null,
     });
 
-    // Set nextRunAt to past
+    // Set leadNextRunAt to past
     const pastDate = new Date(Date.now() - 1000);
     await db.update(agents)
-      .set({ nextRunAt: pastDate })
+      .set({ leadNextRunAt: pastDate })
       .where(eq(agents.id, lead.id));
 
     const dueLeads = await getAideLeadsDueToRun();
@@ -690,7 +690,7 @@ describe('getAideLeadsDueToRun', () => {
     const pastDate = new Date(Date.now() - 1000);
     const futureBackoff = new Date(Date.now() + 60 * 60 * 1000);
     await db.update(agents)
-      .set({ nextRunAt: pastDate, backoffNextRunAt: futureBackoff, backoffAttemptCount: 1 })
+      .set({ leadNextRunAt: pastDate, backoffNextRunAt: futureBackoff, backoffAttemptCount: 1 })
       .where(eq(agents.id, lead.id));
 
     const dueLeads = await getAideLeadsDueToRun();
@@ -700,7 +700,7 @@ describe('getAideLeadsDueToRun', () => {
     await cleanupAides([aide.id]);
   });
 
-  test('excludes aide leads with future nextRunAt', async () => {
+  test('excludes aide leads with future leadNextRunAt', async () => {
     const aide = await createAide({ userId: testUserId, name: 'Active', status: 'active' });
     const lead = await createAgentForAide({
       aideId: aide.id,
@@ -709,10 +709,10 @@ describe('getAideLeadsDueToRun', () => {
       parentAgentId: null,
     });
 
-    // Set nextRunAt to future
+    // Set leadNextRunAt to future
     const futureDate = new Date(Date.now() + 86400000);
     await db.update(agents)
-      .set({ nextRunAt: futureDate })
+      .set({ leadNextRunAt: futureDate })
       .where(eq(agents.id, lead.id));
 
     const dueLeads = await getAideLeadsDueToRun();
@@ -731,10 +731,10 @@ describe('getAideLeadsDueToRun', () => {
       parentAgentId: null,
     });
 
-    // Set nextRunAt to past
+    // Set leadNextRunAt to past
     const pastDate = new Date(Date.now() - 1000);
     await db.update(agents)
-      .set({ nextRunAt: pastDate })
+      .set({ leadNextRunAt: pastDate })
       .where(eq(agents.id, lead.id));
 
     const dueLeads = await getAideLeadsDueToRun();

@@ -807,12 +807,12 @@ If briefing is warranted, provide:
   }
 
   /**
-   * Schedule the next work session run
+   * Schedule the next work session run (for lead agents only)
    */
   private async scheduleNextRun(hours: number): Promise<void> {
-    const { updateAgentNextRunAt } = await import('@/lib/db/queries/agents');
+    const { updateAgentLeadNextRunAt } = await import('@/lib/db/queries/agents');
     const nextRun = new Date(Date.now() + hours * 60 * 60 * 1000);
-    await updateAgentNextRunAt(this.id, nextRun);
+    await updateAgentLeadNextRunAt(this.id, nextRun);
     console.log(`[Agent ${this.name}] Next run scheduled for ${nextRun.toISOString()}`);
   }
 

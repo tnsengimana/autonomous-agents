@@ -70,7 +70,7 @@ The system separates user interactions (foreground) from agent work (background)
 **Background Worker** (`src/worker/runner.ts`)
 - Event-driven + timer-based execution:
   - **Event-driven**: Tasks queued via `notifyTaskQueued()` trigger immediate processing
-  - **Timer-based**: Team leads scheduled for daily proactive runs via `nextRunAt`
+  - **Timer-based**: Team leads scheduled for daily proactive runs via `leadNextRunAt`
 - Subordinates are purely reactive (only triggered when work in queue)
 - Team leads are proactive (daily trigger to further mission)
 - Calls `agent.runWorkSession()` for background conversation task processing
