@@ -423,7 +423,7 @@ Examples:
    *    - Team lead: decides on briefing
    *    - Schedules next run
    *
-   * Note: Background conversation is persistent across work sessions (unlike threads which were ephemeral)
+   * Note: Background conversation is persistent across work sessions (unlike the old session model)
    */
   async runWorkSession(): Promise<void> {
     // Check if there's work to do
@@ -486,7 +486,7 @@ Examples:
         `[Agent ${this.name}] Extracted ${newKnowledge.length} knowledge items from session`
       );
 
-      // No thread to end - conversation persists across sessions
+      // No session to end - conversation persists across sessions
 
       // Team lead: decide on briefing
       if (this.isTeamLead()) {

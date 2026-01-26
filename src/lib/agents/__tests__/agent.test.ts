@@ -3,7 +3,7 @@
  *
  * Tests cover:
  * - handleUserMessage flow (queue task, return ack)
- * - runWorkSession flow (thread creation, task processing, knowledge extraction)
+ * - runWorkSession flow (background conversation creation, task processing, knowledge extraction)
  * - decideBriefing (team lead vs subordinate)
  * - Knowledge item tools (add, list, remove)
  *
@@ -12,7 +12,7 @@
 
 import { describe, test, expect, beforeAll, afterAll, beforeEach, vi } from 'vitest';
 import { db } from '@/lib/db/client';
-import { users, teams, agents, agentTasks, knowledgeItems, threads, threadMessages, messages } from '@/lib/db/schema';
+import { users, teams, agents, agentTasks, knowledgeItems, conversations, messages } from '@/lib/db/schema';
 import { eq, and } from 'drizzle-orm';
 
 // Import the Agent class and related functions
@@ -21,7 +21,7 @@ import { queueUserTask, getQueueStatus } from '@/lib/agents/taskQueue';
 import { registerKnowledgeItemTools } from '@/lib/agents/tools/knowledge-item-tools';
 import { getTool, executeTool, type ToolContext } from '@/lib/agents/tools';
 import { createKnowledgeItem, getKnowledgeItemsByAgentId, deleteKnowledgeItem } from '@/lib/db/queries/knowledge-items';
-import { createThread } from '@/lib/db/queries/threads';
+import { getOrCreateConversation } from '@/lib/db/queries/conversations';
 import * as llm from '@/lib/agents/llm';
 
 // ============================================================================
@@ -83,12 +83,12 @@ afterAll(async () => {
 
 // Helper to cleanup data created during tests
 async function cleanupTestData() {
-  // Clean up tasks, knowledge items, threads, messages for test agents
+  // Clean up tasks, knowledge items, conversations for test agents
   await db.delete(agentTasks).where(eq(agentTasks.teamId, testTeamId));
   await db.delete(knowledgeItems).where(eq(knowledgeItems.agentId, testTeamLeadId));
   await db.delete(knowledgeItems).where(eq(knowledgeItems.agentId, testSubordinateId));
-  await db.delete(threads).where(eq(threads.agentId, testTeamLeadId));
-  await db.delete(threads).where(eq(threads.agentId, testSubordinateId));
+  await db.delete(conversations).where(eq(conversations.agentId, testTeamLeadId));
+  await db.delete(conversations).where(eq(conversations.agentId, testSubordinateId));
 }
 
 beforeEach(async () => {
@@ -278,26 +278,30 @@ describe('runWorkSession', () => {
     const statusBefore = await getQueueStatus(testTeamLeadId);
     expect(statusBefore.hasPendingWork).toBe(false);
 
-    // Run work session - should complete without creating thread
+    // Run work session - should complete without adding messages to background conversation
     await agent!.runWorkSession();
 
-    // Verify no thread was created
-    const threadList = await db.select().from(threads)
-      .where(eq(threads.agentId, testTeamLeadId));
-    expect(threadList.length).toBe(0);
+    // Get background conversation
+    const bgConversation = await getOrCreateConversation(testTeamLeadId, 'background');
+
+    // Verify no messages were added (empty session)
+    const bgMessages = await db.select().from(messages)
+      .where(eq(messages.conversationId, bgConversation.id));
+    expect(bgMessages.length).toBe(0);
   });
 
-  test('creates new thread for session', async () => {
+  test('uses background conversation for session', async () => {
     // Queue a task first
     await queueUserTask(testTeamLeadId, testTeamId, 'Test task');
 
     const agent = await createAgent(testTeamLeadId);
     await agent!.runWorkSession();
 
-    // Verify thread was created
-    const threadList = await db.select().from(threads)
-      .where(eq(threads.agentId, testTeamLeadId));
-    expect(threadList.length).toBeGreaterThan(0);
+    // Verify background conversation was used
+    const bgConversation = await getOrCreateConversation(testTeamLeadId, 'background');
+    const bgMessages = await db.select().from(messages)
+      .where(eq(messages.conversationId, bgConversation.id));
+    expect(bgMessages.length).toBeGreaterThan(0);
   });
 
   test('processes pending tasks in queue', async () => {
@@ -371,13 +375,13 @@ describe('runWorkSession', () => {
 });
 
 // ============================================================================
-// processTaskInThread Tests
+// processTask Tests
 // ============================================================================
 
-describe('processTaskInThread', () => {
-  test('adds task as user message to thread', async () => {
-    // Create a thread manually
-    const thread = await createThread(testTeamLeadId);
+describe('processTask', () => {
+  test('adds task as user message to background conversation', async () => {
+    // Get background conversation
+    const bgConversation = await getOrCreateConversation(testTeamLeadId, 'background');
 
     // Queue a task
     const task = await queueUserTask(testTeamLeadId, testTeamId, 'Analyze TSLA stock');
@@ -387,33 +391,33 @@ describe('processTaskInThread', () => {
     const claimedTask = await startTask(task.id);
 
     const agent = await createAgent(testTeamLeadId);
-    await agent!.processTaskInThread(thread.id, claimedTask);
+    await agent!.processTask(bgConversation.id, claimedTask);
 
-    // Verify thread has messages
-    const threadMsgs = await db.select().from(threadMessages)
-      .where(eq(threadMessages.threadId, thread.id));
+    // Verify conversation has messages
+    const conversationMsgs = await db.select().from(messages)
+      .where(eq(messages.conversationId, bgConversation.id));
 
-    expect(threadMsgs.length).toBeGreaterThanOrEqual(2);
+    expect(conversationMsgs.length).toBeGreaterThanOrEqual(2);
 
     // First message should be user (task)
-    const userMsg = threadMsgs.find(m => m.role === 'user');
+    const userMsg = conversationMsgs.find(m => m.role === 'user');
     expect(userMsg).toBeDefined();
     expect(userMsg!.content).toContain('TSLA');
 
     // Should have assistant response
-    const assistantMsg = threadMsgs.find(m => m.role === 'assistant');
+    const assistantMsg = conversationMsgs.find(m => m.role === 'assistant');
     expect(assistantMsg).toBeDefined();
   });
 
   test('marks task complete with result', async () => {
-    const thread = await createThread(testTeamLeadId);
+    const bgConversation = await getOrCreateConversation(testTeamLeadId, 'background');
     const task = await queueUserTask(testTeamLeadId, testTeamId, 'Complete this');
 
     const { startTask } = await import('@/lib/db/queries/agentTasks');
     const claimedTask = await startTask(task.id);
 
     const agent = await createAgent(testTeamLeadId);
-    const result = await agent!.processTaskInThread(thread.id, claimedTask);
+    const result = await agent!.processTask(bgConversation.id, claimedTask);
 
     // Result should be non-empty (mock response)
     expect(result.length).toBeGreaterThan(0);
@@ -431,38 +435,37 @@ describe('processTaskInThread', () => {
 // ============================================================================
 
 describe('decideBriefing', () => {
-  test('team lead decideBriefing does not error with empty thread', async () => {
-    // Create a thread with no messages
-    const thread = await createThread(testTeamLeadId);
+  test('team lead decideBriefing does not error with empty conversation', async () => {
+    // Create a background conversation with no messages
+    const bgConversation = await getOrCreateConversation(testTeamLeadId, 'background');
 
     const agent = await createAgent(testTeamLeadId);
 
     // Should not throw - just return early
-    await expect(agent!.decideBriefing(thread.id)).resolves.not.toThrow();
+    await expect(agent!.decideBriefing(bgConversation.id)).resolves.not.toThrow();
   });
 
   test('subordinate agent does not create briefings', async () => {
-    const thread = await createThread(testSubordinateId);
-    await db.insert(threadMessages).values({
-      threadId: thread.id,
+    const bgConversation = await getOrCreateConversation(testSubordinateId, 'background');
+    await db.insert(messages).values({
+      conversationId: bgConversation.id,
       role: 'assistant',
       content: 'Subordinate completed task with important info.',
-      sequenceNumber: 1,
     });
 
     const agent = await createAgent(testSubordinateId);
 
-    // Get conversation before
-    const conversationBefore = await agent!.getConversation();
+    // Get foreground conversation before
+    const fgConversation = await agent!.getConversation();
     const messagesBefore = await db.select().from(messages)
-      .where(eq(messages.conversationId, conversationBefore.id));
+      .where(eq(messages.conversationId, fgConversation.id));
     const countBefore = messagesBefore.length;
 
-    await agent!.decideBriefing(thread.id);
+    await agent!.decideBriefing(bgConversation.id);
 
     // Subordinate should not add any messages (decideBriefing returns early for subordinates)
     const messagesAfter = await db.select().from(messages)
-      .where(eq(messages.conversationId, conversationBefore.id));
+      .where(eq(messages.conversationId, fgConversation.id));
     expect(messagesAfter.length).toBe(countBefore);
   });
 

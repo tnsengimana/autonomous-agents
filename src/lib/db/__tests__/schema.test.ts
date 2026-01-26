@@ -1,7 +1,7 @@
 import { describe, test, expect, beforeAll, afterAll } from 'vitest';
 import { db } from '@/lib/db/client';
 import {
-  users, teams, agents, threads, threadMessages, knowledgeItems, agentTasks
+  users, teams, agents, conversations, messages, knowledgeItems, agentTasks
 } from '@/lib/db/schema';
 import { eq } from 'drizzle-orm';
 
@@ -40,19 +40,19 @@ afterAll(async () => {
   await db.delete(users).where(eq(users.id, testUserId));
 });
 
-describe('threads schema', () => {
-  test('creates thread for agent', async () => {
-    const [thread] = await db.insert(threads).values({
+describe('conversations schema', () => {
+  test('creates conversation for agent', async () => {
+    const [conversation] = await db.insert(conversations).values({
       agentId: testAgentId,
+      mode: 'foreground',
     }).returning();
 
-    expect(thread.agentId).toBe(testAgentId);
-    expect(thread.status).toBe('active');
-    expect(thread.createdAt).toBeDefined();
-    expect(thread.completedAt).toBeNull();
+    expect(conversation.agentId).toBe(testAgentId);
+    expect(conversation.mode).toBe('foreground');
+    expect(conversation.createdAt).toBeDefined();
 
     // Cleanup
-    await db.delete(threads).where(eq(threads.id, thread.id));
+    await db.delete(conversations).where(eq(conversations.id, conversation.id));
   });
 
   test('cascades delete when agent deleted', async () => {
@@ -63,84 +63,80 @@ describe('threads schema', () => {
       role: 'Temp',
     }).returning();
 
-    const [thread] = await db.insert(threads).values({
+    const [conversation] = await db.insert(conversations).values({
       agentId: tempAgent.id,
+      mode: 'background',
     }).returning();
 
     // Delete the agent
     await db.delete(agents).where(eq(agents.id, tempAgent.id));
 
-    // Thread should be gone
-    const remainingThreads = await db.select().from(threads).where(eq(threads.id, thread.id));
-    expect(remainingThreads).toHaveLength(0);
+    // Conversation should be gone
+    const remainingConversations = await db.select().from(conversations).where(eq(conversations.id, conversation.id));
+    expect(remainingConversations).toHaveLength(0);
   });
 
-  test('supports status transitions (active -> completed)', async () => {
-    const [thread] = await db.insert(threads).values({
+  test('supports foreground and background modes', async () => {
+    const [foreground] = await db.insert(conversations).values({
       agentId: testAgentId,
+      mode: 'foreground',
     }).returning();
 
-    expect(thread.status).toBe('active');
+    const [background] = await db.insert(conversations).values({
+      agentId: testAgentId,
+      mode: 'background',
+    }).returning();
 
-    // Transition to completed
-    const completedAt = new Date();
-    await db.update(threads)
-      .set({ status: 'completed', completedAt })
-      .where(eq(threads.id, thread.id));
-
-    const [updated] = await db.select().from(threads).where(eq(threads.id, thread.id));
-    expect(updated.status).toBe('completed');
-    expect(updated.completedAt).toBeDefined();
+    expect(foreground.mode).toBe('foreground');
+    expect(background.mode).toBe('background');
 
     // Cleanup
-    await db.delete(threads).where(eq(threads.id, thread.id));
+    await db.delete(conversations).where(eq(conversations.id, foreground.id));
+    await db.delete(conversations).where(eq(conversations.id, background.id));
   });
 });
 
-describe('threadMessages schema', () => {
-  test('creates message in thread', async () => {
-    const [thread] = await db.insert(threads).values({
+describe('messages schema', () => {
+  test('creates message in conversation', async () => {
+    const [conversation] = await db.insert(conversations).values({
       agentId: testAgentId,
     }).returning();
 
-    const [message] = await db.insert(threadMessages).values({
-      threadId: thread.id,
+    const [message] = await db.insert(messages).values({
+      conversationId: conversation.id,
       role: 'user',
       content: 'Test message',
-      sequenceNumber: 1,
     }).returning();
 
-    expect(message.threadId).toBe(thread.id);
+    expect(message.conversationId).toBe(conversation.id);
     expect(message.role).toBe('user');
     expect(message.content).toBe('Test message');
-    expect(message.sequenceNumber).toBe(1);
 
     // Cleanup
-    await db.delete(threads).where(eq(threads.id, thread.id));
+    await db.delete(conversations).where(eq(conversations.id, conversation.id));
   });
 
-  test('cascades delete when thread deleted', async () => {
-    const [thread] = await db.insert(threads).values({
+  test('cascades delete when conversation deleted', async () => {
+    const [conversation] = await db.insert(conversations).values({
       agentId: testAgentId,
     }).returning();
 
-    await db.insert(threadMessages).values({
-      threadId: thread.id,
+    await db.insert(messages).values({
+      conversationId: conversation.id,
       role: 'assistant',
       content: 'Response',
-      sequenceNumber: 1,
     });
 
-    // Delete thread
-    await db.delete(threads).where(eq(threads.id, thread.id));
+    // Delete conversation
+    await db.delete(conversations).where(eq(conversations.id, conversation.id));
 
     // Messages should be gone
-    const messages = await db.select().from(threadMessages).where(eq(threadMessages.threadId, thread.id));
-    expect(messages).toHaveLength(0);
+    const remainingMessages = await db.select().from(messages).where(eq(messages.conversationId, conversation.id));
+    expect(remainingMessages).toHaveLength(0);
   });
 
   test('stores toolCalls in jsonb field', async () => {
-    const [thread] = await db.insert(threads).values({
+    const [conversation] = await db.insert(conversations).values({
       agentId: testAgentId,
     }).returning();
 
@@ -149,22 +145,84 @@ describe('threadMessages schema', () => {
       { id: 'call_2', type: 'function', function: { name: 'browse', arguments: '{"url":"https://example.com"}' } },
     ];
 
-    const [message] = await db.insert(threadMessages).values({
-      threadId: thread.id,
+    const [message] = await db.insert(messages).values({
+      conversationId: conversation.id,
       role: 'assistant',
       content: 'Let me search for that.',
       toolCalls,
-      sequenceNumber: 1,
     }).returning();
 
     expect(message.toolCalls).toEqual(toolCalls);
 
     // Verify retrieval from database
-    const [retrieved] = await db.select().from(threadMessages).where(eq(threadMessages.id, message.id));
+    const [retrieved] = await db.select().from(messages).where(eq(messages.id, message.id));
     expect(retrieved.toolCalls).toEqual(toolCalls);
 
     // Cleanup
-    await db.delete(threads).where(eq(threads.id, thread.id));
+    await db.delete(conversations).where(eq(conversations.id, conversation.id));
+  });
+
+  test('links tool results via toolCallId', async () => {
+    const [conversation] = await db.insert(conversations).values({
+      agentId: testAgentId,
+    }).returning();
+
+    const toolCalls = [
+      { id: 'call_123', type: 'function', function: { name: 'search', arguments: '{"query":"test"}' } },
+    ];
+
+    const [assistantMessage] = await db.insert(messages).values({
+      conversationId: conversation.id,
+      role: 'assistant',
+      content: 'Let me search for that.',
+      toolCalls,
+    }).returning();
+
+    const [toolResult] = await db.insert(messages).values({
+      conversationId: conversation.id,
+      role: 'tool',
+      content: '{"results": ["result1", "result2"]}',
+      toolCallId: 'call_123',
+    }).returning();
+
+    expect(toolResult.role).toBe('tool');
+    expect(toolResult.toolCallId).toBe('call_123');
+
+    // Cleanup
+    await db.delete(conversations).where(eq(conversations.id, conversation.id));
+  });
+
+  test('supports summary messages with previousMessageId', async () => {
+    const [conversation] = await db.insert(conversations).values({
+      agentId: testAgentId,
+    }).returning();
+
+    // Create some messages
+    const [msg1] = await db.insert(messages).values({
+      conversationId: conversation.id,
+      role: 'user',
+      content: 'Hello',
+    }).returning();
+
+    const [msg2] = await db.insert(messages).values({
+      conversationId: conversation.id,
+      role: 'assistant',
+      content: 'Hi there!',
+    }).returning();
+
+    // Create summary pointing to last summarized message
+    const [summary] = await db.insert(messages).values({
+      conversationId: conversation.id,
+      role: 'summary',
+      content: 'User greeted the assistant and received a friendly response.',
+      previousMessageId: msg2.id,
+    }).returning();
+
+    expect(summary.role).toBe('summary');
+    expect(summary.previousMessageId).toBe(msg2.id);
+
+    // Cleanup
+    await db.delete(conversations).where(eq(conversations.id, conversation.id));
   });
 });
 
@@ -179,49 +237,51 @@ describe('knowledgeItems schema', () => {
     expect(knowledgeItem.agentId).toBe(testAgentId);
     expect(knowledgeItem.type).toBe('fact');
     expect(knowledgeItem.content).toBe('NVIDIA reports earnings in February');
-    expect(knowledgeItem.sourceThreadId).toBeNull();
+    expect(knowledgeItem.sourceConversationId).toBeNull();
 
     // Cleanup
     await db.delete(knowledgeItems).where(eq(knowledgeItems.id, knowledgeItem.id));
   });
 
-  test('links knowledge item to source thread', async () => {
-    const [thread] = await db.insert(threads).values({
+  test('links knowledge item to source conversation', async () => {
+    const [conversation] = await db.insert(conversations).values({
       agentId: testAgentId,
+      mode: 'background',
     }).returning();
 
     const [knowledgeItem] = await db.insert(knowledgeItems).values({
       agentId: testAgentId,
       type: 'technique',
       content: 'Check SEC filings first',
-      sourceThreadId: thread.id,
+      sourceConversationId: conversation.id,
     }).returning();
 
-    expect(knowledgeItem.sourceThreadId).toBe(thread.id);
+    expect(knowledgeItem.sourceConversationId).toBe(conversation.id);
 
     // Cleanup
-    await db.delete(threads).where(eq(threads.id, thread.id));
+    await db.delete(conversations).where(eq(conversations.id, conversation.id));
   });
 
-  test('nullifies sourceThreadId when thread deleted', async () => {
-    const [thread] = await db.insert(threads).values({
+  test('nullifies sourceConversationId when conversation deleted', async () => {
+    const [conversation] = await db.insert(conversations).values({
       agentId: testAgentId,
+      mode: 'background',
     }).returning();
 
     const [knowledgeItem] = await db.insert(knowledgeItems).values({
       agentId: testAgentId,
       type: 'pattern',
       content: 'Market volatility increases before earnings',
-      sourceThreadId: thread.id,
+      sourceConversationId: conversation.id,
     }).returning();
 
-    // Delete thread
-    await db.delete(threads).where(eq(threads.id, thread.id));
+    // Delete conversation
+    await db.delete(conversations).where(eq(conversations.id, conversation.id));
 
-    // Knowledge item should remain but with null sourceThreadId
+    // Knowledge item should remain but with null sourceConversationId
     const [updated] = await db.select().from(knowledgeItems).where(eq(knowledgeItems.id, knowledgeItem.id));
     expect(updated).toBeDefined();
-    expect(updated.sourceThreadId).toBeNull();
+    expect(updated.sourceConversationId).toBeNull();
 
     // Cleanup
     await db.delete(knowledgeItems).where(eq(knowledgeItems.id, knowledgeItem.id));

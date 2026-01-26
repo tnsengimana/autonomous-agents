@@ -4,12 +4,12 @@
  * Tests cover:
  * - Messages API using handleUserMessage (foreground, queues task)
  * - Team creation bootstrapping with "get to work" task
- * - Conversations API returning only user conversations (not threads)
+ * - Conversations API returning only user conversations (not background conversations)
  *
  * Uses database-level testing with test fixtures.
  */
 
-import { describe, test, expect, beforeAll, afterAll } from 'vitest';
+import { describe, test, expect, beforeAll, afterAll, vi } from 'vitest';
 import { db } from '@/lib/db/client';
 import {
   users,
@@ -18,9 +18,9 @@ import {
   agentTasks,
   conversations,
   messages,
-  threads,
 } from '@/lib/db/schema';
 import { eq, and } from 'drizzle-orm';
+import * as llm from '@/lib/agents/llm';
 
 // ============================================================================
 // Test Setup
@@ -82,9 +82,15 @@ afterAll(async () => {
 // ============================================================================
 
 describe('Messages API (/api/messages)', () => {
-  test('uses handleUserMessage which queues task for background processing', async () => {
+  test('uses handleUserMessage which queues task for work_request classification', async () => {
     // Import the Agent class
     const { Agent } = await import('@/lib/agents/agent');
+
+    // Mock intent classification to return work_request
+    const mockGenerateLLMObject = vi.spyOn(llm, 'generateLLMObject').mockResolvedValueOnce({
+      intent: 'work_request',
+      reasoning: 'User is requesting price information',
+    });
 
     // Create an agent instance
     const agentData = await db.query.agents.findFirst({
@@ -122,6 +128,7 @@ describe('Messages API (/api/messages)', () => {
     expect(queuedTask.source).toBe('user');
 
     // Cleanup
+    mockGenerateLLMObject.mockRestore();
     await db
       .delete(agentTasks)
       .where(eq(agentTasks.id, queuedTask.id));
@@ -233,12 +240,13 @@ describe('Team Creation API (/api/teams)', () => {
 // ============================================================================
 
 describe('Conversations API (/api/conversations/[agentId])', () => {
-  test('returns user conversations, not threads', async () => {
-    // Create a conversation (user-facing)
+  test('returns foreground conversations for user interaction', async () => {
+    // Create a foreground conversation (user-facing)
     const [conversation] = await db
       .insert(conversations)
       .values({
         agentId: testTeamLeadId,
+        mode: 'foreground',
       })
       .returning();
 
@@ -248,22 +256,20 @@ describe('Conversations API (/api/conversations/[agentId])', () => {
         conversationId: conversation.id,
         role: 'user',
         content: 'Hello agent',
-        sequenceNumber: 1,
       },
       {
         conversationId: conversation.id,
         role: 'assistant',
         content: 'Hello! How can I help?',
-        sequenceNumber: 2,
       },
     ]);
 
-    // Create a thread (internal background work - should NOT be returned by conversations API)
-    const [thread] = await db
-      .insert(threads)
+    // Create a background conversation (internal work - separate from foreground)
+    const [bgConversation] = await db
+      .insert(conversations)
       .values({
         agentId: testTeamLeadId,
-        status: 'active',
+        mode: 'background',
       })
       .returning();
 
@@ -275,10 +281,14 @@ describe('Conversations API (/api/conversations/[agentId])', () => {
       '@/lib/db/queries/messages'
     );
 
-    // This is what the API does - get conversations, not threads
-    const latestConversation = await getLatestConversation(testTeamLeadId);
+    // This is what the API does - get foreground conversation
+    const latestConversation = await getLatestConversation(
+      testTeamLeadId,
+      'foreground'
+    );
     expect(latestConversation).toBeDefined();
     expect(latestConversation!.id).toBe(conversation.id);
+    expect(latestConversation!.mode).toBe('foreground');
 
     // Verify we're getting conversation messages
     const conversationMessages = await getMessagesByConversationId(
@@ -286,40 +296,37 @@ describe('Conversations API (/api/conversations/[agentId])', () => {
     );
     expect(conversationMessages.length).toBeGreaterThan(0);
 
-    // Verify thread is separate
-    const threadExists = await db
-      .select()
-      .from(threads)
-      .where(eq(threads.id, thread.id));
-    expect(threadExists.length).toBe(1);
-
-    // But thread messages would be in threadMessages table, not messages table
-    // This confirms the API correctly returns conversations (user-facing) not threads (internal)
-
     // Cleanup
-    await db.delete(threads).where(eq(threads.id, thread.id));
+    await db.delete(conversations).where(eq(conversations.id, bgConversation.id));
     await db.delete(conversations).where(eq(conversations.id, conversation.id));
   });
 
-  test('conversations and threads are stored in separate tables', async () => {
-    // This test verifies the data model separation
-    const conversationResult = await db
-      .select()
-      .from(conversations)
-      .where(eq(conversations.agentId, testTeamLeadId));
+  test('foreground and background conversations are stored separately', async () => {
+    // Create foreground conversation
+    const [fgConversation] = await db
+      .insert(conversations)
+      .values({
+        agentId: testTeamLeadId,
+        mode: 'foreground',
+      })
+      .returning();
 
-    const threadCount = await db
-      .select()
-      .from(threads)
-      .where(eq(threads.agentId, testTeamLeadId));
+    // Create background conversation
+    const [bgConversation] = await db
+      .insert(conversations)
+      .values({
+        agentId: testTeamLeadId,
+        mode: 'background',
+      })
+      .returning();
 
-    // These are different tables - conversations are for user interactions,
-    // threads are for internal agent work sessions
-    // The API should only return conversations
+    // Verify both modes exist
+    expect(fgConversation.mode).toBe('foreground');
+    expect(bgConversation.mode).toBe('background');
 
-    // Verify the tables exist and are queryable (schema is correct)
-    expect(Array.isArray(conversationResult)).toBe(true);
-    expect(Array.isArray(threadCount)).toBe(true);
+    // Cleanup
+    await db.delete(conversations).where(eq(conversations.id, fgConversation.id));
+    await db.delete(conversations).where(eq(conversations.id, bgConversation.id));
   });
 });
 
@@ -424,6 +431,25 @@ describe('Edge Cases', () => {
   test('multiple user messages queue multiple tasks', async () => {
     const { Agent } = await import('@/lib/agents/agent');
 
+    const mockGenerateLLMObject = vi
+      .spyOn(llm, 'generateLLMObject')
+      .mockImplementation(async (_messages, schema) => {
+        const candidates = [
+          { intent: 'work_request', reasoning: 'User is requesting work' },
+          { memories: [] },
+          { knowledgeItems: [] },
+          { shouldBrief: false, reason: 'Mock mode - no briefing' },
+        ];
+
+        for (const candidate of candidates) {
+          if (schema.safeParse(candidate).success) {
+            return candidate;
+          }
+        }
+
+        throw new Error('Unexpected schema in test');
+      });
+
     const agentData = await db.query.agents.findFirst({
       where: eq(agents.id, testTeamLeadId),
     });
@@ -453,6 +479,7 @@ describe('Edge Cases', () => {
     expect(queuedTasks.length).toBeGreaterThanOrEqual(3);
 
     // Cleanup
+    mockGenerateLLMObject.mockRestore();
     await db
       .delete(agentTasks)
       .where(eq(agentTasks.assignedToId, testTeamLeadId));

@@ -120,7 +120,7 @@ export function getForegroundTools(): Tool[] {
 }
 
 /**
- * Get tools available during background work sessions (threads)
+ * Get tools available during background work sessions (background conversations)
  * Team leads get full tools, subordinates get limited set
  */
 export function getBackgroundTools(isTeamLead: boolean): Tool[] {

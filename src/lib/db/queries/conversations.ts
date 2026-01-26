@@ -102,26 +102,6 @@ export async function getOrCreateConversation(
 }
 
 /**
- * Get the foreground conversation for an agent (convenience wrapper)
- * Returns the existing foreground conversation or null if none exists
- */
-export async function getForegroundConversation(
-  agentId: string
-): Promise<Conversation | null> {
-  return getConversationByMode(agentId, 'foreground');
-}
-
-/**
- * Get the background conversation for an agent (convenience wrapper)
- * Returns the existing background conversation or null if none exists
- */
-export async function getBackgroundConversation(
-  agentId: string
-): Promise<Conversation | null> {
-  return getConversationByMode(agentId, 'background');
-}
-
-/**
  * Update conversation timestamp
  */
 export async function touchConversation(

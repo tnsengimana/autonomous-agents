@@ -1,6 +1,6 @@
 {
-  "id": "6365bad9-153d-4c9e-8a15-9409abe61f88",
-  "prevId": "762906e9-b519-4247-968f-8cd18162b60f",
+  "id": "110b4513-8335-45bf-8fbb-2abd14ca824e",
+  "prevId": "6365bad9-153d-4c9e-8a15-9409abe61f88",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -365,6 +365,13 @@
           "primaryKey": false,
           "notNull": true
         },
+        "mode": {
+          "name": "mode",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'foreground'"
+        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp",
@@ -540,8 +547,8 @@
           "primaryKey": false,
           "notNull": true
         },
-        "source_thread_id": {
-          "name": "source_thread_id",
+        "source_conversation_id": {
+          "name": "source_conversation_id",
           "type": "uuid",
           "primaryKey": false,
           "notNull": false
@@ -591,12 +598,12 @@
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
-        "knowledge_items_source_thread_id_threads_id_fk": {
-          "name": "knowledge_items_source_thread_id_threads_id_fk",
+        "knowledge_items_source_conversation_id_conversations_id_fk": {
+          "name": "knowledge_items_source_conversation_id_conversations_id_fk",
           "tableFrom": "knowledge_items",
-          "tableTo": "threads",
+          "tableTo": "conversations",
           "columnsFrom": [
-            "source_thread_id"
+            "source_conversation_id"
           ],
           "columnsTo": [
             "id"
@@ -731,11 +738,23 @@
           "primaryKey": false,
           "notNull": false
         },
-        "sequence_number": {
-          "name": "sequence_number",
-          "type": "integer",
+        "tool_calls": {
+          "name": "tool_calls",
+          "type": "jsonb",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
+        },
+        "tool_call_id": {
+          "name": "tool_call_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "previous_message_id": {
+          "name": "previous_message_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
         },
         "created_at": {
           "name": "created_at",
@@ -758,6 +777,19 @@
             "id"
           ],
           "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "messages_previous_message_id_messages_id_fk": {
+          "name": "messages_previous_message_id_messages_id_fk",
+          "tableFrom": "messages",
+          "tableTo": "messages",
+          "columnsFrom": [
+            "previous_message_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
           "onUpdate": "no action"
         }
       },
@@ -871,169 +903,6 @@
           "tableTo": "users",
           "columnsFrom": [
             "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.thread_messages": {
-      "name": "thread_messages",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "thread_id": {
-          "name": "thread_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "role": {
-          "name": "role",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "content": {
-          "name": "content",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "tool_calls": {
-          "name": "tool_calls",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "sequence_number": {
-          "name": "sequence_number",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "thread_messages_thread_id_idx": {
-          "name": "thread_messages_thread_id_idx",
-          "columns": [
-            {
-              "expression": "thread_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "thread_messages_thread_id_threads_id_fk": {
-          "name": "thread_messages_thread_id_threads_id_fk",
-          "tableFrom": "thread_messages",
-          "tableTo": "threads",
-          "columnsFrom": [
-            "thread_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.threads": {
-      "name": "threads",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "agent_id": {
-          "name": "agent_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "status": {
-          "name": "status",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'active'"
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "completed_at": {
-          "name": "completed_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": false
-        }
-      },
-      "indexes": {
-        "threads_agent_id_idx": {
-          "name": "threads_agent_id_idx",
-          "columns": [
-            {
-              "expression": "agent_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "threads_agent_id_agents_id_fk": {
-          "name": "threads_agent_id_agents_id_fk",
-          "tableFrom": "threads",
-          "tableTo": "agents",
-          "columnsFrom": [
-            "agent_id"
           ],
           "columnsTo": [
             "id"

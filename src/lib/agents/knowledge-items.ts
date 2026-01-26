@@ -71,7 +71,7 @@ export async function extractKnowledgeFromMessages(
     return [];
   }
 
-  // Build transcript from thread messages
+  // Build transcript from conversation messages
   const transcript = messages
     .map((m) => `[${m.role.toUpperCase()}]: ${m.content}`)
     .join('\n\n');
