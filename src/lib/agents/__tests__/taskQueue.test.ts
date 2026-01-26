@@ -472,9 +472,9 @@ describe('Full Workflow', () => {
   });
 
   test('delegation workflow', async () => {
-    // 1. Team lead delegates to worker
+    // 1. Team lead delegates to subordinate
     const task = await queueDelegationTask(
-      testAgentId,    // worker
+      testAgentId,    // subordinate
       testTeamId,
       'Research NVIDIA earnings report',
       testAgent2Id    // team lead
@@ -482,7 +482,7 @@ describe('Full Workflow', () => {
     expect(task.source).toBe('delegation');
     expect(task.assignedById).toBe(testAgent2Id);
 
-    // 2. Worker claims and processes
+    // 2. Subordinate claims and processes
     const claimed = await claimNextTask(testAgentId);
     expect(claimed!.id).toBe(task.id);
 

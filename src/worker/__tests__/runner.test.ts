@@ -5,7 +5,7 @@
  * - getAgentsNeedingWork combines pending tasks + due team leads
  * - processAgentWorkSession calls runWorkSession
  * - notifyTaskQueued triggers processing
- * - Team leads get scheduled, workers don't
+ * - Team leads get scheduled, subordinates don't
  */
 
 import { describe, test, expect, beforeAll, afterAll, beforeEach } from 'vitest';
@@ -36,7 +36,7 @@ import { updateAgentNextRunAt } from '@/lib/db/queries/agents';
 let testUserId: string;
 let testTeamId: string;
 let testTeamLeadId: string;
-let testWorkerId: string;
+let testSubordinateId: string;
 let inactiveTeamId: string;
 let inactiveTeamLeadId: string;
 
@@ -75,14 +75,14 @@ beforeAll(async () => {
   }).returning();
   testTeamLeadId = teamLead.id;
 
-  // Create worker (has parent)
-  const [worker] = await db.insert(agents).values({
+  // Create subordinate (has parent)
+  const [subordinate] = await db.insert(agents).values({
     teamId: testTeamId,
-    name: 'Test Worker',
+    name: 'Test Subordinate',
     role: 'Research Assistant',
-    parentAgentId: testTeamLeadId, // Worker has team lead as parent
+    parentAgentId: testTeamLeadId, // Subordinate has team lead as parent
   }).returning();
-  testWorkerId = worker.id;
+  testSubordinateId = subordinate.id;
 
   // Create team lead in inactive team
   const [inactiveTeamLead] = await db.insert(agents).values({
@@ -123,24 +123,24 @@ describe('getAgentsWithPendingTasks', () => {
 
     // Filter to only our test agents (other tests may have tasks)
     const ourAgents = agentIds.filter(id =>
-      id === testTeamLeadId || id === testWorkerId
+      id === testTeamLeadId || id === testSubordinateId
     );
 
     expect(ourAgents).toHaveLength(0);
   });
 
   test('returns agent IDs with pending tasks', async () => {
-    const task = await queueUserTask(testWorkerId, testTeamId, 'Pending task');
+    const task = await queueUserTask(testSubordinateId, testTeamId, 'Pending task');
 
     const agentIds = await getAgentsWithPendingTasks();
 
-    expect(agentIds).toContain(testWorkerId);
+    expect(agentIds).toContain(testSubordinateId);
 
     await cleanupTasks([task.id]);
   });
 
   test('returns agent IDs with in_progress tasks', async () => {
-    const task = await queueUserTask(testWorkerId, testTeamId, 'In progress task');
+    const task = await queueUserTask(testSubordinateId, testTeamId, 'In progress task');
 
     // Start the task to make it in_progress
     const { startTask } = await import('@/lib/db/queries/agentTasks');
@@ -148,13 +148,13 @@ describe('getAgentsWithPendingTasks', () => {
 
     const agentIds = await getAgentsWithPendingTasks();
 
-    expect(agentIds).toContain(testWorkerId);
+    expect(agentIds).toContain(testSubordinateId);
 
     await cleanupTasks([task.id]);
   });
 
   test('does not return agents with only completed tasks', async () => {
-    const task = await queueUserTask(testWorkerId, testTeamId, 'Completed task');
+    const task = await queueUserTask(testSubordinateId, testTeamId, 'Completed task');
 
     // Complete the task
     const { startTask, completeTaskWithResult } = await import('@/lib/db/queries/agentTasks');
@@ -163,23 +163,23 @@ describe('getAgentsWithPendingTasks', () => {
 
     const agentIds = await getAgentsWithPendingTasks();
 
-    // Filter to only our test worker
-    const hasWorker = agentIds.includes(testWorkerId);
-    expect(hasWorker).toBe(false);
+    // Filter to only our test subordinate
+    const hasSubordinate = agentIds.includes(testSubordinateId);
+    expect(hasSubordinate).toBe(false);
 
     await cleanupTasks([task.id]);
   });
 
   test('returns distinct agent IDs even with multiple tasks', async () => {
-    const task1 = await queueUserTask(testWorkerId, testTeamId, 'Task 1');
-    const task2 = await queueUserTask(testWorkerId, testTeamId, 'Task 2');
-    const task3 = await queueUserTask(testWorkerId, testTeamId, 'Task 3');
+    const task1 = await queueUserTask(testSubordinateId, testTeamId, 'Task 1');
+    const task2 = await queueUserTask(testSubordinateId, testTeamId, 'Task 2');
+    const task3 = await queueUserTask(testSubordinateId, testTeamId, 'Task 3');
 
     const agentIds = await getAgentsWithPendingTasks();
 
     // Should only appear once even with multiple tasks
-    const workerOccurrences = agentIds.filter(id => id === testWorkerId);
-    expect(workerOccurrences).toHaveLength(1);
+    const subordinateOccurrences = agentIds.filter(id => id === testSubordinateId);
+    expect(subordinateOccurrences).toHaveLength(1);
 
     await cleanupTasks([task1.id, task2.id, task3.id]);
   });
@@ -193,7 +193,7 @@ describe('getTeamLeadsDueToRun', () => {
   beforeEach(async () => {
     // Reset nextRunAt for all test agents
     await resetAgentNextRunAt(testTeamLeadId);
-    await resetAgentNextRunAt(testWorkerId);
+    await resetAgentNextRunAt(testSubordinateId);
     await resetAgentNextRunAt(inactiveTeamLeadId);
   });
 
@@ -217,14 +217,14 @@ describe('getTeamLeadsDueToRun', () => {
     expect(teamLeadIds).toContain(testTeamLeadId);
   });
 
-  test('does not return workers even if they have nextRunAt set', async () => {
-    // Set nextRunAt on worker (shouldn't happen, but test the guard)
+  test('does not return subordinates even if they have nextRunAt set', async () => {
+    // Set nextRunAt on subordinate (shouldn't happen, but test the guard)
     const pastDate = new Date(Date.now() - 1000);
-    await updateAgentNextRunAt(testWorkerId, pastDate);
+    await updateAgentNextRunAt(testSubordinateId, pastDate);
 
     const teamLeadIds = await getTeamLeadsDueToRun();
 
-    expect(teamLeadIds).not.toContain(testWorkerId);
+    expect(teamLeadIds).not.toContain(testSubordinateId);
   });
 
   test('only returns team leads from active teams', async () => {
@@ -255,7 +255,7 @@ describe('getTeamLeadsDueToRun', () => {
 describe('notifyTaskQueued', () => {
   test('adds agent to pending notifications', async () => {
     // notifyTaskQueued should add the agent to the Set
-    notifyTaskQueued(testWorkerId);
+    notifyTaskQueued(testSubordinateId);
 
     // We can't directly access pendingNotifications since it's private
     // But we can verify by calling runSingleCycle and checking if the agent is processed
@@ -266,16 +266,16 @@ describe('notifyTaskQueued', () => {
   test('can be called multiple times for same agent', () => {
     // Should not throw even when called multiple times
     expect(() => {
-      notifyTaskQueued(testWorkerId);
-      notifyTaskQueued(testWorkerId);
-      notifyTaskQueued(testWorkerId);
+      notifyTaskQueued(testSubordinateId);
+      notifyTaskQueued(testSubordinateId);
+      notifyTaskQueued(testSubordinateId);
     }).not.toThrow();
   });
 
   test('can be called for multiple agents', () => {
     // Should not throw for multiple agents
     expect(() => {
-      notifyTaskQueued(testWorkerId);
+      notifyTaskQueued(testSubordinateId);
       notifyTaskQueued(testTeamLeadId);
     }).not.toThrow();
   });
@@ -289,10 +289,10 @@ describe('Task Queue Integration', () => {
   test('queueUserTask calls notifyWorkerRunner', async () => {
     // Create a task - this should internally call notifyTaskQueued
     // We can verify by checking the task was created successfully
-    const task = await queueUserTask(testWorkerId, testTeamId, 'Integration test task');
+    const task = await queueUserTask(testSubordinateId, testTeamId, 'Integration test task');
 
     expect(task).toBeDefined();
-    expect(task.assignedToId).toBe(testWorkerId);
+    expect(task.assignedToId).toBe(testSubordinateId);
 
     await cleanupTasks([task.id]);
   });
@@ -312,13 +312,13 @@ describe('Agent Scheduling', () => {
     expect(teamLead.parentAgentId).toBeNull();
   });
 
-  test('worker is identified correctly', async () => {
-    // Worker has a parent
-    const [worker] = await db.select()
+  test('subordinate is identified correctly', async () => {
+    // Subordinate has a parent
+    const [subordinate] = await db.select()
       .from(agents)
-      .where(eq(agents.id, testWorkerId));
+      .where(eq(agents.id, testSubordinateId));
 
-    expect(worker.parentAgentId).toBe(testTeamLeadId);
+    expect(subordinate.parentAgentId).toBe(testTeamLeadId);
   });
 
   test('team lead can have nextRunAt updated', async () => {
@@ -343,14 +343,14 @@ describe('Agent Scheduling', () => {
 describe('Combined Agent Selection', () => {
   beforeEach(async () => {
     await resetAgentNextRunAt(testTeamLeadId);
-    await resetAgentNextRunAt(testWorkerId);
+    await resetAgentNextRunAt(testSubordinateId);
   });
 
   test('agents with pending tasks are selected', async () => {
-    const task = await queueUserTask(testWorkerId, testTeamId, 'Worker task');
+    const task = await queueUserTask(testSubordinateId, testTeamId, 'Subordinate task');
 
     const agentsWithTasks = await getAgentsWithPendingTasks();
-    expect(agentsWithTasks).toContain(testWorkerId);
+    expect(agentsWithTasks).toContain(testSubordinateId);
 
     await cleanupTasks([task.id]);
   });
@@ -364,8 +364,8 @@ describe('Combined Agent Selection', () => {
   });
 
   test('both sources can contribute agents', async () => {
-    // Worker has pending task
-    const task = await queueUserTask(testWorkerId, testTeamId, 'Worker task');
+    // Subordinate has pending task
+    const task = await queueUserTask(testSubordinateId, testTeamId, 'Subordinate task');
 
     // Team lead is due to run
     const pastDate = new Date(Date.now() - 1000);
@@ -374,7 +374,7 @@ describe('Combined Agent Selection', () => {
     const agentsWithTasks = await getAgentsWithPendingTasks();
     const dueTeamLeads = await getTeamLeadsDueToRun();
 
-    expect(agentsWithTasks).toContain(testWorkerId);
+    expect(agentsWithTasks).toContain(testSubordinateId);
     expect(dueTeamLeads).toContain(testTeamLeadId);
 
     await cleanupTasks([task.id]);
@@ -414,13 +414,13 @@ describe('Edge Cases', () => {
   test('handles concurrent task creation', async () => {
     // Create multiple tasks concurrently
     const tasks = await Promise.all([
-      queueUserTask(testWorkerId, testTeamId, 'Task 1'),
-      queueUserTask(testWorkerId, testTeamId, 'Task 2'),
-      queueUserTask(testWorkerId, testTeamId, 'Task 3'),
+      queueUserTask(testSubordinateId, testTeamId, 'Task 1'),
+      queueUserTask(testSubordinateId, testTeamId, 'Task 2'),
+      queueUserTask(testSubordinateId, testTeamId, 'Task 3'),
     ]);
 
     const agentsWithTasks = await getAgentsWithPendingTasks();
-    expect(agentsWithTasks).toContain(testWorkerId);
+    expect(agentsWithTasks).toContain(testSubordinateId);
 
     await cleanupTasks(tasks.map(t => t.id));
   });

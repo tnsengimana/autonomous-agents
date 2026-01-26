@@ -4,7 +4,7 @@
  * Tests cover:
  * - handleUserMessage flow (queue task, return ack)
  * - runWorkSession flow (thread creation, task processing, insight extraction)
- * - decideBriefing (team lead vs worker)
+ * - decideBriefing (team lead vs subordinate)
  * - Insight tools (add, list, remove)
  *
  * Uses MOCK_LLM=true for testing without real API calls.
@@ -30,7 +30,7 @@ import { createThread } from '@/lib/db/queries/threads';
 let testUserId: string;
 let testTeamId: string;
 let testTeamLeadId: string;
-let testWorkerId: string;
+let testSubordinateId: string;
 
 beforeAll(async () => {
   // Enable mock LLM mode for testing
@@ -61,14 +61,14 @@ beforeAll(async () => {
   }).returning();
   testTeamLeadId = teamLead.id;
 
-  // Create worker agent (has parent)
-  const [worker] = await db.insert(agents).values({
+  // Create subordinate agent (has parent)
+  const [subordinate] = await db.insert(agents).values({
     teamId: testTeamId,
-    name: 'Test Worker',
+    name: 'Test Subordinate',
     role: 'Research Assistant',
     parentAgentId: testTeamLeadId,
   }).returning();
-  testWorkerId = worker.id;
+  testSubordinateId = subordinate.id;
 
   // Register insight tools
   registerInsightTools();
@@ -85,9 +85,9 @@ async function cleanupTestData() {
   // Clean up tasks, insights, threads, messages for test agents
   await db.delete(agentTasks).where(eq(agentTasks.teamId, testTeamId));
   await db.delete(insights).where(eq(insights.agentId, testTeamLeadId));
-  await db.delete(insights).where(eq(insights.agentId, testWorkerId));
+  await db.delete(insights).where(eq(insights.agentId, testSubordinateId));
   await db.delete(threads).where(eq(threads.agentId, testTeamLeadId));
-  await db.delete(threads).where(eq(threads.agentId, testWorkerId));
+  await db.delete(threads).where(eq(threads.agentId, testSubordinateId));
 }
 
 beforeEach(async () => {
@@ -118,8 +118,8 @@ describe('Agent Class', () => {
     expect(agent!.isTeamLead()).toBe(true);
   });
 
-  test('isTeamLead() returns false for worker', async () => {
-    const agent = await createAgent(testWorkerId);
+  test('isTeamLead() returns false for subordinate', async () => {
+    const agent = await createAgent(testSubordinateId);
     expect(agent!.isTeamLead()).toBe(false);
   });
 
@@ -322,16 +322,16 @@ describe('runWorkSession', () => {
     expect(diffHours).toBeLessThan(1.1);
   });
 
-  test('worker does not schedule next run', async () => {
-    // Queue a task for worker
-    await queueUserTask(testWorkerId, testTeamId, 'Worker task');
+  test('subordinate does not schedule next run', async () => {
+    // Queue a task for subordinate
+    await queueUserTask(testSubordinateId, testTeamId, 'Subordinate task');
 
-    const agent = await createAgent(testWorkerId);
+    const agent = await createAgent(testSubordinateId);
     await agent!.runWorkSession();
 
-    // Worker should not have nextRunAt set
+    // Subordinate should not have nextRunAt set
     const [updatedAgent] = await db.select().from(agents)
-      .where(eq(agents.id, testWorkerId));
+      .where(eq(agents.id, testSubordinateId));
     expect(updatedAgent.nextRunAt).toBeNull();
   });
 });
@@ -407,16 +407,16 @@ describe('decideBriefing', () => {
     await expect(agent!.decideBriefing(thread.id)).resolves.not.toThrow();
   });
 
-  test('worker agent does not create briefings', async () => {
-    const thread = await createThread(testWorkerId);
+  test('subordinate agent does not create briefings', async () => {
+    const thread = await createThread(testSubordinateId);
     await db.insert(threadMessages).values({
       threadId: thread.id,
       role: 'assistant',
-      content: 'Worker completed task with important info.',
+      content: 'Subordinate completed task with important info.',
       sequenceNumber: 1,
     });
 
-    const agent = await createAgent(testWorkerId);
+    const agent = await createAgent(testSubordinateId);
 
     // Get conversation before
     const conversationBefore = await agent!.getConversation();
@@ -426,17 +426,17 @@ describe('decideBriefing', () => {
 
     await agent!.decideBriefing(thread.id);
 
-    // Worker should not add any messages (decideBriefing returns early for workers)
+    // Subordinate should not add any messages (decideBriefing returns early for subordinates)
     const messagesAfter = await db.select().from(messages)
       .where(eq(messages.conversationId, conversationBefore.id));
     expect(messagesAfter.length).toBe(countBefore);
   });
 
   test('isTeamLead check works in decideBriefing', async () => {
-    const workerAgent = await createAgent(testWorkerId);
+    const subordinateAgent = await createAgent(testSubordinateId);
     const teamLeadAgent = await createAgent(testTeamLeadId);
 
-    expect(workerAgent!.isTeamLead()).toBe(false);
+    expect(subordinateAgent!.isTeamLead()).toBe(false);
     expect(teamLeadAgent!.isTeamLead()).toBe(true);
   });
 });
@@ -618,8 +618,8 @@ describe('Insight Tools', () => {
     });
 
     test('fails for insight belonging to another agent', async () => {
-      // Create insight for worker
-      const insight = await createInsight(testWorkerId, 'fact', 'Worker insight');
+      // Create insight for subordinate
+      const insight = await createInsight(testSubordinateId, 'fact', 'Subordinate insight');
 
       // Try to delete from team lead context
       const result = await executeTool('removeInsight', {
