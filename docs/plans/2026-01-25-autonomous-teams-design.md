@@ -15,7 +15,7 @@ Autonomous Teams is a TypeScript web application where users create teams of AI 
 | Decision | Choice | Rationale |
 |----------|--------|-----------|
 | Deployment | Monolith | Simplicity for initial development |
-| Agent execution | Hybrid | Team leads run continuously, workers spawn on-demand |
+| Agent execution | Hybrid | Team leads run continuously, subordinates spawn on-demand |
 | Frontend | Next.js | Full-stack TypeScript, API routes built-in |
 | Database | PostgreSQL only | Simple, JSONB for flexible data, LISTEN/NOTIFY for real-time |
 | LLM integration | Vercel AI SDK | Unified interface, streaming, thinking mode support |
@@ -42,7 +42,7 @@ Autonomous Teams is a TypeScript web application where users create teams of AI 
 ┌─────────────────────────────────────────────────────────┐
 │              Separate Worker Process                     │
 │  - Team Lead agents (always running)                    │
-│  - Worker agents (spawned on-demand)                    │
+│  - Subordinate agents (spawned on-demand)               │
 │  - Memory extraction (sync after each message)          │
 │  - Postgres LISTEN/NOTIFY for coordination              │
 └─────────────────────────────────────────────────────────┘
@@ -243,11 +243,11 @@ Return empty array if nothing worth remembering.
 
 | Tool | Description |
 |------|-------------|
-| `delegateToAgent` | Assign a task to a worker agent |
+| `delegateToAgent` | Assign a task to a subordinate agent |
 | `createInboxItem` | Push briefing/signal to user inbox |
-| `getTeamStatus` | Check status of all worker agents |
+| `getTeamStatus` | Check status of all subordinate agents |
 
-### Worker Agent Tools
+### Subordinate Agent Tools
 
 | Tool | Description |
 |------|-------------|
@@ -256,7 +256,7 @@ Return empty array if nothing worth remembering.
 
 ## Team Orchestration
 
-### Worker Agent Lifecycle
+### Subordinate Agent Lifecycle
 
 ```
 Team Lead decides to delegate
@@ -273,18 +273,18 @@ Team Lead decides to delegate
          │
          ▼
 ┌────────────────────────┐
-│  Worker spawns         │  ← Worker process listening, creates instance
+│  Subordinate spawns    │  ← Worker process listening, creates instance
 │  (on-demand)           │
 └────────────────────────┘
          │
          ▼
 ┌────────────────────────┐
-│  Worker executes task  │  ← Handles message, extracts memories
+│  Subordinate executes  │  ← Handles message, extracts memories
 └────────────────────────┘
          │
          ▼
 ┌────────────────────────┐
-│  NOTIFY 'agent_results'│  ← Worker writes result + notifies team lead
+│  NOTIFY 'agent_results'│  ← Subordinate writes result + notifies team lead
 └────────────────────────┘
          │
          ▼
@@ -444,14 +444,14 @@ autonomous-teams/
 │   │   │
 │   │   ├── teams/                # Team Orchestration
 │   │   │   ├── team-lead.ts      # Team lead logic
-│   │   │   ├── worker.ts         # Worker agent logic
+│   │   │   ├── subordinate.ts    # Subordinate agent logic
 │   │   │   ├── coordinator.ts    # LISTEN/NOTIFY handling
 │   │   │   └── inbox.ts          # Inbox item creation
 │   │   │
 │   │   └── tools/                # Agent tools
 │   │       ├── tavily.ts         # Tavily integration
 │   │       ├── team-lead-tools.ts
-│   │       └── worker-tools.ts
+│   │       └── subordinate-tools.ts
 │   │
 │   ├── components/               # React components
 │   │   ├── ui/                   # Base UI components
@@ -502,10 +502,10 @@ autonomous-teams/
 
 ### Track 3: Team Orchestration
 - Team lead continuous runner loop
-- Worker agent on-demand spawning
+- Subordinate agent on-demand spawning
 - Postgres LISTEN/NOTIFY coordinator
 - Team lead tools (delegateToAgent, createInboxItem, getTeamStatus)
-- Worker tools (reportToLead, requestInput)
+- Subordinate tools (reportToLead, requestInput)
 - Inbox item creation and delivery
 - Proactive briefing generation
 

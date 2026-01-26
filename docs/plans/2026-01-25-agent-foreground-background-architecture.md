@@ -44,8 +44,8 @@ Evolve the agent system from single-conversation to a sophisticated foreground/b
 
 ### Agent Types & Behavior
 
-| Aspect | Team Lead | Teammate Worker |
-|--------|-----------|-----------------|
+| Aspect | Team Lead | Subordinate |
+|--------|-----------|-------------|
 | Task Queue | Yes | Yes |
 | Proactive | Yes (seeks work based on mission) | No (purely reactive) |
 | 1-Hour Trigger | Yes (to further mission) | No (only queue-triggered) |
@@ -66,13 +66,13 @@ User sends message → Agent responds minimally ("I'll look into that")
 ```
 Task picked up → Load thread (or create new)
               → Process task via LLM with tools
-              → May queue sub-tasks or delegate to workers
+              → May queue sub-tasks or delegate to subordinates
               → Mark task complete
               → If queue empty:
                   → Extract insights from thread → insights table
                   → Team lead only: decide if briefing needed
                   → If briefing: create inbox item + message in user conversation
-                  → Schedule next run (team lead: 1 hour, worker: none)
+                  → Schedule next run (team lead: 1 hour, subordinate: none)
 ```
 
 **Team Creation Bootstrap**:
@@ -701,13 +701,13 @@ describe('decideBriefing (team lead)', () => {
     expect(inboxAfter.length).toBe(inboxBefore.length);
   });
 
-  test('worker agents cannot send briefings', async () => {
-    const agent = await Agent.fromId(workerId);
-    const { threadId } = await startWorkSession(workerId);
+  test('subordinate agents cannot send briefings', async () => {
+    const agent = await Agent.fromId(subordinateId);
+    const { threadId } = await startWorkSession(subordinateId);
 
     await agent.decideBriefing(threadId);
 
-    // No inbox items created for worker's team
+    // No inbox items created for subordinate's team
     // (decideBriefing returns early for non-team-leads)
   });
 });
@@ -825,10 +825,10 @@ describe('background worker scheduling', () => {
     expect(agentsDue.some(a => a.id === teamLeadId)).toBe(true);
   });
 
-  test('does not pick up worker when no tasks (purely reactive)', async () => {
-    // Worker has no tasks and no nextRunAt
+  test('does not pick up subordinate when no tasks (purely reactive)', async () => {
+    // Subordinate has no tasks and no nextRunAt
     const agentsDue = await getAgentsWithWork();
-    expect(agentsDue.some(a => a.id === workerId)).toBe(false);
+    expect(agentsDue.some(a => a.id === subordinateId)).toBe(false);
   });
 
   test('schedules team lead for 1 hour after completion', async () => {
@@ -850,7 +850,7 @@ describe('background worker scheduling', () => {
     expect(updatedAgent.nextRunAt.getTime()).toBeCloseTo(oneHourFromNow, -4); // within 10 seconds
   });
 
-  test('does not schedule worker after completion', async () => {
+  test('does not schedule subordinate after completion', async () => {
     server.use(
       http.post('https://api.openai.com/v1/chat/completions', () => {
         return HttpResponse.json({
@@ -859,12 +859,12 @@ describe('background worker scheduling', () => {
       })
     );
 
-    await queueTask(workerId, 'Work', 'delegation');
+    await queueTask(subordinateId, 'Work', 'delegation');
 
-    const agent = await Agent.fromId(workerId);
+    const agent = await Agent.fromId(subordinateId);
     await agent.runWorkSession();
 
-    const updatedAgent = await getAgentById(workerId);
+    const updatedAgent = await getAgentById(subordinateId);
     expect(updatedAgent.nextRunAt).toBeNull();
   });
 });
@@ -1036,7 +1036,7 @@ describe('GET /api/conversations/[agentId]', () => {
 
 #### Task 7.2: Update runCycle dispatch
 - Team lead: `runWorkSession()` + proactive work if queue empty
-- Worker: `runWorkSession()` only
+- Subordinate: `runWorkSession()` only
 
 ### Phase 8: Documentation Update
 
@@ -1063,7 +1063,7 @@ Update to reflect new architecture:
 
 4. **Background Worker section** - Update to describe:
    - Event-driven (task queued) + timer-based (team lead 1-hour)
-   - Workers purely reactive, team leads proactive
+   - Subordinates purely reactive, team leads proactive
 
 5. **Commands section** - Verify worker command still accurate
 
@@ -1110,7 +1110,7 @@ Update to reflect new architecture:
 │    - Add task as "user" message to thread                       │
 │    - LLM responds with tool calls                               │
 │    - tavilySearch("NVIDIA stock news") → add result to thread   │
-│    - May delegate to workers                                    │
+│    - May delegate to subordinates                               │
 │    - Thread grows with work conversation                        │
 │    - Compact if approaching context limit                       │
 │ 6. Mark task complete                                           │
@@ -1145,7 +1145,7 @@ Update to reflect new architecture:
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-### Teammate Worker (Purely Reactive)
+### Subordinate (Purely Reactive)
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -1160,7 +1160,7 @@ Update to reflect new architecture:
 │ 7. Check queue → empty                                          │
 │ 8. Extract insights from thread → insights table                │
 │ 9. Mark thread completed                                        │
-│ 10. NO briefing (workers can't send)                            │
+│ 10. NO briefing (subordinates can't send)                       │
 │ 11. NO scheduling (purely reactive)                             │
 │ 12. Session ends, agent goes idle                               │
 └─────────────────────────────────────────────────────────────────┘
@@ -1348,7 +1348,7 @@ npx drizzle-kit studio  # Verify new tables: threads, thread_messages, insights
 - [ ] Team leads decide briefings (not automatic)
 - [ ] Briefings go to inbox (summary) + conversation (full)
 - [ ] Team leads have 1-hour proactive trigger
-- [ ] Workers are purely reactive (queue-triggered only)
+- [ ] Subordinates are purely reactive (queue-triggered only)
 - [ ] New teams bootstrap with "get to work" task
 - [ ] Insights accumulate professional knowledge over time
 - [ ] Insights sent to LLM only in background (threads)

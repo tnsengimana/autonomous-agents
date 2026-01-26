@@ -4,7 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Autonomous Teams is a TypeScript/Next.js application where users create teams of AI agents that run continuously to fulfill a mission. Teams have hierarchical agents (team leads run continuously, workers spawn on-demand) that collaborate, extract insights from work sessions, and proactively deliver briefings to users.
+Autonomous Teams is a TypeScript/Next.js application where users create teams of AI agents that run continuously to fulfill a mission. Teams have hierarchical agents (team leads run continuously, subordinates spawn on-demand) that collaborate, extract insights from work sessions, and proactively deliver briefings to users.
+
+**Terminology Note**: "Subordinate" refers to team member agents (non-lead agents that report to the team lead). "Worker" refers to the background process (`src/worker/`) that runs agent cycles.
 
 ## Commands
 
@@ -62,7 +64,7 @@ The system separates user interactions (foreground) from agent work (background)
 - Event-driven + timer-based execution:
   - **Event-driven**: Tasks queued via `notifyTaskQueued()` trigger immediate processing
   - **Timer-based**: Team leads scheduled for 1-hour proactive runs via `nextRunAt`
-- Workers are purely reactive (only triggered when work in queue)
+- Subordinates are purely reactive (only triggered when work in queue)
 - Team leads are proactive (1-hour trigger to further mission)
 - Calls `agent.runWorkSession()` for thread-based task processing
 
@@ -94,7 +96,7 @@ The system separates user interactions (foreground) from agent work (background)
 - **Path alias**: `@/*` maps to `./src/*`
 - **Mock mode**: Set `MOCK_LLM=true` in `.env.local` to run without real API calls
 - **Encrypted API keys**: User API keys stored encrypted in `userApiKeys` table
-- **Team hierarchy**: Team leads have `parentAgentId = null`, workers reference their lead
+- **Team hierarchy**: Team leads have `parentAgentId = null`, subordinates reference their lead
 - **Memories vs Insights**: Memories store user interaction context. Insights are the agent's professional knowledge base.
 - **Thread lifecycle**: created -> active -> insight extraction -> completed
 - **Thread compaction**: Mid-session context management when thread exceeds 50 messages
@@ -111,11 +113,7 @@ For teams to run autonomously and deliver proactive insights:
    ```
 3. **Event-driven**: Tasks queued trigger immediate processing via `notifyTaskQueued()`
 4. **Timer-based**: Team leads auto-scheduled for 1-hour proactive runs
-5. Team leads can delegate to workers and push briefings to user inbox
-
-## Design Document
-
-Full system design with diagrams, tool definitions, and development tracks: `docs/plans/2026-01-25-autonomous-teams-design.md`
+5. Team leads can delegate to subordinates and push briefings to user inbox
 
 ## Workflow Preferences
 
