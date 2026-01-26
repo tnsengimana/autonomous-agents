@@ -381,7 +381,7 @@ Examples:
         await this.decideBriefing(threadId);
       }
 
-      // Schedule next run (team lead: 1 hour, worker: none - triggered by delegation)
+      // Schedule next run (team lead: 1 hour, subordinate: none - triggered by delegation)
       if (this.isTeamLead()) {
         await this.scheduleNextRun(TEAM_LEAD_NEXT_RUN_HOURS);
       }

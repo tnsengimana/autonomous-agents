@@ -119,6 +119,8 @@ Full system design with diagrams, tool definitions, and development tracks: `doc
 
 ## Workflow Preferences
 
+**Plans**: Always save implementation plans to `docs/plans/` with the naming convention `YYYY-MM-DD-<topic>.md`. This keeps plans version-controlled with the project.
+
 **Subagent Usage**: Always prefer to use subagents for implementation tasks:
 1. **Implementation subagent** - Writes code, creates files, installs dependencies
 2. **Review subagent** - Reviews implementation against plan/standards, then commits changes

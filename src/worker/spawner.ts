@@ -1,7 +1,7 @@
 /**
  * Worker Spawner
  *
- * Handles on-demand spawning of worker agents when a team lead delegates tasks.
+ * Handles on-demand spawning of subordinate agents when a team lead delegates tasks.
  * Currently uses a polling-based approach, but could be extended to use
  * event-driven notifications.
  */
@@ -33,13 +33,13 @@ function logError(message: string, error: unknown): void {
 // ============================================================================
 
 /**
- * Spawn a worker agent to execute a specific task
+ * Spawn a subordinate agent to execute a specific task
  */
-export async function spawnWorker(
+export async function spawnSubordinate(
   agentId: string,
   taskDescription: string
 ): Promise<{ success: boolean; result?: string; error?: string }> {
-  log(`Spawning worker: ${agentId}`);
+  log(`Spawning subordinate: ${agentId}`);
 
   try {
     // Get the agent data
@@ -74,7 +74,7 @@ export async function spawnWorker(
       result: response,
     };
   } catch (error) {
-    logError(`Error spawning worker ${agentId}:`, error);
+    logError(`Error spawning subordinate ${agentId}:`, error);
 
     // Try to reset agent status
     try {
@@ -91,18 +91,18 @@ export async function spawnWorker(
 }
 
 /**
- * Process all pending tasks for a worker agent
+ * Process all pending tasks for a subordinate agent
  */
-export async function processWorkerPendingTasks(
+export async function processSubordinatePendingTasks(
   agentId: string
 ): Promise<void> {
-  log(`Processing pending tasks for worker: ${agentId}`);
+  log(`Processing pending tasks for subordinate: ${agentId}`);
 
   try {
     const pendingTasks = await getPendingTasksForAgent(agentId);
 
     if (pendingTasks.length === 0) {
-      log(`No pending tasks for worker: ${agentId}`);
+      log(`No pending tasks for subordinate: ${agentId}`);
       return;
     }
 
@@ -116,7 +116,7 @@ export async function processWorkerPendingTasks(
       await updateTaskStatus(task.id, 'in_progress');
 
       // Execute the task
-      const result = await spawnWorker(agentId, task.task);
+      const result = await spawnSubordinate(agentId, task.task);
 
       // Complete the task with the result
       if (result.success) {
@@ -128,14 +128,14 @@ export async function processWorkerPendingTasks(
       }
     }
 
-    log(`Finished processing tasks for worker: ${agentId}`);
+    log(`Finished processing tasks for subordinate: ${agentId}`);
   } catch (error) {
     logError(`Error processing pending tasks for ${agentId}:`, error);
   }
 }
 
 /**
- * Spawn workers for all pending tasks in a team
+ * Spawn subordinates for all pending tasks in a team
  * This can be called periodically or triggered by task creation
  */
 export async function processTeamPendingTasks(teamId: string): Promise<void> {
@@ -146,12 +146,12 @@ export async function processTeamPendingTasks(teamId: string): Promise<void> {
     const { getAgentsByTeamId } = await import('@/lib/db/queries/agents');
     const agents = await getAgentsByTeamId(teamId);
 
-    // Filter to worker agents (those with a parent)
-    const workers = agents.filter((a) => a.parentAgentId !== null);
+    // Filter to subordinate agents (those with a parent)
+    const subordinates = agents.filter((a) => a.parentAgentId !== null);
 
-    // Process pending tasks for each worker
-    for (const worker of workers) {
-      await processWorkerPendingTasks(worker.id);
+    // Process pending tasks for each subordinate
+    for (const subordinate of subordinates) {
+      await processSubordinatePendingTasks(subordinate.id);
     }
 
     log(`Finished processing team: ${teamId}`);
@@ -182,7 +182,7 @@ export async function notifyNewTask(taskId: string): Promise<void> {
     }
 
     // Process the task immediately
-    await processWorkerPendingTasks(task.assignedToId);
+    await processSubordinatePendingTasks(task.assignedToId);
   } catch (error) {
     logError(`Error handling task notification ${taskId}:`, error);
   }

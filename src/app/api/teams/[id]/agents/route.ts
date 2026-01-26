@@ -12,7 +12,7 @@ const createAgentSchema = z.object({
 });
 
 /**
- * POST /api/teams/[id]/agents - Create a new worker agent for a team
+ * POST /api/teams/[id]/agents - Create a new subordinate agent for a team
  */
 export async function POST(
   request: NextRequest,
@@ -39,7 +39,7 @@ export async function POST(
     const teamLead = await getTeamLead(teamId);
     if (!teamLead) {
       return NextResponse.json(
-        { error: 'Team lead not found. Cannot create worker agent without a team lead.' },
+        { error: 'Team lead not found. Cannot create subordinate agent without a team lead.' },
         { status: 400 }
       );
     }
@@ -56,7 +56,7 @@ export async function POST(
 
     const { name, role, systemPrompt } = validation.data;
 
-    // Create the worker agent
+    // Create the subordinate agent
     const agent = await createAgent({
       teamId,
       parentAgentId: teamLead.id,

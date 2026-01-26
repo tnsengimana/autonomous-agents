@@ -7,7 +7,7 @@
  * 1. Event-driven: When tasks are queued to any agent
  * 2. Timer-based: Team leads run every hour (scheduled via nextRunAt)
  *
- * Workers are purely reactive - they only run when they have queued tasks.
+ * Subordinates are purely reactive - they only run when they have queued tasks.
  * Team leads get scheduled for 1 hour after each work session completion.
  */
 
@@ -198,12 +198,12 @@ export async function runSingleCycle(): Promise<void> {
 }
 
 /**
- * Process pending tasks for a specific worker agent
+ * Process pending tasks for a specific subordinate agent
  * This is called when a team lead has delegated work
  *
  * @deprecated Use notifyTaskQueued instead - work sessions handle task processing
  */
-export async function processWorkerTasks(workerId: string): Promise<void> {
-  log(`Processing tasks for worker: ${workerId} (via notifyTaskQueued)`);
-  notifyTaskQueued(workerId);
+export async function processSubordinateTasks(subordinateId: string): Promise<void> {
+  log(`Processing tasks for subordinate: ${subordinateId} (via notifyTaskQueued)`);
+  notifyTaskQueued(subordinateId);
 }
