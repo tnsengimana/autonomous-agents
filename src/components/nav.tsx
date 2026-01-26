@@ -10,6 +10,7 @@ import { useUnreadCount } from "@/hooks/useUnreadCount";
 const navItems = [
   { href: "/inbox", label: "Inbox", showUnreadCount: true },
   { href: "/teams", label: "Teams" },
+  { href: "/aides", label: "Aides" },
   { href: "/settings", label: "Settings" },
 ];
 

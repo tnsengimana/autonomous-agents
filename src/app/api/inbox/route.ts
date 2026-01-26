@@ -5,7 +5,7 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@/lib/auth/config';
 import {
-  getInboxItemsWithTeams,
+  getInboxItemsWithSources,
   getUnreadCount,
 } from '@/lib/db/queries/inboxItems';
 
@@ -19,19 +19,21 @@ export async function GET() {
 
     const userId = session.user.id;
 
-    // 2. Get inbox items with team names
-    const itemsWithTeams = await getInboxItemsWithTeams(userId);
+    // 2. Get inbox items with team/aide names
+    const itemsWithSources = await getInboxItemsWithSources(userId);
     const unreadCount = await getUnreadCount(userId);
 
     // 3. Format response
-    const items = itemsWithTeams.map(({ item, teamName }) => ({
+    const items = itemsWithSources.map(({ item, teamName, aideName }) => ({
       id: item.id,
       type: item.type,
       title: item.title,
       content: item.content,
       teamId: item.teamId,
-      agentId: item.agentId,
       teamName,
+      aideId: item.aideId,
+      aideName,
+      agentId: item.agentId,
       read: item.readAt !== null,
       readAt: item.readAt,
       createdAt: item.createdAt,

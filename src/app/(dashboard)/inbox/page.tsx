@@ -19,12 +19,30 @@ interface InboxItem {
   type: string;
   title: string;
   content: string;
-  teamId: string;
-  teamName: string;
+  teamId: string | null;
+  teamName: string | null;
+  aideId: string | null;
+  aideName: string | null;
   agentId: string;
   read: boolean;
   readAt: string | null;
   createdAt: string;
+}
+
+// Helper functions for displaying source info
+function getSourceName(item: InboxItem): string {
+  return item.teamName ?? item.aideName ?? "Unknown";
+}
+
+function getSourceLabel(item: InboxItem): string {
+  return item.teamId ? "Team" : "Aide";
+}
+
+function getConversationLink(item: InboxItem): string {
+  if (item.teamId) {
+    return `/teams/${item.teamId}/agents/${item.agentId}/chat`;
+  }
+  return `/aides/${item.aideId}/agents/${item.agentId}/chat`;
 }
 
 interface InboxResponse {
@@ -276,7 +294,7 @@ export default function InboxPage() {
                             {item.title}
                           </h3>
                           <p className="mt-1 text-xs text-muted-foreground">
-                            {item.teamName} - {formatTimeAgo(item.createdAt)}
+                            {getSourceName(item)} - {formatTimeAgo(item.createdAt)}
                           </p>
                         </div>
                       </div>
@@ -301,7 +319,7 @@ export default function InboxPage() {
                         </span>
                       </div>
                       <CardTitle className="mt-2">{selectedItem.title}</CardTitle>
-                      <CardDescription>From {selectedItem.teamName}</CardDescription>
+                      <CardDescription>From {getSourceName(selectedItem)}</CardDescription>
                     </div>
                     <div className="flex gap-2">
                       <Button
@@ -330,8 +348,8 @@ export default function InboxPage() {
                   <Separator className="my-6" />
                   <div className="text-sm text-muted-foreground">
                     <p>
-                      <span className="font-medium">Team:</span>{" "}
-                      {selectedItem.teamName}
+                      <span className="font-medium">{getSourceLabel(selectedItem)}:</span>{" "}
+                      {getSourceName(selectedItem)}
                     </p>
                     <p>
                       <span className="font-medium">Type:</span>{" "}
@@ -345,7 +363,7 @@ export default function InboxPage() {
                   <Separator className="my-6" />
                   <div className="flex justify-center">
                     <Button asChild>
-                      <Link href={`/teams/${selectedItem.teamId}/chat`}>
+                      <Link href={getConversationLink(selectedItem)}>
                         View Conversation
                       </Link>
                     </Button>

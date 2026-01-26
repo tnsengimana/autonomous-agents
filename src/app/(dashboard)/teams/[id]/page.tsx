@@ -36,6 +36,9 @@ export default async function TeamDetailPage({
     ? team.purpose.split("Mission:")[1]?.trim()
     : team.purpose || "No mission set";
 
+  // Find the team lead (agent with no parent)
+  const teamLead = team.agents.find((a) => a.parentAgentId === null);
+
   return (
     <div className="space-y-6">
       <div className="flex items-start justify-between">
@@ -53,9 +56,11 @@ export default async function TeamDetailPage({
           <Badge variant={team.status === "active" ? "default" : "secondary"}>
             {team.status}
           </Badge>
-          <Link href={`/teams/${team.id}/chat`}>
-            <Button>Chat with Team</Button>
-          </Link>
+          {teamLead && (
+            <Link href={`/teams/${team.id}/agents/${teamLead.id}/chat`}>
+              <Button>Chat with Team</Button>
+            </Link>
+          )}
         </div>
       </div>
 
