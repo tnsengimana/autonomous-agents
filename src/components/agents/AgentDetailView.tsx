@@ -7,7 +7,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { MessageSquare, Eye, Edit } from "lucide-react";
+import { MessageSquare, Eye, Edit, ListTodo } from "lucide-react";
 import type { AgentOwnerContext, Agent, Memory, KnowledgeItem } from "./types";
 import { buildAgentPath, buildOwnerPath, getOwnerLabel } from "./utils";
 import { KnowledgeItemsList } from "./KnowledgeItemsList";
@@ -59,6 +59,12 @@ export function AgentDetailView({
             <Button variant="outline" size="sm" className="gap-2">
               <Eye className="h-4 w-4" />
               Inspect
+            </Button>
+          </Link>
+          <Link href={buildAgentPath(owner, agent.id, "tasks")}>
+            <Button variant="outline" size="sm" className="gap-2">
+              <ListTodo className="h-4 w-4" />
+              Tasks
             </Button>
           </Link>
           <Link href={buildAgentPath(owner, agent.id, "chat")}>

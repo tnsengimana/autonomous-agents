@@ -1,4 +1,4 @@
-import type { Agent, Memory, KnowledgeItem } from "@/lib/types";
+import type { Agent, Memory, KnowledgeItem, AgentTask } from "@/lib/types";
 
 /**
  * The entity type that owns an agent (team or aide)
@@ -24,4 +24,4 @@ export interface AgentPageBaseProps {
 }
 
 // Re-export types that components need
-export type { Agent, Memory, KnowledgeItem };
+export type { Agent, Memory, KnowledgeItem, AgentTask };

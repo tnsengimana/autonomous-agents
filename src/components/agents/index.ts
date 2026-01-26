@@ -24,6 +24,7 @@ export { MemoriesList } from "./MemoriesList";
 
 // Server View Components
 export { AgentDetailView } from "./AgentDetailView";
+export { AgentTasksView } from "./AgentTasksView";
 export { AgentChatView } from "./AgentChatView";
 export { AgentInspectView } from "./AgentInspectView";
 

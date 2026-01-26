@@ -92,6 +92,24 @@ export async function getPendingTasksForAgent(
 }
 
 /**
+ * Get completed tasks for an agent, ordered by creation time (FIFO)
+ */
+export async function getCompletedTasksForAgent(
+  agentId: string
+): Promise<AgentTask[]> {
+  return db
+    .select()
+    .from(agentTasks)
+    .where(
+      and(
+        eq(agentTasks.assignedToId, agentId),
+        eq(agentTasks.status, 'completed')
+      )
+    )
+    .orderBy(asc(agentTasks.createdAt));
+}
+
+/**
  * Get pending tasks for an agent (tasks assigned TO this agent), ordered by creation time (FIFO)
  */
 export async function getOwnPendingTasks(agentId: string): Promise<AgentTask[]> {
