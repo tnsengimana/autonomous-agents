@@ -1,0 +1,72 @@
+services:
+  postgres:
+    image: postgres:16
+    ports:
+      - "5433:5432"
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: autonomous_teams
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d autonomous_teams"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  migrate:
+    image: node:20
+    working_dir: /app
+    depends_on:
+      postgres:
+        condition: service_healthy
+    env_file:
+      - .env.local
+    environment:
+      DATABASE_URL: postgres://postgres:postgres@postgres:5432/autonomous_teams
+      NODE_ENV: development
+    volumes:
+      - .:/app
+      - node_modules:/app/node_modules
+    command: sh -c "npm install && npx drizzle-kit migrate"
+
+  web:
+    image: node:20
+    working_dir: /app
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    env_file:
+      - .env.local
+    environment:
+      DATABASE_URL: postgres://postgres:postgres@postgres:5432/autonomous_teams
+      NODE_ENV: development
+      WATCHPACK_POLLING: "true"
+    ports:
+      - "3000:3000"
+    volumes:
+      - .:/app
+      - node_modules:/app/node_modules
+    command: sh -c "npm install && npm run dev"
+
+  worker:
+    image: node:20
+    working_dir: /app
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    env_file:
+      - .env.local
+    environment:
+      DATABASE_URL: postgres://postgres:postgres@postgres:5432/autonomous_teams
+      NODE_ENV: development
+      CHOKIDAR_USEPOLLING: "true"
+    volumes:
+      - .:/app
+      - node_modules:/app/node_modules
+    command: sh -c "npm install && npm run worker"
+
+volumes:
+  postgres_data:
+  node_modules:
