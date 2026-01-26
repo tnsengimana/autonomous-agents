@@ -5,57 +5,8 @@
     {
       "idx": 0,
       "version": "7",
-      "when": 1769334605325,
-      "tag": "0000_youthful_exodus",
-      "breakpoints": true
-    },
-    {
-      "idx": 1,
-      "version": "7",
-      "when": 1769334804459,
-      "tag": "0001_eager_azazel",
-      "breakpoints": true
-    },
-    {
-      "idx": 2,
-      "version": "7",
-      "when": 1769335545412,
-      "tag": "0002_aspiring_fantastic_four",
-      "breakpoints": true
-    },
-    {
-      "idx": 3,
-      "version": "7",
-      "when": 1769336696405,
-      "tag": "0003_broad_omega_flight",
-      "breakpoints": true
-    },
-    {
-      "idx": 4,
-      "version": "7",
-      "when": 1769348526500,
-      "tag": "0004_violet_micromax",
-      "breakpoints": true
-    },
-    {
-      "idx": 5,
-      "version": "7",
-      "when": 1769348734219,
-      "tag": "0005_rapid_shape",
-      "breakpoints": true
-    },
-    {
-      "idx": 6,
-      "version": "7",
-      "when": 1769375757813,
-      "tag": "0006_lazy_stature",
-      "breakpoints": true
-    },
-    {
-      "idx": 7,
-      "version": "7",
-      "when": 1769396293843,
-      "tag": "0007_boring_phalanx",
+      "when": 1769402862470,
+      "tag": "0000_init",
       "breakpoints": true
     }
   ]

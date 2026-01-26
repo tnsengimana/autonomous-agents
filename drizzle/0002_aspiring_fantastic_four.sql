@@ -1,1 +1,0 @@
-ALTER TABLE "memories" ADD COLUMN "type" text NOT NULL;

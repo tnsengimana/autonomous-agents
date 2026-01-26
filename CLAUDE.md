@@ -11,6 +11,13 @@ Autonomous Teams is a TypeScript/Next.js application where users create teams of
 ## Commands
 
 ```bash
+# Start Postgres, run migrations, start web + worker. This is the preferred development workflow
+docker compose up
+```
+
+Alternatively, if you want to use `npm` directly
+
+```bash
 # Development
 npm run dev          # Start Next.js dev server
 npm run build        # Build for production

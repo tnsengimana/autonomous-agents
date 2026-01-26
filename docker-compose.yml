@@ -9,23 +9,62 @@ services:
       POSTGRES_DB: autonomous_teams
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d autonomous_teams"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
-  # Worker service for background agent processing
-  # Build with: docker build -t autonomous-teams-worker .
-  # Note: Requires a Dockerfile to be created for production use
-  worker:
-    build: .
-    command: npm run worker
+  migrate:
+    image: node:20
+    working_dir: /app
     depends_on:
-      - postgres
+      postgres:
+        condition: service_healthy
+    env_file:
+      - .env.local
     environment:
       DATABASE_URL: postgres://postgres:postgres@postgres:5432/autonomous_teams
-      NODE_ENV: production
-    # Uncomment and add your API keys for production
-    # OPENAI_API_KEY: ${OPENAI_API_KEY}
-    # ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
-    profiles:
-      - worker  # Only starts when explicitly requested with --profile worker
+      NODE_ENV: development
+    volumes:
+      - .:/app
+      - node_modules:/app/node_modules
+    command: sh -c "npm install && npx drizzle-kit migrate"
+
+  web:
+    image: node:20
+    working_dir: /app
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    env_file:
+      - .env.local
+    environment:
+      DATABASE_URL: postgres://postgres:postgres@postgres:5432/autonomous_teams
+      NODE_ENV: development
+    ports:
+      - "3000:3000"
+    volumes:
+      - .:/app
+      - node_modules:/app/node_modules
+    command: sh -c "npm install && npm run dev"
+
+  worker:
+    image: node:20
+    working_dir: /app
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    env_file:
+      - .env.local
+    environment:
+      DATABASE_URL: postgres://postgres:postgres@postgres:5432/autonomous_teams
+      NODE_ENV: development
+    volumes:
+      - .:/app
+      - node_modules:/app/node_modules
+    command: sh -c "npm install && npm run worker"
 
 volumes:
   postgres_data:
+  node_modules:
