@@ -223,8 +223,11 @@ const createInboxItemTool: Tool = {
       })
       .returning();
 
-    // 2. Append full message to agent's conversation
-    const conversation = await getOrCreateConversation(context.agentId);
+    // 2. Append full message to agent's foreground conversation (user-facing)
+    const conversation = await getOrCreateConversation(
+      context.agentId,
+      'foreground'
+    );
     await appendMessage(conversation.id, 'assistant', fullMessage);
 
     return {

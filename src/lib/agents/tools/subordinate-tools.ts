@@ -16,6 +16,8 @@ import {
   completeTask,
 } from '@/lib/db/queries/agentTasks';
 import { getAgentById } from '@/lib/db/queries/agents';
+import { getOrCreateConversation } from '@/lib/db/queries/conversations';
+import { appendMessage } from '@/lib/db/queries/messages';
 
 // ============================================================================
 // reportToLead
@@ -83,6 +85,19 @@ const reportToLeadTool: Tool = {
     const agent = await getAgentById(context.agentId);
     const parentAgentId = agent?.parentAgentId;
 
+    // Add message to lead's background conversation
+    if (parentAgentId) {
+      const backgroundConv = await getOrCreateConversation(
+        parentAgentId,
+        'background'
+      );
+      await appendMessage(
+        backgroundConv.id,
+        'user',
+        `Subordinate ${agent.name} reports: ${result}`
+      );
+    }
+
     return {
       success: true,
       data: {
@@ -141,26 +156,22 @@ const requestInputTool: Tool = {
       };
     }
 
-    // For now, we'll create a message in the team lead's conversation
-    // In a more complete implementation, this would use a message queue
-    // or notification system
-
-    // Import the conversation module to add a message
-    const { getActiveConversation, addSystemMessage } = await import(
-      '@/lib/agents/conversation'
+    // Add message to lead's background conversation
+    const backgroundConv = await getOrCreateConversation(
+      agent.parentAgentId,
+      'background'
     );
 
-    const conversation = await getActiveConversation(agent.parentAgentId);
-
-    await addSystemMessage(
-      conversation.id,
-      `[Subordinate Agent ${agent.name} is requesting input]\n\nQuestion: ${question}\n\nPlease respond with guidance for the subordinate.`
+    await appendMessage(
+      backgroundConv.id,
+      'user',
+      `Subordinate ${agent.name} asks: ${question}`
     );
 
     return {
       success: true,
       data: {
-        questionId: conversation.id, // Using conversation ID as reference
+        questionId: backgroundConv.id, // Using conversation ID as reference
         message: 'Question sent to team lead. Awaiting response.',
       },
     };
