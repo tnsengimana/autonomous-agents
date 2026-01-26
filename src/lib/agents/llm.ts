@@ -23,7 +23,11 @@ import {
 const DEFAULT_MODEL = {
   openai: 'gpt-4o',
   anthropic: 'claude-sonnet-4-20250514',
-  google: 'gemini-3-pro-preview',
+  google: 'gemini-3-flash-preview',  // Using flash as default since pro has reliability issues
+} as const;
+
+const FALLBACK_MODEL = {
+  google: 'gemini-3-pro-preview',  // Pro as fallback when flash fails
 } as const;
 
 // Check mock mode dynamically to support testing
@@ -650,16 +654,35 @@ export async function generateLLMObject<T>(
 
   if (provider === 'google') {
     const google = await createGoogleProvider(userId);
-    const result = await generateObject({
-      model: google(model),
-      messages,
-      system: systemPrompt,
-      schema,
-      temperature: options.temperature,
-      maxOutputTokens: options.maxOutputTokens,
-    });
 
-    return result.object;
+    // Try primary model first, fall back to flash model if it fails
+    try {
+      console.log(`[LLM] generateObject using model: ${model}`);
+      const result = await generateObject({
+        model: google(model),
+        messages,
+        system: systemPrompt,
+        schema,
+        temperature: options.temperature,
+        maxOutputTokens: options.maxOutputTokens,
+      });
+      return result.object;
+    } catch (error) {
+      const fallbackModel = FALLBACK_MODEL.google;
+      if (model !== fallbackModel) {
+        console.log(`[LLM] Primary model ${model} failed, falling back to ${fallbackModel}:`, error);
+        const result = await generateObject({
+          model: google(fallbackModel),
+          messages,
+          system: systemPrompt,
+          schema,
+          temperature: options.temperature,
+          maxOutputTokens: options.maxOutputTokens,
+        });
+        return result.object;
+      }
+      throw error;
+    }
   }
 
   throw new Error(`Unsupported provider: ${provider}`);
