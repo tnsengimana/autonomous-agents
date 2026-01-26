@@ -8,6 +8,13 @@
       "when": 1769402862470,
       "tag": "0000_init",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1769408766012,
+      "tag": "0001_bumpy_luckman",
+      "breakpoints": true
     }
   ]
 }

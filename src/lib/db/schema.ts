@@ -98,11 +98,24 @@ export const teams = pgTable('teams', {
   updatedAt: timestamp('updated_at', { mode: 'date' }).defaultNow().notNull(),
 });
 
+export const aides = pgTable('aides', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: uuid('user_id')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  name: text('name').notNull(),
+  purpose: text('purpose'),
+  status: text('status').notNull().default('active'), // 'active', 'paused', 'archived'
+  createdAt: timestamp('created_at', { mode: 'date' }).defaultNow().notNull(),
+  updatedAt: timestamp('updated_at', { mode: 'date' }).defaultNow().notNull(),
+});
+
 export const agents = pgTable('agents', {
   id: uuid('id').primaryKey().defaultRandom(),
   teamId: uuid('team_id')
-    .notNull()
-    .references(() => teams.id, { onDelete: 'cascade' }),
+    .references(() => teams.id, { onDelete: 'cascade' }), // NOW NULLABLE - agent belongs to team OR aide
+  aideId: uuid('aide_id')
+    .references(() => aides.id, { onDelete: 'cascade' }), // NEW - agent belongs to team OR aide
   parentAgentId: uuid('parent_agent_id').references((): AnyPgColumn => agents.id, { onDelete: 'cascade' }), // null for team leads
   name: text('name').notNull(),
   role: text('role').notNull(),
@@ -114,6 +127,7 @@ export const agents = pgTable('agents', {
   updatedAt: timestamp('updated_at', { mode: 'date' }).defaultNow().notNull(),
 }, (table) => [
   index('agents_next_run_at_idx').on(table.nextRunAt),
+  index('agents_aide_id_idx').on(table.aideId),
 ]);
 
 export const conversations = pgTable('conversations', {
@@ -160,8 +174,9 @@ export const inboxItems = pgTable('inbox_items', {
     .notNull()
     .references(() => users.id, { onDelete: 'cascade' }),
   teamId: uuid('team_id')
-    .notNull()
-    .references(() => teams.id, { onDelete: 'cascade' }),
+    .references(() => teams.id, { onDelete: 'cascade' }), // NOW NULLABLE - inbox item from team OR aide
+  aideId: uuid('aide_id')
+    .references(() => aides.id, { onDelete: 'cascade' }), // NEW - inbox item from team OR aide
   agentId: uuid('agent_id')
     .notNull()
     .references(() => agents.id, { onDelete: 'cascade' }),
@@ -175,8 +190,9 @@ export const inboxItems = pgTable('inbox_items', {
 export const agentTasks = pgTable('agent_tasks', {
   id: uuid('id').primaryKey().defaultRandom(),
   teamId: uuid('team_id')
-    .notNull()
-    .references(() => teams.id, { onDelete: 'cascade' }),
+    .references(() => teams.id, { onDelete: 'cascade' }), // NOW NULLABLE - task belongs to team OR aide
+  aideId: uuid('aide_id')
+    .references(() => aides.id, { onDelete: 'cascade' }), // NEW - task belongs to team OR aide
   assignedToId: uuid('assigned_to_id')
     .notNull()
     .references(() => agents.id, { onDelete: 'cascade' }),
@@ -217,6 +233,7 @@ export const usersRelations = relations(users, ({ many }) => ({
   sessions: many(sessions),
   apiKeys: many(userApiKeys),
   teams: many(teams),
+  aides: many(aides),
   inboxItems: many(inboxItems),
 }));
 
@@ -251,10 +268,24 @@ export const teamsRelations = relations(teams, ({ one, many }) => ({
   agentTasks: many(agentTasks),
 }));
 
+export const aidesRelations = relations(aides, ({ one, many }) => ({
+  user: one(users, {
+    fields: [aides.userId],
+    references: [users.id],
+  }),
+  agents: many(agents),
+  inboxItems: many(inboxItems),
+  agentTasks: many(agentTasks),
+}));
+
 export const agentsRelations = relations(agents, ({ one, many }) => ({
   team: one(teams, {
     fields: [agents.teamId],
     references: [teams.id],
+  }),
+  aide: one(aides, {
+    fields: [agents.aideId],
+    references: [aides.id],
   }),
   parentAgent: one(agents, {
     fields: [agents.parentAgentId],
@@ -321,6 +352,10 @@ export const inboxItemsRelations = relations(inboxItems, ({ one }) => ({
     fields: [inboxItems.teamId],
     references: [teams.id],
   }),
+  aide: one(aides, {
+    fields: [inboxItems.aideId],
+    references: [aides.id],
+  }),
   agent: one(agents, {
     fields: [inboxItems.agentId],
     references: [agents.id],
@@ -331,6 +366,10 @@ export const agentTasksRelations = relations(agentTasks, ({ one }) => ({
   team: one(teams, {
     fields: [agentTasks.teamId],
     references: [teams.id],
+  }),
+  aide: one(aides, {
+    fields: [agentTasks.aideId],
+    references: [aides.id],
   }),
   assignedTo: one(agents, {
     fields: [agentTasks.assignedToId],
