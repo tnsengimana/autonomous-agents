@@ -5,16 +5,16 @@
  *
  * Execution triggers:
  * 1. Event-driven: When tasks are queued to any agent
- * 2. Timer-based: Team leads run once per day (scheduled via nextRunAt)
+ * 2. Timer-based: Lead agents (team leads AND aide leads) run once per day (scheduled via nextRunAt)
  *
  * Subordinates are purely reactive - they only run when they have queued tasks.
- * Team leads get scheduled for 1 day after each work session completion.
+ * Lead agents get scheduled for 1 day after each work session completion.
  */
 
 import { Agent } from '@/lib/agents/agent';
 import {
   getAgentsWithPendingTasks,
-  getTeamLeadsDueToRun,
+  getAllLeadsDueToRun,
 } from '@/lib/db/queries/agents';
 
 // ============================================================================
@@ -103,14 +103,14 @@ async function processAgentWorkSession(agentId: string): Promise<void> {
 
 /**
  * Get all agents that need to run work sessions
- * Combines: agents with pending tasks + team leads due for scheduled run
+ * Combines: agents with pending tasks + all leads (team AND aide) due for scheduled run
  */
 async function getAgentsNeedingWork(): Promise<string[]> {
   // 1. Get agents with pending tasks (from notifications or database)
   const agentsWithTasks = await getAgentsWithPendingTasks();
 
-  // 2. Get team leads due for scheduled proactive run
-  const teamLeadsDue = await getTeamLeadsDueToRun();
+  // 2. Get all leads (team AND aide) due for scheduled proactive run
+  const leadsDue = await getAllLeadsDueToRun();
 
   // 3. Add any agents from pending notifications
   const notifiedAgents = Array.from(pendingNotifications);
@@ -119,7 +119,7 @@ async function getAgentsNeedingWork(): Promise<string[]> {
   // 4. Combine and dedupe
   const allAgentIds = new Set([
     ...agentsWithTasks,
-    ...teamLeadsDue,
+    ...leadsDue,
     ...notifiedAgents,
   ]);
 
