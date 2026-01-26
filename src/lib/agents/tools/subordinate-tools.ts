@@ -1,7 +1,7 @@
 /**
  * Subordinate Agent Tools
  *
- * Tools available to subordinate agents for reporting back to team leads.
+ * Tools available to subordinate agents for reporting back to leads.
  */
 
 import {
@@ -24,7 +24,7 @@ const reportToLeadTool: Tool = {
   schema: {
     name: 'reportToLead',
     description:
-      'Send the results of your current task back to the team lead. Use this when you have completed or failed a task.',
+      'Send the results of your current task back to the lead. Use this when you have completed or failed a task.',
     parameters: [
       {
         name: 'result',
@@ -55,10 +55,10 @@ const reportToLeadTool: Tool = {
     const { result, status } = parsed.data;
 
     // Only subordinates can report to lead
-    if (context.isTeamLead) {
+    if (context.isLead) {
       return {
         success: false,
-        error: 'Team leads cannot use this tool',
+        error: 'Leads cannot use this tool',
       };
     }
 
@@ -78,7 +78,7 @@ const reportToLeadTool: Tool = {
 
     await completeTask(task.id, result, taskStatus);
 
-    // Get the team lead info for the response
+    // Get the lead info for the response
     const agent = await getAgentById(context.agentId);
     const parentAgentId = agent?.parentAgentId;
 
@@ -100,7 +100,7 @@ const reportToLeadTool: Tool = {
       data: {
         taskId: task.id,
         reportedTo: parentAgentId,
-        message: `Task ${taskStatus}. Result reported to team lead.`,
+        message: `Task ${taskStatus}. Result reported to lead.`,
       },
     };
   },
@@ -114,12 +114,12 @@ const requestInputTool: Tool = {
   schema: {
     name: 'requestInput',
     description:
-      'Ask the team lead for clarification or additional input when you need more information to complete a task.',
+      'Ask the lead for clarification or additional input when you need more information to complete a task.',
     parameters: [
       {
         name: 'question',
         type: 'string',
-        description: 'The question or clarification you need from the team lead',
+        description: 'The question or clarification you need from the lead',
         required: true,
       },
     ],
@@ -137,19 +137,19 @@ const requestInputTool: Tool = {
     const { question } = parsed.data;
 
     // Only subordinates can request input from lead
-    if (context.isTeamLead) {
+    if (context.isLead) {
       return {
         success: false,
-        error: 'Team leads cannot use this tool',
+        error: 'Leads cannot use this tool',
       };
     }
 
-    // Get the agent to find the team lead
+    // Get the agent to find the lead
     const agent = await getAgentById(context.agentId);
     if (!agent || !agent.parentAgentId) {
       return {
         success: false,
-        error: 'Could not find team lead',
+        error: 'Could not find lead',
       };
     }
 
@@ -169,7 +169,7 @@ const requestInputTool: Tool = {
       success: true,
       data: {
         questionId: backgroundConv.id, // Using conversation ID as reference
-        message: 'Question sent to team lead. Awaiting response.',
+        message: 'Question sent to lead. Awaiting response.',
       },
     };
   },

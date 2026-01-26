@@ -31,7 +31,7 @@ export interface ToolContext {
   agentId: string;
   teamId: string | null;
   aideId: string | null;
-  isTeamLead: boolean;
+  isLead: boolean;
 }
 
 export interface ToolResult {
@@ -78,9 +78,9 @@ export function getAllTools(): Tool[] {
 }
 
 /**
- * Get tools available for team leads
+ * Get tools available for leads
  */
-export function getTeamLeadTools(): Tool[] {
+export function getLeadTools(): Tool[] {
   return getAllTools().filter((tool) =>
     [
       'delegateToAgent',
@@ -122,12 +122,12 @@ export function getForegroundTools(): Tool[] {
 
 /**
  * Get tools available during background work sessions (background conversations)
- * Team leads get full tools, subordinates get limited set
+ * Leads get full tools, subordinates get limited set
  */
-export function getBackgroundTools(isTeamLead: boolean): Tool[] {
-  if (isTeamLead) {
+export function getBackgroundTools(isLead: boolean): Tool[] {
+  if (isLead) {
     return [
-      ...getTeamLeadTools(),
+      ...getLeadTools(),
       ...getKnowledgeItemTools(),
     ];
   }
@@ -210,7 +210,7 @@ export const ReportToLeadParamsSchema = z.object({
 });
 
 export const RequestInputParamsSchema = z.object({
-  question: z.string().min(1).describe('The question to ask the team lead'),
+  question: z.string().min(1).describe('The question to ask the lead'),
 });
 
 export type DelegateToAgentParams = z.infer<typeof DelegateToAgentParamsSchema>;

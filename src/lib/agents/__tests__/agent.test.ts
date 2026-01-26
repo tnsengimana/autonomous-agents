@@ -485,7 +485,7 @@ describe('Knowledge Item Tools', () => {
     agentId: '',
     teamId: '',
     aideId: null,
-    isTeamLead: true,
+    isLead: true,
   };
 
   beforeEach(() => {
@@ -1258,7 +1258,7 @@ describe('Aide Support', () => {
 
     // Access private method to build context
     const buildContext = (agent as unknown as {
-      buildToolContext: () => { agentId: string; teamId: string | null; aideId: string | null; isTeamLead: boolean }
+      buildToolContext: () => { agentId: string; teamId: string | null; aideId: string | null; isLead: boolean }
     }).buildToolContext?.bind(agent);
 
     // If buildToolContext exists, test it

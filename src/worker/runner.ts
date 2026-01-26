@@ -143,8 +143,8 @@ export async function startRunner(): Promise<void> {
   log('Worker runner started (event-driven + timer-based)');
 
   // Register all tools before starting
-  const { registerTeamLeadTools } = await import(
-    '@/lib/agents/tools/team-lead-tools'
+  const { registerLeadTools } = await import(
+    '@/lib/agents/tools/lead-tools'
   );
   const { registerSubordinateTools } = await import(
     '@/lib/agents/tools/subordinate-tools'
@@ -153,7 +153,7 @@ export async function startRunner(): Promise<void> {
     '@/lib/agents/tools/tavily-tools'
   );
 
-  registerTeamLeadTools();
+  registerLeadTools();
   registerSubordinateTools();
   registerTavilyTools();
   log('Tools registered');

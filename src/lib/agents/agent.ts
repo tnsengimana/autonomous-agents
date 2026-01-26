@@ -346,7 +346,7 @@ Examples:
       agentId: this.id,
       teamId: this.teamId,
       aideId: this.aideId,
-      isTeamLead: this.isTeamLead(),
+      isLead: this.isTeamLead(),
     };
 
     const result = await streamLLMResponseWithTools(
@@ -562,7 +562,7 @@ Examples:
       agentId: this.id,
       teamId: this.teamId,
       aideId: this.aideId,
-      isTeamLead: this.isTeamLead(),
+      isLead: this.isTeamLead(),
     };
 
     // 4. Call LLM with tools

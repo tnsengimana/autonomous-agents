@@ -56,7 +56,7 @@ export {
   registerTool,
   getTool,
   getAllTools,
-  getTeamLeadTools,
+  getLeadTools,
   getSubordinateTools,
   getToolSchemas,
   executeTool,
@@ -69,13 +69,13 @@ export {
   type ToolParameter,
 } from "./tools";
 
-// Team lead tools
+// Lead tools
 export {
-  registerTeamLeadTools,
+  registerLeadTools,
   delegateToAgentTool,
   getTeamStatusTool,
   createInboxItemTool,
-} from "./tools/team-lead-tools";
+} from "./tools/lead-tools";
 
 // Subordinate tools
 export {

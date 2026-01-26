@@ -1,7 +1,7 @@
 /**
- * Team Lead Tools
+ * Lead Tools
  *
- * Tools available to team lead agents for delegation and coordination.
+ * Tools available to lead agents for delegation and coordination.
  */
 
 import {
@@ -80,15 +80,15 @@ const delegateToAgentTool: Tool = {
 
     const { agentId, task } = parsed.data;
 
-    // Verify the agent is a team lead
-    if (!context.isTeamLead) {
+    // Verify the agent is a lead
+    if (!context.isLead) {
       return {
         success: false,
-        error: 'Only team leads can delegate tasks',
+        error: 'Only leads can delegate tasks',
       };
     }
 
-    // Verify the target agent is a child of this team lead
+    // Verify the target agent is a child of this lead
     const childAgents = await getChildAgents(context.agentId);
     const isChild = childAgents.some((child) => child.id === agentId);
 
@@ -129,11 +129,11 @@ const getTeamStatusTool: Tool = {
     parameters: [],
   },
   handler: async (_params, context): Promise<ToolResult> => {
-    // Verify the agent is a team lead
-    if (!context.isTeamLead) {
+    // Verify the agent is a lead
+    if (!context.isLead) {
       return {
         success: false,
-        error: 'Only team leads can check team status',
+        error: 'Only leads can check team status',
       };
     }
 
@@ -272,9 +272,9 @@ const createInboxItemTool: Tool = {
 // ============================================================================
 
 /**
- * Register all team lead tools
+ * Register all lead tools
  */
-export function registerTeamLeadTools(): void {
+export function registerLeadTools(): void {
   registerTool(delegateToAgentTool);
   registerTool(getTeamStatusTool);
   registerTool(createInboxItemTool);
