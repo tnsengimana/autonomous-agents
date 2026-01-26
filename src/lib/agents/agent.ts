@@ -1,5 +1,10 @@
 import { getAgentById, updateAgentStatus } from '@/lib/db/queries/agents';
 import { getMemoriesByAgentId } from '@/lib/db/queries/memories';
+import { getOrCreateConversation } from '@/lib/db/queries/conversations';
+import {
+  getConversationContext,
+  appendMessage,
+} from '@/lib/db/queries/messages';
 import {
   getActiveConversation,
   buildMessageContext,
@@ -26,20 +31,11 @@ import {
   buildMemoryContextBlock,
 } from './memory';
 import {
-  extractKnowledgeFromThread,
+  extractKnowledgeFromMessages,
   buildKnowledgeContextBlock,
   loadKnowledge,
 } from './knowledge-items';
-import {
-  startWorkSession,
-  endWorkSession,
-  addToThread,
-  buildThreadContext,
-  shouldCompact,
-  compactWithSummary,
-  getMessages as getThreadMessages,
-  threadMessagesToLLMFormat,
-} from './thread';
+import { compactIfNeeded } from './compaction';
 import { queueUserTask, claimNextTask, getQueueStatus } from './taskQueue';
 import type {
   Agent as AgentData,
@@ -47,6 +43,7 @@ import type {
   Memory,
   KnowledgeItem,
   Conversation,
+  Message,
   LLMMessage,
 } from '@/lib/types';
 import { z } from 'zod';
@@ -59,7 +56,7 @@ const DEFAULT_MAX_CONTEXT_TOKENS = 8000;
 const DEFAULT_MAX_RESPONSE_TOKENS = 2000;
 
 // Work session configuration
-const MAX_THREAD_MESSAGES_BEFORE_COMPACT = 50;
+const MAX_MESSAGES_BEFORE_COMPACT = 50;
 const TEAM_LEAD_NEXT_RUN_HOURS = 24; // 1 day
 
 // ============================================================================
@@ -411,21 +408,22 @@ Examples:
   }
 
   // ============================================================================
-  // NEW: Background Work Session (Thread-based processing)
+  // NEW: Background Work Session (Conversation-based processing)
   // ============================================================================
 
   /**
    * Run a work session to process queued tasks
    *
    * This is the main entry point for background processing:
-   * 1. Creates a new thread for this session
+   * 1. Gets or creates the background conversation for this agent
    * 2. Loads KNOWLEDGE for work context (not memories)
    * 3. Processes all pending tasks in queue
    * 4. When queue empty:
-   *    - Extracts knowledge from thread
-   *    - Marks thread completed
+   *    - Extracts knowledge from conversation
    *    - Team lead: decides on briefing
    *    - Schedules next run
+   *
+   * Note: Background conversation is persistent across work sessions (unlike threads which were ephemeral)
    */
   async runWorkSession(): Promise<void> {
     // Check if there's work to do
@@ -442,8 +440,9 @@ Examples:
     await this.setStatus('running');
 
     try {
-      // 1. Create new thread for this session
-      const { threadId } = await startWorkSession(this.id);
+      // 1. Get or create background conversation for this agent
+      const backgroundConversation = await getOrCreateConversation(this.id, 'background');
+      const conversationId = backgroundConversation.id;
 
       // 2. Load KNOWLEDGE for work context (not memories)
       await this.loadKnowledge();
@@ -454,7 +453,7 @@ Examples:
         console.log(`[Agent ${this.name}] Processing task: ${task.id}`);
 
         try {
-          const result = await this.processTaskInThread(threadId, task);
+          const result = await this.processTask(conversationId, task);
           console.log(
             `[Agent ${this.name}] Task ${task.id} completed: ${result.slice(0, 100)}...`
           );
@@ -477,23 +476,21 @@ Examples:
       // 4. Queue empty - wrap up the session
       console.log(`[Agent ${this.name}] All tasks processed, wrapping up session`);
 
-      // Extract knowledge from thread
-      const newKnowledge = await extractKnowledgeFromThread(
-        threadId,
-        this.id,
-        this.role,
-        this.llmOptions
+      // Extract knowledge from background conversation
+      const conversationMessages = await getConversationContext(conversationId);
+      const newKnowledge = await this.extractKnowledgeFromConversation(
+        conversationId,
+        conversationMessages
       );
       console.log(
         `[Agent ${this.name}] Extracted ${newKnowledge.length} knowledge items from session`
       );
 
-      // Mark thread completed
-      await endWorkSession(threadId);
+      // No thread to end - conversation persists across sessions
 
       // Team lead: decide on briefing
       if (this.isTeamLead()) {
-        await this.decideBriefing(threadId);
+        await this.decideBriefing(conversationId);
       }
 
       // Schedule next run (team lead: 1 day, subordinate: none - triggered by delegation)
@@ -508,16 +505,15 @@ Examples:
   }
 
   /**
-   * Process a single task within a thread
+   * Process a single task within the background conversation
    */
-  async processTaskInThread(threadId: string, task: AgentTask): Promise<string> {
-    // 1. Add task as "user" message to thread (agent is the user here)
+  async processTask(conversationId: string, task: AgentTask): Promise<string> {
+    // 1. Add task as "user" message to conversation (agent is the user here)
     const taskMessage = `Task from ${task.source}: ${task.task}`;
-    await addToThread(threadId, 'user', taskMessage);
+    await appendMessage(conversationId, 'user', taskMessage);
 
-    // 2. Build context from thread messages + KNOWLEDGE
-    // Note: threadContext is used implicitly when we fetch messages below for the LLM call
-    await buildThreadContext(threadId);
+    // 2. Build context from conversation messages + KNOWLEDGE
+    const contextMessages = await getConversationContext(conversationId);
     const systemPrompt = this.buildBackgroundSystemPrompt();
 
     // 3. Get tools for background work
@@ -530,13 +526,7 @@ Examples:
 
     // 4. Call LLM with tools
     const result = await streamLLMResponseWithTools(
-      threadMessagesToLLMFormat(
-        (await getThreadMessages(threadId)).map((m) => ({
-          ...m,
-          toolCalls: null,
-          createdAt: new Date(),
-        }))
-      ),
+      this.messagesToLLMFormat(contextMessages),
       systemPrompt,
       {
         ...this.llmOptions,
@@ -550,15 +540,17 @@ Examples:
     // 5. Consume stream and get response
     const fullResponse = await result.fullResponse;
 
-    // 6. Add response to thread
-    await addToThread(threadId, 'assistant', fullResponse.text, fullResponse.toolCalls);
+    // 6. Add response to conversation
+    // Note: Tool calls and results are currently handled inline during the LLM call.
+    // The fullResponse.text contains the final response after tool execution.
+    // Tool call tracking with toolCallId will be enhanced in a future update
+    // when the LLM module supports returning toolCallIds.
+    await appendMessage(conversationId, 'assistant', fullResponse.text);
 
-    // 7. Check if should compact thread
-    if (await shouldCompact(threadId, MAX_THREAD_MESSAGES_BEFORE_COMPACT)) {
-      await this.compactThread(threadId);
-    }
+    // 7. Check if should compact conversation
+    await compactIfNeeded(conversationId, MAX_MESSAGES_BEFORE_COMPACT, this.llmOptions);
 
-    // 8. Mark task complete with result
+    // 9. Mark task complete with result
     const { completeTaskWithResult } = await import('@/lib/db/queries/agentTasks');
     await completeTaskWithResult(task.id, fullResponse.text);
 
@@ -566,32 +558,79 @@ Examples:
   }
 
   /**
-   * Compact a thread by summarizing its content
+   * Convert messages to LLM format for background work
+   * Maps database message roles to LLM roles
    */
-  private async compactThread(threadId: string): Promise<void> {
-    const messages = await getThreadMessages(threadId);
+  private messagesToLLMFormat(messages: Message[]): LLMMessage[] {
+    return messages.map((m) => ({
+      role: this.mapRoleToLLMRole(m.role),
+      content: m.content,
+    }));
+  }
 
-    // Generate summary
-    const summaryPrompt = `Summarize the key points from this work session conversation for context in future messages. Focus on:
-- What tasks were completed
-- Key decisions made
-- Important findings
-- Outstanding items
+  /**
+   * Map database message roles to LLM roles
+   */
+  private mapRoleToLLMRole(role: string): 'user' | 'assistant' | 'system' {
+    switch (role) {
+      case 'user':
+        return 'user';
+      case 'assistant':
+      case 'summary':
+      case 'tool':
+        return 'assistant';
+      default:
+        return 'assistant';
+    }
+  }
 
-Conversation:
-${messages.map((m) => `[${m.role}]: ${m.content}`).join('\n\n')}`;
+  /**
+   * Extract knowledge from background conversation messages
+   */
+  private async extractKnowledgeFromConversation(
+    conversationId: string,
+    messages: Message[]
+  ): Promise<KnowledgeItem[]> {
+    if (messages.length === 0) {
+      return [];
+    }
 
-    const summaryResponse = await generateLLMResponse(
-      [{ role: 'user', content: summaryPrompt }],
-      'You are a concise summarizer. Create a brief summary (2-3 paragraphs max).',
-      {
-        ...this.llmOptions,
-        maxOutputTokens: 500,
-      }
+    // Convert Message[] to the format expected by extractKnowledgeFromMessages
+    // extractKnowledgeFromMessages only uses role and content properties
+    const messagesForExtraction = messages.map((m) => ({
+      id: m.id,
+      threadId: conversationId, // Use conversationId in place of threadId
+      role: m.role,
+      content: m.content,
+      toolCalls: m.toolCalls,
+      createdAt: m.createdAt,
+    })) as { id: string; threadId: string; role: string; content: string; toolCalls: unknown; createdAt: Date }[];
+
+    const extractedKnowledge = await extractKnowledgeFromMessages(
+      messagesForExtraction as Parameters<typeof extractKnowledgeFromMessages>[0],
+      this.role,
+      this.llmOptions
     );
 
-    await compactWithSummary(threadId, summaryResponse.content);
-    console.log(`[Agent ${this.name}] Thread compacted`);
+    if (extractedKnowledge.length === 0) {
+      return [];
+    }
+
+    // Persist knowledge items to database
+    const { createKnowledgeItem } = await import('@/lib/db/queries/knowledge-items');
+    const persistedKnowledgeItems: KnowledgeItem[] = [];
+    for (const item of extractedKnowledge) {
+      const persisted = await createKnowledgeItem(
+        this.id,
+        item.type as 'fact' | 'technique' | 'pattern' | 'lesson',
+        item.content,
+        conversationId, // Pass conversationId as sourceThreadId (will be renamed in Phase 7)
+        item.confidence
+      );
+      persistedKnowledgeItems.push(persisted);
+    }
+
+    return persistedKnowledgeItems;
   }
 
   // ============================================================================
@@ -601,11 +640,11 @@ ${messages.map((m) => `[${m.role}]: ${m.content}`).join('\n\n')}`;
   /**
    * Decide whether to brief the user based on work session results
    */
-  async decideBriefing(threadId: string): Promise<void> {
+  async decideBriefing(conversationId: string): Promise<void> {
     if (!this.isTeamLead()) return;
 
-    // Get thread messages for review
-    const messages = await getThreadMessages(threadId);
+    // Get conversation context for review
+    const messages = await getConversationContext(conversationId);
     if (messages.length === 0) return;
 
     // Build summary of work done
@@ -714,10 +753,7 @@ If briefing is warranted, provide:
    *
    * @deprecated Use handleUserMessage for the new foreground/background architecture
    */
-  async handleMessage(
-    content: string,
-    _from: 'user' | string = 'user'
-  ): Promise<AsyncIterable<string>> {
+  async handleMessage(content: string): Promise<AsyncIterable<string>> {
     // Ensure we have loaded memories and conversation
     await this.loadMemories();
     const conversation = await this.ensureConversation();
@@ -774,11 +810,8 @@ If briefing is warranted, provide:
    *
    * @deprecated Use handleUserMessage for the new foreground/background architecture
    */
-  async handleMessageSync(
-    content: string,
-    from: 'user' | string = 'user'
-  ): Promise<string> {
-    const stream = await this.handleMessage(content, from);
+  async handleMessageSync(content: string): Promise<string> {
+    const stream = await this.handleMessage(content);
     let fullResponse = '';
 
     for await (const chunk of stream) {
