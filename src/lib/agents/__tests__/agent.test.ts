@@ -3,24 +3,24 @@
  *
  * Tests cover:
  * - handleUserMessage flow (queue task, return ack)
- * - runWorkSession flow (thread creation, task processing, insight extraction)
+ * - runWorkSession flow (thread creation, task processing, knowledge extraction)
  * - decideBriefing (team lead vs subordinate)
- * - Insight tools (add, list, remove)
+ * - Knowledge item tools (add, list, remove)
  *
  * Uses MOCK_LLM=true for testing without real API calls.
  */
 
 import { describe, test, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import { db } from '@/lib/db/client';
-import { users, teams, agents, agentTasks, insights, threads, threadMessages, messages } from '@/lib/db/schema';
+import { users, teams, agents, agentTasks, knowledgeItems, threads, threadMessages, messages } from '@/lib/db/schema';
 import { eq, and } from 'drizzle-orm';
 
 // Import the Agent class and related functions
 import { createAgent, createAgentFromData } from '@/lib/agents/agent';
 import { queueUserTask, getQueueStatus } from '@/lib/agents/taskQueue';
-import { registerInsightTools } from '@/lib/agents/tools/insight-tools';
+import { registerKnowledgeItemTools } from '@/lib/agents/tools/knowledge-item-tools';
 import { getTool, executeTool, type ToolContext } from '@/lib/agents/tools';
-import { createInsight, getInsightsByAgentId, deleteInsight } from '@/lib/db/queries/insights';
+import { createKnowledgeItem, getKnowledgeItemsByAgentId, deleteKnowledgeItem } from '@/lib/db/queries/knowledge-items';
 import { createThread } from '@/lib/db/queries/threads';
 
 // ============================================================================
@@ -70,8 +70,8 @@ beforeAll(async () => {
   }).returning();
   testSubordinateId = subordinate.id;
 
-  // Register insight tools
-  registerInsightTools();
+  // Register knowledge item tools
+  registerKnowledgeItemTools();
 });
 
 afterAll(async () => {
@@ -82,10 +82,10 @@ afterAll(async () => {
 
 // Helper to cleanup data created during tests
 async function cleanupTestData() {
-  // Clean up tasks, insights, threads, messages for test agents
+  // Clean up tasks, knowledge items, threads, messages for test agents
   await db.delete(agentTasks).where(eq(agentTasks.teamId, testTeamId));
-  await db.delete(insights).where(eq(insights.agentId, testTeamLeadId));
-  await db.delete(insights).where(eq(insights.agentId, testSubordinateId));
+  await db.delete(knowledgeItems).where(eq(knowledgeItems.agentId, testTeamLeadId));
+  await db.delete(knowledgeItems).where(eq(knowledgeItems.agentId, testSubordinateId));
   await db.delete(threads).where(eq(threads.agentId, testTeamLeadId));
   await db.delete(threads).where(eq(threads.agentId, testSubordinateId));
 }
@@ -283,23 +283,23 @@ describe('runWorkSession', () => {
     expect(statusAfter.inProgressCount).toBe(0);
   });
 
-  test('loads insights not memories for background work', async () => {
-    // Create some insights for the agent
-    await createInsight(testTeamLeadId, 'fact', 'NVIDIA is a GPU company', undefined, 0.9);
-    await createInsight(testTeamLeadId, 'pattern', 'Tech stocks rise in Q4', undefined, 0.7);
+  test('loads knowledge items not memories for background work', async () => {
+    // Create some knowledge items for the agent
+    await createKnowledgeItem(testTeamLeadId, 'fact', 'NVIDIA is a GPU company', undefined, 0.9);
+    await createKnowledgeItem(testTeamLeadId, 'pattern', 'Tech stocks rise in Q4', undefined, 0.7);
 
     // Queue a task
     await queueUserTask(testTeamLeadId, testTeamId, 'Analyze market');
 
     const agent = await createAgent(testTeamLeadId);
 
-    // Before session, no insights loaded
-    expect(agent!.getInsights()).toHaveLength(0);
+    // Before session, no knowledge items loaded
+    expect(agent!.getKnowledge()).toHaveLength(0);
 
     await agent!.runWorkSession();
 
-    // After session, insights should be loaded
-    expect(agent!.getInsights()).toHaveLength(2);
+    // After session, knowledge items should be loaded
+    expect(agent!.getKnowledge()).toHaveLength(2);
   });
 
   test('team lead schedules next run after session', async () => {
@@ -442,10 +442,10 @@ describe('decideBriefing', () => {
 });
 
 // ============================================================================
-// Insight Tools Tests
+// Knowledge Item Tools Tests
 // ============================================================================
 
-describe('Insight Tools', () => {
+describe('Knowledge Item Tools', () => {
   const toolContext: ToolContext = {
     agentId: '',
     teamId: '',
@@ -457,41 +457,41 @@ describe('Insight Tools', () => {
     toolContext.teamId = testTeamId;
   });
 
-  describe('addInsight', () => {
-    test('stores fact insight successfully', async () => {
-      const tool = getTool('addInsight');
+  describe('addKnowledgeItem', () => {
+    test('stores fact knowledge item successfully', async () => {
+      const tool = getTool('addKnowledgeItem');
       expect(tool).toBeDefined();
 
-      const result = await executeTool('addInsight', {
+      const result = await executeTool('addKnowledgeItem', {
         type: 'fact',
         content: 'NVIDIA dominates the AI chip market',
         confidence: 0.95,
       }, toolContext);
 
       expect(result.success).toBe(true);
-      expect(result.data).toHaveProperty('insightId');
+      expect(result.data).toHaveProperty('knowledgeItemId');
 
       // Verify in database
-      const agentInsights = await getInsightsByAgentId(testTeamLeadId);
-      expect(agentInsights.some(i => i.content === 'NVIDIA dominates the AI chip market')).toBe(true);
+      const agentKnowledgeItems = await getKnowledgeItemsByAgentId(testTeamLeadId);
+      expect(agentKnowledgeItems.some(k => k.content === 'NVIDIA dominates the AI chip market')).toBe(true);
     });
 
-    test('stores technique insight successfully', async () => {
-      const result = await executeTool('addInsight', {
+    test('stores technique knowledge item successfully', async () => {
+      const result = await executeTool('addKnowledgeItem', {
         type: 'technique',
         content: 'Use RSI indicators for timing entries',
       }, toolContext);
 
       expect(result.success).toBe(true);
 
-      const agentInsights = await getInsightsByAgentId(testTeamLeadId);
-      const technique = agentInsights.find(i => i.type === 'technique');
+      const agentKnowledgeItems = await getKnowledgeItemsByAgentId(testTeamLeadId);
+      const technique = agentKnowledgeItems.find(k => k.type === 'technique');
       expect(technique).toBeDefined();
       expect(technique!.content).toContain('RSI');
     });
 
-    test('stores pattern insight successfully', async () => {
-      const result = await executeTool('addInsight', {
+    test('stores pattern knowledge item successfully', async () => {
+      const result = await executeTool('addKnowledgeItem', {
         type: 'pattern',
         content: 'Tech stocks rally after earnings beats',
         confidence: 0.8,
@@ -499,27 +499,27 @@ describe('Insight Tools', () => {
 
       expect(result.success).toBe(true);
 
-      const agentInsights = await getInsightsByAgentId(testTeamLeadId);
-      const pattern = agentInsights.find(i => i.type === 'pattern');
+      const agentKnowledgeItems = await getKnowledgeItemsByAgentId(testTeamLeadId);
+      const pattern = agentKnowledgeItems.find(k => k.type === 'pattern');
       expect(pattern).toBeDefined();
       expect(pattern!.confidence).toBe(0.8);
     });
 
-    test('stores lesson insight successfully', async () => {
-      const result = await executeTool('addInsight', {
+    test('stores lesson knowledge item successfully', async () => {
+      const result = await executeTool('addKnowledgeItem', {
         type: 'lesson',
         content: 'Never chase momentum after major news',
       }, toolContext);
 
       expect(result.success).toBe(true);
 
-      const agentInsights = await getInsightsByAgentId(testTeamLeadId);
-      const lesson = agentInsights.find(i => i.type === 'lesson');
+      const agentKnowledgeItems = await getKnowledgeItemsByAgentId(testTeamLeadId);
+      const lesson = agentKnowledgeItems.find(k => k.type === 'lesson');
       expect(lesson).toBeDefined();
     });
 
     test('fails with invalid type', async () => {
-      const result = await executeTool('addInsight', {
+      const result = await executeTool('addKnowledgeItem', {
         type: 'invalid_type',
         content: 'Some content',
       }, toolContext);
@@ -529,7 +529,7 @@ describe('Insight Tools', () => {
     });
 
     test('fails with empty content', async () => {
-      const result = await executeTool('addInsight', {
+      const result = await executeTool('addKnowledgeItem', {
         type: 'fact',
         content: '',
       }, toolContext);
@@ -538,43 +538,43 @@ describe('Insight Tools', () => {
     });
   });
 
-  describe('listInsights', () => {
-    test('lists all insights for agent', async () => {
-      // Create some insights
-      await createInsight(testTeamLeadId, 'fact', 'Fact 1', undefined, 0.9);
-      await createInsight(testTeamLeadId, 'technique', 'Technique 1', undefined, 0.8);
-      await createInsight(testTeamLeadId, 'pattern', 'Pattern 1', undefined, 0.7);
+  describe('listKnowledgeItems', () => {
+    test('lists all knowledge items for agent', async () => {
+      // Create some knowledge items
+      await createKnowledgeItem(testTeamLeadId, 'fact', 'Fact 1', undefined, 0.9);
+      await createKnowledgeItem(testTeamLeadId, 'technique', 'Technique 1', undefined, 0.8);
+      await createKnowledgeItem(testTeamLeadId, 'pattern', 'Pattern 1', undefined, 0.7);
 
-      const result = await executeTool('listInsights', {}, toolContext);
+      const result = await executeTool('listKnowledgeItems', {}, toolContext);
 
       expect(result.success).toBe(true);
       expect(result.data).toHaveProperty('count');
-      expect(result.data).toHaveProperty('insights');
+      expect(result.data).toHaveProperty('knowledgeItems');
       expect((result.data as { count: number }).count).toBe(3);
     });
 
     test('filters by type', async () => {
-      await createInsight(testTeamLeadId, 'fact', 'Fact A');
-      await createInsight(testTeamLeadId, 'fact', 'Fact B');
-      await createInsight(testTeamLeadId, 'technique', 'Technique A');
+      await createKnowledgeItem(testTeamLeadId, 'fact', 'Fact A');
+      await createKnowledgeItem(testTeamLeadId, 'fact', 'Fact B');
+      await createKnowledgeItem(testTeamLeadId, 'technique', 'Technique A');
 
-      const result = await executeTool('listInsights', {
+      const result = await executeTool('listKnowledgeItems', {
         type: 'fact',
       }, toolContext);
 
       expect(result.success).toBe(true);
-      const data = result.data as { count: number; insights: Array<{ type: string }> };
+      const data = result.data as { count: number; knowledgeItems: Array<{ type: string }> };
       expect(data.count).toBe(2);
-      expect(data.insights.every(i => i.type === 'fact')).toBe(true);
+      expect(data.knowledgeItems.every(k => k.type === 'fact')).toBe(true);
     });
 
     test('respects limit parameter', async () => {
-      // Create 5 insights
+      // Create 5 knowledge items
       for (let i = 0; i < 5; i++) {
-        await createInsight(testTeamLeadId, 'fact', `Fact ${i}`);
+        await createKnowledgeItem(testTeamLeadId, 'fact', `Fact ${i}`);
       }
 
-      const result = await executeTool('listInsights', {
+      const result = await executeTool('listKnowledgeItems', {
         limit: 3,
       }, toolContext);
 
@@ -583,59 +583,59 @@ describe('Insight Tools', () => {
       expect(data.count).toBe(3);
     });
 
-    test('returns empty array when no insights', async () => {
-      const result = await executeTool('listInsights', {}, toolContext);
+    test('returns empty array when no knowledge items', async () => {
+      const result = await executeTool('listKnowledgeItems', {}, toolContext);
 
       expect(result.success).toBe(true);
-      const data = result.data as { count: number; insights: unknown[] };
+      const data = result.data as { count: number; knowledgeItems: unknown[] };
       expect(data.count).toBe(0);
-      expect(data.insights).toEqual([]);
+      expect(data.knowledgeItems).toEqual([]);
     });
   });
 
-  describe('removeInsight', () => {
-    test('removes existing insight', async () => {
-      const insight = await createInsight(testTeamLeadId, 'fact', 'To be deleted');
+  describe('removeKnowledgeItem', () => {
+    test('removes existing knowledge item', async () => {
+      const knowledgeItem = await createKnowledgeItem(testTeamLeadId, 'fact', 'To be deleted');
 
-      const result = await executeTool('removeInsight', {
-        insightId: insight.id,
+      const result = await executeTool('removeKnowledgeItem', {
+        knowledgeItemId: knowledgeItem.id,
       }, toolContext);
 
       expect(result.success).toBe(true);
 
       // Verify deleted
-      const agentInsights = await getInsightsByAgentId(testTeamLeadId);
-      expect(agentInsights.find(i => i.id === insight.id)).toBeUndefined();
+      const agentKnowledgeItems = await getKnowledgeItemsByAgentId(testTeamLeadId);
+      expect(agentKnowledgeItems.find(k => k.id === knowledgeItem.id)).toBeUndefined();
     });
 
-    test('fails for non-existent insight', async () => {
-      const result = await executeTool('removeInsight', {
-        insightId: '00000000-0000-0000-0000-000000000000',
+    test('fails for non-existent knowledge item', async () => {
+      const result = await executeTool('removeKnowledgeItem', {
+        knowledgeItemId: '00000000-0000-0000-0000-000000000000',
       }, toolContext);
 
       expect(result.success).toBe(false);
       expect(result.error).toContain('not found');
     });
 
-    test('fails for insight belonging to another agent', async () => {
-      // Create insight for subordinate
-      const insight = await createInsight(testSubordinateId, 'fact', 'Subordinate insight');
+    test('fails for knowledge item belonging to another agent', async () => {
+      // Create knowledge item for subordinate
+      const knowledgeItem = await createKnowledgeItem(testSubordinateId, 'fact', 'Subordinate knowledge item');
 
       // Try to delete from team lead context
-      const result = await executeTool('removeInsight', {
-        insightId: insight.id,
+      const result = await executeTool('removeKnowledgeItem', {
+        knowledgeItemId: knowledgeItem.id,
       }, toolContext);
 
       expect(result.success).toBe(false);
       expect(result.error).toContain('other agents');
 
       // Cleanup
-      await deleteInsight(insight.id);
+      await deleteKnowledgeItem(knowledgeItem.id);
     });
 
     test('fails with invalid UUID format', async () => {
-      const result = await executeTool('removeInsight', {
-        insightId: 'not-a-uuid',
+      const result = await executeTool('removeKnowledgeItem', {
+        knowledgeItemId: 'not-a-uuid',
       }, toolContext);
 
       expect(result.success).toBe(false);
@@ -645,17 +645,17 @@ describe('Insight Tools', () => {
 });
 
 // ============================================================================
-// Insights Context Building Tests
+// Knowledge Context Building Tests
 // ============================================================================
 
-describe('Insights Context', () => {
-  test('buildBackgroundSystemPrompt includes insights', async () => {
-    // Create some insights
-    await createInsight(testTeamLeadId, 'fact', 'Important domain fact');
-    await createInsight(testTeamLeadId, 'technique', 'Useful technique');
+describe('Knowledge Context', () => {
+  test('buildBackgroundSystemPrompt includes knowledge items', async () => {
+    // Create some knowledge items
+    await createKnowledgeItem(testTeamLeadId, 'fact', 'Important domain fact');
+    await createKnowledgeItem(testTeamLeadId, 'technique', 'Useful technique');
 
     const agent = await createAgent(testTeamLeadId);
-    await agent!.loadInsights();
+    await agent!.loadKnowledge();
 
     const systemPrompt = agent!.buildBackgroundSystemPrompt();
 
@@ -664,13 +664,13 @@ describe('Insights Context', () => {
     expect(systemPrompt).toContain('Useful technique');
   });
 
-  test('buildBackgroundSystemPrompt handles no insights', async () => {
+  test('buildBackgroundSystemPrompt handles no knowledge items', async () => {
     const agent = await createAgent(testTeamLeadId);
-    await agent!.loadInsights();
+    await agent!.loadKnowledge();
 
     const systemPrompt = agent!.buildBackgroundSystemPrompt();
 
-    // Should just be the base system prompt without insights block
+    // Should just be the base system prompt without knowledge block
     expect(systemPrompt).not.toContain('professional_knowledge');
   });
 });

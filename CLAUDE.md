@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Autonomous Teams is a TypeScript/Next.js application where users create teams of AI agents that run continuously to fulfill a mission. Teams have hierarchical agents (team leads run continuously, subordinates spawn on-demand) that collaborate, extract insights from work sessions, and proactively deliver briefings to users.
+Autonomous Teams is a TypeScript/Next.js application where users create teams of AI agents that run continuously to fulfill a mission. Teams have hierarchical agents (team leads run continuously, subordinates spawn on-demand) that collaborate, extract knowledge from work sessions, and proactively deliver insights to users.
 
 **Terminology Note**: "Subordinate" refers to team member agents (non-lead agents that report to the team lead). "Worker" refers to the background process (`src/worker/`) that runs agent cycles.
 
@@ -34,30 +34,30 @@ The system separates user interactions (foreground) from agent work (background)
 
 **Conversations vs Threads**:
 - **Conversations**: User-Agent interaction (permanent, UI-visible, one per agent). Used for foreground communication.
-- **Threads**: Background work sessions (ephemeral, internal only, many per agent). Created when processing tasks, discarded after insight extraction.
+- **Threads**: Background work sessions (ephemeral, internal only, many per agent). Created when processing tasks, discarded after knowledge extraction.
 
-**Memories vs Insights**:
+**Memories vs Knowledge Items**:
 - **Memories**: User interaction context (preferences, past requests). Extracted from user conversations. Sent to LLM in **foreground only**.
-- **Insights**: Professional knowledge base (domain expertise, techniques, patterns, facts). Extracted from work threads. Sent to LLM in **background only**.
+- **Knowledge Items**: Professional knowledge base (domain expertise, techniques, patterns, facts). Extracted from work threads. Sent to LLM in **background only**.
 
 ### Core Components
 
 **Agent Runtime** (`src/lib/agents/`)
 - `agent.ts` - Agent class with foreground/background separation:
   - `handleUserMessage()` - Foreground: quick ack + queue task, returns immediately
-  - `runWorkSession()` - Background: process queue in thread, extract insights, decide briefing
+  - `runWorkSession()` - Background: process queue in thread, extract knowledge, decide briefing
   - `processTaskInThread()` - Per-task processing with tools within a thread
-  - `extractInsightsFromThread()` - Post-session professional learning (via `insights.ts`)
+  - `extractKnowledgeFromThread()` - Post-session professional learning (via `knowledge-items.ts`)
   - `decideBriefing()` - Team lead briefing decision after work session
 - `memory.ts` - Memory extraction from user conversations using `generateObject()`
-- `insights.ts` - Insight extraction from work threads (professional knowledge)
+- `knowledge-items.ts` - Knowledge extraction from work threads (professional knowledge)
 - `thread.ts` - Thread lifecycle management (create, add messages, compact, complete)
 - `taskQueue.ts` - Task queue operations (queue, claim, complete)
 - `llm.ts` - Provider abstraction (OpenAI, Anthropic, Gemini). Looks up user's encrypted API keys, falls back to env vars
 
 **Database** (`src/lib/db/`)
 - PostgreSQL with Drizzle ORM
-- Schema: users, teams, agents, conversations, messages, memories, threads, threadMessages, insights, agentTasks, inboxItems
+- Schema: users, teams, agents, conversations, messages, memories, threads, threadMessages, knowledgeItems, agentTasks, inboxItems
 - `drizzle.config.ts` points to `src/lib/db/schema.ts`
 
 **Background Worker** (`src/worker/runner.ts`)
@@ -85,9 +85,9 @@ The system separates user interactions (foreground) from agent work (background)
 **Background (Work Session)**:
 1. Task picked up from queue (event-driven or scheduled)
 2. New thread created for work session
-3. Agent loads INSIGHTS (professional knowledge)
+3. Agent loads KNOWLEDGE ITEMS (professional knowledge)
 4. Processes task with tools in thread
-5. After queue empty: extracts insights from thread
+5. After queue empty: extracts knowledge from thread
 6. Team lead only: decides whether to brief user
 7. Thread marked completed, next run scheduled
 
@@ -97,10 +97,10 @@ The system separates user interactions (foreground) from agent work (background)
 - **Mock mode**: Set `MOCK_LLM=true` in `.env.local` to run without real API calls
 - **Encrypted API keys**: User API keys stored encrypted in `userApiKeys` table
 - **Team hierarchy**: Team leads have `parentAgentId = null`, subordinates reference their lead
-- **Memories vs Insights**: Memories store user interaction context. Insights are the agent's professional knowledge base.
-- **Thread lifecycle**: created -> active -> insight extraction -> completed
+- **Memories vs Knowledge Items**: Memories store user interaction context. Knowledge items are the agent's professional knowledge base.
+- **Thread lifecycle**: created -> active -> knowledge extraction -> completed
 - **Thread compaction**: Mid-session context management when thread exceeds 50 messages
-- **Professional growth**: Insights accumulate as expertise from work sessions
+- **Professional growth**: Knowledge items accumulate as expertise from work sessions
 
 ## Autonomous Operation
 
@@ -124,3 +124,5 @@ For teams to run autonomously and deliver proactive insights:
 2. **Review subagent** - Reviews implementation against plan/standards, then commits changes
 
 **Keeping CLAUDE.md Updated**: Whenever working in this repository and something sounds like it's worth keeping in mind for the future (patterns, gotchas, decisions, learnings), update this CLAUDE.md file immediately.
+
+**NEVER EVER rename files in docs/plans**: When you're engaged in refactoring to rename things, never ever rename documents in `docs/plans`. These documents represent a snapshot of the development of this codebase over time, and it doesn't make sense to rename the previous documents as the new plan document will fit nicely in the evolution timeline of this codebase, together with other plans documents.

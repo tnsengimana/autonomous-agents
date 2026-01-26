@@ -2,7 +2,7 @@
 
 ## Overview
 
-Autonomous Teams is a TypeScript web application where users create teams of AI agents that run continuously to fulfill a mission. Each team has a hierarchy of agents that collaborate, learn from user interactions, and proactively deliver insights.
+Autonomous Teams is a TypeScript web application where users create teams of AI agents that run continuously to fulfill a mission. Each team has a hierarchy of agents that collaborate, learn from user interactions, and proactively deliver insights to users.
 
 **Example: Hedge Fund Team**
 - Portfolio Manager (Team Lead) - Holds user's risk profile, presents briefings

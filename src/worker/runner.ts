@@ -85,7 +85,7 @@ async function processAgentWorkSession(agentId: string): Promise<void> {
       return;
     }
 
-    // Run work session (processes queue, extracts insights, maybe briefing)
+    // Run work session (processes queue, extracts knowledge, maybe briefing)
     await agent.runWorkSession();
 
     log(`Completed work session for agent: ${agent.name}`);

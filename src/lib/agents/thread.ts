@@ -4,7 +4,7 @@
  * Threads are ephemeral work sessions for background processing.
  * Each time an agent processes its task queue, it creates a new thread.
  * Threads hold the agent ↔ LLM conversation during work, and are
- * discarded after extracting insights.
+ * discarded after extracting knowledge.
  */
 
 import {

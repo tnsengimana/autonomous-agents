@@ -189,7 +189,7 @@ export const agentTasks = pgTable('agent_tasks', {
 });
 
 // ============================================================================
-// Threads and Insights (Background Work)
+// Threads and Knowledge Items (Background Work)
 // ============================================================================
 
 // Threads - ephemeral work sessions

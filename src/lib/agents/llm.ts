@@ -572,8 +572,8 @@ export async function generateLLMObject<T>(
     const mockValues = [
       // Memory extraction result
       { memories: [] },
-      // Insights extraction result
-      { insights: [] },
+      // Knowledge extraction result
+      { knowledgeItems: [] },
       // Briefing decision (no briefing)
       { shouldBrief: false, reason: 'Mock mode - no briefing' },
       // Empty array (fallback)

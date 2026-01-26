@@ -2,7 +2,7 @@
 
 ## Overview
 
-Evolve the agent system from single-conversation to a sophisticated foreground/background architecture with separate conversation contexts, task queues for all agents, and knowledge extraction.
+Evolve the agent system from single-conversation to a sophisticated foreground/background architecture with separate conversation contexts, task queues for all agents, and knowledge item extraction.
 
 ## Core Concepts
 
@@ -13,34 +13,34 @@ Evolve the agent system from single-conversation to a sophisticated foreground/b
 | Purpose | User ↔ Agent interaction | Agent background work session |
 | Lifecycle | One per agent, permanent | Many per agent, ephemeral |
 | Visibility | Shown in UI | Internal only |
-| Persistence | Long-lived, accumulates | Discarded after knowledge extraction |
+| Persistence | Long-lived, accumulates | Discarded after knowledge item extraction |
 | Context | Grows over time | Fresh each session, compaction if needed |
 
 - **Conversation**: The user-facing chat history. One per agent. This is where briefings and user interactions live.
-- **Thread**: A single background work session. Agent creates new thread each time it processes its queue. Thread is used for agent ↔ LLM communication during work. Discarded after extracting knowledge.
+- **Thread**: A single background work session. Agent creates new thread each time it processes its queue. Thread is used for agent ↔ LLM communication during work. Discarded after extracting knowledge items.
 
-### Memories vs Insights
+### Memories vs Knowledge Items
 
-| Aspect | Memories | Insights |
-|--------|----------|----------|
+| Aspect | Memories | Knowledge Items |
+|--------|----------|-----------------|
 | Source | User conversations | Work threads (+ user-shared professional info) |
 | Purpose | User interaction context | Professional knowledge base |
 | Content | Preferences, past requests, relationship | Domain expertise, techniques, patterns, facts |
 | Sent to LLM | Foreground only (user conversations) | Background only (threads) |
 | Example | "User prefers concise responses" | "SEC filings are more reliable than news for earnings" |
 
-**Cross-pollination**: If a user shares professionally valuable information during conversation (e.g., "NVIDIA always reports earnings on the last Wednesday of February"), the agent should add this to insights, not memories. The agent can also show/manage insights when the user asks (e.g., "What do you know about NVIDIA?").
+**Cross-pollination**: If a user shares professionally valuable information during conversation (e.g., "NVIDIA always reports earnings on the last Wednesday of February"), the agent should add this to knowledge items, not memories. The agent can also show/manage knowledge items when the user asks (e.g., "What do you know about NVIDIA?").
 
-**Tools in foreground**: Agent has access to insight management tools (`addInsight`, `listInsights`, `removeInsight`) during user conversations to handle these cases.
+**Tools in foreground**: Agent has access to knowledge item management tools (`addKnowledgeItem`, `listKnowledgeItems`, `removeKnowledgeItem`) during user conversations to handle these cases.
 
 ### Why This Model Works
 
 1. **No context overflow across sessions**: Each work session starts with a fresh thread
 2. **Mid-session compaction**: If thread exceeds context during work, compact and continue
-3. **Learning becomes critical**: Memories + Insights are what persist between sessions
-4. **Professional growth**: Agent improves by extracting insights from work threads
+3. **Learning becomes critical**: Memories + Knowledge Items are what persist between sessions
+4. **Professional growth**: Agent improves by extracting knowledge items from work threads
 5. **Clean separation**: Users see conversation, internal work happens in disposable threads
-6. **Distinct knowledge types**: User context (memories) vs domain expertise (insights)
+6. **Distinct knowledge types**: User context (memories) vs domain expertise (knowledge items)
 
 ### Agent Types & Behavior
 
@@ -50,7 +50,7 @@ Evolve the agent system from single-conversation to a sophisticated foreground/b
 | Proactive | Yes (seeks work based on mission) | No (purely reactive) |
 | Daily Trigger | Yes (to further mission) | No (only queue-triggered) |
 | Can Send Briefings | Yes (decides after work) | No |
-| Knowledge Extraction | Yes (after clearing queue) | Yes (after clearing queue) |
+| Knowledge Item Extraction | Yes (after clearing queue) | Yes (after clearing queue) |
 
 ### Key Flows
 
@@ -69,7 +69,7 @@ Task picked up → Load thread (or create new)
               → May queue sub-tasks or delegate to subordinates
               → Mark task complete
               → If queue empty:
-                  → Extract insights from thread → insights table
+                  → Extract knowledge items from thread → knowledge_items table
                   → Team lead only: decide if briefing needed
                   → If briefing: create inbox item + message in user conversation
                   → Schedule next run (team lead: 1 day, subordinate: none)
@@ -117,18 +117,18 @@ export const threadMessages = pgTable('thread_messages', {
 });
 ```
 
-### 3. Create insights table (NEW)
+### 3. Create knowledgeItems table (NEW)
 
 Professional knowledge extracted from work threads:
 
 ```typescript
-export const insights = pgTable('insights', {
+export const knowledgeItems = pgTable('knowledge_items', {
   id: uuid('id').primaryKey().defaultRandom(),
   agentId: uuid('agent_id').notNull().references(() => agents.id, { onDelete: 'cascade' }),
   type: text('type').notNull(), // 'fact', 'technique', 'pattern', 'lesson'
   content: text('content').notNull(),
   sourceThreadId: uuid('source_thread_id').references(() => threads.id, { onDelete: 'set null' }),
-  confidence: real('confidence'), // Optional: how confident the agent is in this insight
+  confidence: real('confidence'), // Optional: how confident the agent is in this knowledge item
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });
 ```
@@ -189,13 +189,13 @@ export const threadMessages = pgTable('thread_messages', {
 });
 ```
 
-#### Task 1.2: Create insights table
+#### Task 1.2: Create knowledgeItems table
 **File**: `src/lib/db/schema.ts`
 
 Add table for professional knowledge:
 ```typescript
-// Insights - professional knowledge extracted from work threads
-export const insights = pgTable('insights', {
+// Knowledge Items - professional knowledge extracted from work threads
+export const knowledgeItems = pgTable('knowledge_items', {
   id: uuid('id').primaryKey().defaultRandom(),
   agentId: uuid('agent_id').notNull().references(() => agents.id, { onDelete: 'cascade' }),
   type: text('type').notNull(), // 'fact', 'technique', 'pattern', 'lesson'
@@ -229,15 +229,15 @@ npx drizzle-kit generate
 npx drizzle-kit migrate
 ```
 
-#### Task 1.6: Create insights queries
-**File**: `src/lib/db/queries/insights.ts` (NEW)
+#### Task 1.6: Create knowledge item queries
+**File**: `src/lib/db/queries/knowledge-items.ts` (NEW)
 
-Create functions for insight management:
-- `createInsight(agentId, type, content, sourceThreadId?)` - store new insight
-- `getInsightsByAgentId(agentId)` - get all insights for agent
-- `getRecentInsights(agentId, limit)` - get most recent insights
-- `deleteInsight(insightId)` - remove an insight
-- `searchInsights(agentId, query)` - search insights by content
+Create functions for knowledge item management:
+- `createKnowledgeItem(agentId, type, content, sourceThreadId?)` - store new knowledge item
+- `getKnowledgeItemsByAgentId(agentId)` - get all knowledge items for agent
+- `getRecentKnowledgeItems(agentId, limit)` - get most recent knowledge items
+- `deleteKnowledgeItem(knowledgeItemId)` - remove a knowledge item
+- `searchKnowledgeItems(agentId, query)` - search knowledge items by content
 
 #### Task 1.8: Add schema tests
 **File**: `src/lib/db/__tests__/schema.test.ts` (NEW)
@@ -256,24 +256,24 @@ describe('threads schema', () => {
   });
 });
 
-describe('insights schema', () => {
-  test('creates insight for agent', async () => {
-    const insight = await createInsight(agentId, 'fact', 'NVIDIA reports earnings in February');
-    expect(insight.agentId).toBe(agentId);
-    expect(insight.type).toBe('fact');
+describe('knowledgeItems schema', () => {
+  test('creates knowledge item for agent', async () => {
+    const knowledgeItem = await createKnowledgeItem(agentId, 'fact', 'NVIDIA reports earnings in February');
+    expect(knowledgeItem.agentId).toBe(agentId);
+    expect(knowledgeItem.type).toBe('fact');
   });
 
-  test('links insight to source thread', async () => {
+  test('links knowledge item to source thread', async () => {
     const thread = await createThread(agentId);
-    const insight = await createInsight(agentId, 'technique', 'Check SEC filings first', thread.id);
-    expect(insight.sourceThreadId).toBe(thread.id);
+    const knowledgeItem = await createKnowledgeItem(agentId, 'technique', 'Check SEC filings first', thread.id);
+    expect(knowledgeItem.sourceThreadId).toBe(thread.id);
   });
 
   test('nullifies sourceThreadId when thread deleted', async () => {
     const thread = await createThread(agentId);
-    const insight = await createInsight(agentId, 'pattern', 'Market volatility increases before earnings', thread.id);
+    const knowledgeItem = await createKnowledgeItem(agentId, 'pattern', 'Market volatility increases before earnings', thread.id);
     await deleteThread(thread.id);
-    const updated = await getInsightById(insight.id);
+    const updated = await getKnowledgeItemById(knowledgeItem.id);
     expect(updated.sourceThreadId).toBeNull();
   });
 });
@@ -446,10 +446,10 @@ Main entry point for background processing:
 ```typescript
 async runWorkSession(): Promise<void> {
   // 1. Create new thread for this session
-  // 2. Load memories (user context) + insights (professional knowledge) for context
+  // 2. Load memories (user context) + knowledge items (professional knowledge) for context
   // 3. Process all pending tasks in queue
   // 4. When queue empty:
-  //    - Extract insights from thread → insights table
+  //    - Extract knowledge items from thread → knowledge_items table
   //    - Mark thread completed
   //    - Team lead: decide briefing
   //    - Schedule next run (team lead only)
@@ -473,29 +473,29 @@ async processTaskInThread(threadId: string, task: AgentTask): Promise<string> {
 }
 ```
 
-#### Task 4.4: Create insight management tools for foreground
-**File**: `src/lib/agents/tools/insight-tools.ts` (NEW)
+#### Task 4.4: Create knowledge item management tools for foreground
+**File**: `src/lib/agents/tools/knowledge-item-tools.ts` (NEW)
 
 Tools available during user conversations for managing professional knowledge:
 
 ```typescript
-// addInsight - Add professional knowledge from user conversation
-const addInsightTool: Tool = {
+// addKnowledgeItem - Add professional knowledge from user conversation
+const addKnowledgeItemTool: Tool = {
   schema: {
-    name: 'addInsight',
+    name: 'addKnowledgeItem',
     description: 'Store professional knowledge shared by the user or discovered during conversation',
     parameters: [
       { name: 'type', type: 'string', enum: ['fact', 'technique', 'pattern', 'lesson'], required: true },
-      { name: 'content', type: 'string', description: 'The insight to store', required: true },
+      { name: 'content', type: 'string', description: 'The knowledge item to store', required: true },
     ],
   },
   handler: async (params, context) => { /* ... */ }
 };
 
-// listInsights - Show insights to user when asked
-const listInsightsTool: Tool = {
+// listKnowledgeItems - Show knowledge items to user when asked
+const listKnowledgeItemsTool: Tool = {
   schema: {
-    name: 'listInsights',
+    name: 'listKnowledgeItems',
     description: 'List professional knowledge the agent has accumulated',
     parameters: [
       { name: 'query', type: 'string', description: 'Optional search query', required: false },
@@ -505,33 +505,33 @@ const listInsightsTool: Tool = {
   handler: async (params, context) => { /* ... */ }
 };
 
-// removeInsight - Remove incorrect or outdated insight
-const removeInsightTool: Tool = {
+// removeKnowledgeItem - Remove incorrect or outdated knowledge item
+const removeKnowledgeItemTool: Tool = {
   schema: {
-    name: 'removeInsight',
-    description: 'Remove an insight that is incorrect or outdated',
+    name: 'removeKnowledgeItem',
+    description: 'Remove a knowledge item that is incorrect or outdated',
     parameters: [
-      { name: 'insightId', type: 'string', required: true },
+      { name: 'knowledgeItemId', type: 'string', required: true },
     ],
   },
   handler: async (params, context) => { /* ... */ }
 };
 ```
 
-#### Task 4.5: Create extractInsightsFromThread method
-**File**: `src/lib/agents/agent.ts` or `src/lib/agents/insights.ts` (NEW)
+#### Task 4.5: Create extractKnowledgeFromThread method
+**File**: `src/lib/agents/agent.ts` or `src/lib/agents/knowledge-items.ts` (NEW)
 
 Extract professional knowledge from work session:
 ```typescript
-async extractInsightsFromThread(threadId: string): Promise<void> {
+async extractKnowledgeFromThread(threadId: string): Promise<void> {
   // 1. Load all thread messages
   // 2. Build extraction prompt focused on:
   //    - What approaches worked/didn't work (type: 'technique')
   //    - Patterns discovered (type: 'pattern')
   //    - Skills or techniques learned (type: 'lesson')
   //    - Facts about the domain (type: 'fact')
-  // 3. Extract insights via LLM (generateObject with insight schema)
-  // 4. Persist to insights table with sourceThreadId
+  // 3. Extract knowledge items via LLM (generateObject with knowledge item schema)
+  // 4. Persist to knowledge_items table with sourceThreadId
   // 5. This is how the agent "grows professionally"
 }
 ```
@@ -543,10 +543,10 @@ async extractInsightsFromThread(threadId: string): Promise<void> {
 async decideBriefing(threadId: string): Promise<void> {
   if (!this.isTeamLead()) return;
 
-  // 1. Review thread work and newly extracted knowledge
+  // 1. Review thread work and newly extracted knowledge items
   // 2. LLM decides: is this worth briefing user?
   //    - Significant discoveries?
-  //    - Actionable insights?
+  //    - Actionable findings?
   //    - Important alerts?
   // 3. If yes:
   //    - Generate briefing content
@@ -606,7 +606,7 @@ describe('runWorkSession (background)', () => {
       http.post('https://api.openai.com/v1/chat/completions', () => {
         return HttpResponse.json({
           choices: [{
-            message: { content: 'Research completed. Found key insights.' }
+            message: { content: 'Research completed. Found key findings.' }
           }]
         });
       })
@@ -627,10 +627,10 @@ describe('runWorkSession (background)', () => {
     expect(tasks).toHaveLength(0);
   });
 
-  test('extracts insights after clearing queue', async () => {
+  test('extracts knowledge items after clearing queue', async () => {
     server.use(
       http.post('https://api.openai.com/v1/chat/completions', ({ request }) => {
-        // Different responses for task processing vs insight extraction
+        // Different responses for task processing vs knowledge extraction
         return HttpResponse.json({
           choices: [{
             message: { content: 'Market volatility increases before earnings reports' }
@@ -642,14 +642,14 @@ describe('runWorkSession (background)', () => {
     await queueTask(teamLeadId, 'Analyze market', 'user');
 
     const agent = await Agent.fromId(teamLeadId);
-    const insightsBefore = await getInsightsByAgentId(teamLeadId);
+    const knowledgeItemsBefore = await getKnowledgeItemsByAgentId(teamLeadId);
 
     await agent.runWorkSession();
 
-    const insightsAfter = await getInsightsByAgentId(teamLeadId);
-    expect(insightsAfter.length).toBeGreaterThan(insightsBefore.length);
-    // Verify insight is linked to the thread
-    expect(insightsAfter[insightsAfter.length - 1].sourceThreadId).toBeDefined();
+    const knowledgeItemsAfter = await getKnowledgeItemsByAgentId(teamLeadId);
+    expect(knowledgeItemsAfter.length).toBeGreaterThan(knowledgeItemsBefore.length);
+    // Verify knowledge item is linked to the thread
+    expect(knowledgeItemsAfter[knowledgeItemsAfter.length - 1].sourceThreadId).toBeDefined();
   });
 });
 
@@ -712,58 +712,58 @@ describe('decideBriefing (team lead)', () => {
   });
 });
 
-describe('insight tools (foreground)', () => {
-  test('addInsight stores user-shared professional knowledge', async () => {
-    const result = await addInsightTool.handler(
+describe('knowledge item tools (foreground)', () => {
+  test('addKnowledgeItem stores user-shared professional knowledge', async () => {
+    const result = await addKnowledgeItemTool.handler(
       { type: 'fact', content: 'NVIDIA reports earnings last Wednesday of February' },
       { agentId: teamLeadId, teamId, isTeamLead: true }
     );
 
     expect(result.success).toBe(true);
 
-    const insights = await getInsightsByAgentId(teamLeadId);
-    expect(insights.some(i => i.content.includes('NVIDIA'))).toBe(true);
-    expect(insights.find(i => i.content.includes('NVIDIA')).sourceThreadId).toBeNull(); // No thread, from conversation
+    const knowledgeItems = await getKnowledgeItemsByAgentId(teamLeadId);
+    expect(knowledgeItems.some(i => i.content.includes('NVIDIA'))).toBe(true);
+    expect(knowledgeItems.find(i => i.content.includes('NVIDIA')).sourceThreadId).toBeNull(); // No thread, from conversation
   });
 
-  test('listInsights returns agent knowledge', async () => {
-    await createInsight(teamLeadId, 'fact', 'Tech stocks volatile in Q1');
-    await createInsight(teamLeadId, 'technique', 'Check SEC filings first');
+  test('listKnowledgeItems returns agent knowledge', async () => {
+    await createKnowledgeItem(teamLeadId, 'fact', 'Tech stocks volatile in Q1');
+    await createKnowledgeItem(teamLeadId, 'technique', 'Check SEC filings first');
 
-    const result = await listInsightsTool.handler(
+    const result = await listKnowledgeItemsTool.handler(
       {},
       { agentId: teamLeadId, teamId, isTeamLead: true }
     );
 
     expect(result.success).toBe(true);
-    expect(result.data.insights).toHaveLength(2);
+    expect(result.data.knowledgeItems).toHaveLength(2);
   });
 
-  test('listInsights filters by type', async () => {
-    await createInsight(teamLeadId, 'fact', 'Fact 1');
-    await createInsight(teamLeadId, 'technique', 'Technique 1');
+  test('listKnowledgeItems filters by type', async () => {
+    await createKnowledgeItem(teamLeadId, 'fact', 'Fact 1');
+    await createKnowledgeItem(teamLeadId, 'technique', 'Technique 1');
 
-    const result = await listInsightsTool.handler(
+    const result = await listKnowledgeItemsTool.handler(
       { type: 'fact' },
       { agentId: teamLeadId, teamId, isTeamLead: true }
     );
 
-    expect(result.data.insights).toHaveLength(1);
-    expect(result.data.insights[0].type).toBe('fact');
+    expect(result.data.knowledgeItems).toHaveLength(1);
+    expect(result.data.knowledgeItems[0].type).toBe('fact');
   });
 
-  test('removeInsight deletes insight', async () => {
-    const insight = await createInsight(teamLeadId, 'fact', 'Outdated info');
+  test('removeKnowledgeItem deletes knowledge item', async () => {
+    const knowledgeItem = await createKnowledgeItem(teamLeadId, 'fact', 'Outdated info');
 
-    const result = await removeInsightTool.handler(
-      { insightId: insight.id },
+    const result = await removeKnowledgeItemTool.handler(
+      { knowledgeItemId: knowledgeItem.id },
       { agentId: teamLeadId, teamId, isTeamLead: true }
     );
 
     expect(result.success).toBe(true);
 
-    const insights = await getInsightsByAgentId(teamLeadId);
-    expect(insights.some(i => i.id === insight.id)).toBe(false);
+    const knowledgeItems = await getKnowledgeItemsByAgentId(teamLeadId);
+    expect(knowledgeItems.some(i => i.id === knowledgeItem.id)).toBe(false);
   });
 });
 ```
@@ -1049,17 +1049,17 @@ Update to reflect new architecture:
    - Conversations (user ↔ agent, permanent, UI-visible)
    - Threads (background work sessions, ephemeral, internal)
    - Task queue system (all agents have queues)
-   - Memories vs Insights distinction
+   - Memories vs Knowledge Items distinction
 
 2. **Agent Runtime section** - Update to describe:
    - `handleUserMessage()` - foreground, queues task, returns ack
    - `runWorkSession()` - background, processes queue in thread
-   - `extractInsightsFromThread()` - post-session professional learning
+   - `extractKnowledgeFromThread()` - post-session professional learning
    - `decideBriefing()` - team lead briefing decision
 
 3. **Data Flow section** - Update to reflect:
    - Foreground: User message → ack + task queued
-   - Background: Task → thread → insights → briefing (maybe)
+   - Background: Task → thread → knowledge items → briefing (maybe)
 
 4. **Background Worker section** - Update to describe:
    - Event-driven (task queued) + timer-based (team lead daily)
@@ -1073,10 +1073,10 @@ Update to reflect new architecture:
    - Remove references to `maybeGenerateProactiveBriefing`
 
 7. **Add new key concepts**:
-   - **Memories vs Insights**: Memories store user interaction context (preferences, past requests). Insights are the agent's professional knowledge base - domain expertise, techniques, patterns, and facts extracted from work threads.
-   - Thread lifecycle (created → active → insight extraction → completed)
+   - **Memories vs Knowledge Items**: Memories store user interaction context (preferences, past requests). Knowledge items are the agent's professional knowledge base - domain expertise, techniques, patterns, and facts extracted from work threads.
+   - Thread lifecycle (created → active → knowledge item extraction → completed)
    - Thread compaction (mid-session context management)
-   - Professional growth model (insights as accumulated expertise)
+   - Professional growth model (knowledge items as accumulated expertise)
 
 ---
 
@@ -1105,7 +1105,7 @@ Update to reflect new architecture:
 │ 1. Worker picks up agent (has pending task)                     │
 │ 2. runWorkSession() starts                                      │
 │ 3. Create NEW THREAD for this session                           │
-│ 4. Load memories + insights for context                         │
+│ 4. Load memories + knowledge items for context                  │
 │ 5. Process task in thread:                                      │
 │    - Add task as "user" message to thread                       │
 │    - LLM responds with tool calls                               │
@@ -1115,7 +1115,7 @@ Update to reflect new architecture:
 │    - Compact if approaching context limit                       │
 │ 6. Mark task complete                                           │
 │ 7. Check queue → empty                                          │
-│ 8. Extract insights from THREAD → insights table                │
+│ 8. Extract knowledge items from THREAD → knowledge_items table  │
 │ 9. Mark thread completed (can be cleaned up later)              │
 │ 10. Decide briefing: "Yes, found significant news"              │
 │ 11. Create inbox item (summary)                                 │
@@ -1134,11 +1134,11 @@ Update to reflect new architecture:
 │ 2. runWorkSession() starts                                      │
 │ 3. Create NEW THREAD for this session                           │
 │ 4. Check queue → empty                                          │
-│ 5. Load mission + memories + insights                           │
+│ 5. Load mission + memories + knowledge items                    │
 │ 6. Add to thread: "What should I work on for my mission?"       │
 │ 7. LLM decides proactive work based on mission & learnings      │
 │ 8. Execute work in thread (search, delegate, etc.)              │
-│ 9. When done: extract insights from thread → insights table     │
+│ 9. When done: extract knowledge items from thread → knowledge_items table │
 │ 10. Mark thread completed                                       │
 │ 11. Decide briefing based on significance                       │
 │ 12. Schedule next run: now + 1 day                              │
@@ -1158,7 +1158,7 @@ Update to reflect new architecture:
 │ 5. Process task in thread                                       │
 │ 6. Mark task complete, report to lead                           │
 │ 7. Check queue → empty                                          │
-│ 8. Extract insights from thread → insights table                │
+│ 8. Extract knowledge items from thread → knowledge_items table  │
 │ 9. Mark thread completed                                        │
 │ 10. NO briefing (subordinates can't send)                       │
 │ 11. NO scheduling (purely reactive)                             │
@@ -1191,12 +1191,12 @@ Update to reflect new architecture:
 │                                    │                            │
 │                                    ▼                            │
 │                  ┌──────────────────────────────────────┐       │
-│                  │ Queue Empty → Extract Insights       │       │
+│                  │ Queue Empty → Extract Knowledge Items│       │
 │                  │                                      │       │
 │                  │  - Review all thread messages        │       │
 │                  │  - Extract facts, techniques,        │       │
 │                  │    patterns, lessons                 │       │
-│                  │  - Persist to insights table         │       │
+│                  │  - Persist to knowledge_items table  │       │
 │                  │  - Agent "grows professionally"      │       │
 │                  └──────────────────────────────────────┘       │
 │                                    │                            │
@@ -1218,20 +1218,20 @@ Update to reflect new architecture:
 
 | File | Changes |
 |------|---------|
-| `src/lib/db/schema.ts` | Add threads, threadMessages, insights tables; task source; agent scheduling fields |
+| `src/lib/db/schema.ts` | Add threads, threadMessages, knowledgeItems tables; task source; agent scheduling fields |
 | `src/lib/db/queries/threads.ts` | NEW: createThread, getThreadMessages, appendThreadMessage, compactThread, completeThread |
-| `src/lib/db/queries/insights.ts` | NEW: createInsight, getInsightsByAgentId, getRecentInsights |
+| `src/lib/db/queries/knowledge-items.ts` | NEW: createKnowledgeItem, getKnowledgeItemsByAgentId, getRecentKnowledgeItems |
 | `src/lib/db/queries/agentTasks.ts` | queueTask, getOwnPendingTasks, hasQueuedWork |
 | `src/lib/db/queries/agents.ts` | scheduleNextRun, getAgentsDueToRun |
-| `src/lib/agents/agent.ts` | Major refactor: handleUserMessage, runWorkSession, processTaskInThread, extractInsightsFromThread, decideBriefing |
+| `src/lib/agents/agent.ts` | Major refactor: handleUserMessage, runWorkSession, processTaskInThread, extractKnowledgeFromThread, decideBriefing |
 | `src/lib/agents/thread.ts` | NEW: startWorkSession, addToThread, buildThreadContext, shouldCompact, compactIfNeeded |
-| `src/lib/agents/insights.ts` | NEW: extractInsightsFromThread function |
-| `src/lib/agents/tools/insight-tools.ts` | NEW: addInsight, listInsights, removeInsight tools for foreground |
+| `src/lib/agents/knowledge-items.ts` | NEW: extractKnowledgeFromThread function |
+| `src/lib/agents/tools/knowledge-item-tools.ts` | NEW: addKnowledgeItem, listKnowledgeItems, removeKnowledgeItem tools for foreground |
 | `src/worker/runner.ts` | Event-driven + timer-based scheduling |
 | `src/app/api/messages/route.ts` | Use handleUserMessage |
 | `src/app/api/teams/route.ts` | Bootstrap "get to work" task |
 | `src/app/api/conversations/[agentId]/route.ts` | No changes needed (already returns user conversation) |
-| `CLAUDE.md` | Update architecture docs to reflect new system |
+| `CLAUDE.md` | Update architecture docs to reflect new system (memories vs knowledge items) |
 
 ---
 
@@ -1271,14 +1271,14 @@ Implementation → Spec Review (augment if needed) → Quality Review → Commit
 
 ## Implementation Order
 
-1. **Schema changes** (Tasks 1.1-1.8) - foundation for everything (threads, insights, task source, scheduling)
+1. **Schema changes** (Tasks 1.1-1.8) - foundation for everything (threads, knowledge items, task source, scheduling)
 2. **Thread management** (Tasks 2.1-2.3) - new thread infrastructure
 3. **Task queue system** (Tasks 3.1-3.3) - needed before agent refactor
-4. **Agent lifecycle** (Tasks 4.1-4.7) - core behavior changes + insight tools for foreground
+4. **Agent lifecycle** (Tasks 4.1-4.7) - core behavior changes + knowledge item tools for foreground
 5. **Background worker** (Tasks 5.1-5.3) - execution infrastructure
 6. **API updates** (Tasks 6.1-6.4) - wire up new system
 7. **Cleanup** (Tasks 7.1-7.2) - remove legacy code
-8. **Documentation** (Task 8.1) - update CLAUDE.md with memories vs insights distinction
+8. **Documentation** (Task 8.1) - update CLAUDE.md with memories vs knowledge items distinction
 
 ---
 
@@ -1288,7 +1288,7 @@ Implementation → Spec Review (augment if needed) → Quality Review → Commit
 ```bash
 npx drizzle-kit generate
 npx drizzle-kit migrate
-npx drizzle-kit studio  # Verify new tables: threads, thread_messages, insights
+npx drizzle-kit studio  # Verify new tables: threads, thread_messages, knowledge_items
 ```
 
 ### 2. Unit Tests
@@ -1296,7 +1296,7 @@ npx drizzle-kit studio  # Verify new tables: threads, thread_messages, insights
 - Test `appendThreadMessage()` adds message with correct sequence
 - Test `compactThread()` replaces messages with summary
 - Test `queueTask()` creates task with correct source
-- Test `createInsight()` stores insight with sourceThreadId
+- Test `createKnowledgeItem()` stores knowledge item with sourceThreadId
 - Test `handleUserMessage()` queues task and returns contextual ack
 
 ### 3. Integration Tests
@@ -1304,8 +1304,8 @@ npx drizzle-kit studio  # Verify new tables: threads, thread_messages, insights
 2. Send user message → verify task queued + contextual response
 3. Run worker → verify NEW thread created for session
 4. Verify task processed via thread (not conversation)
-5. Check queue empty → verify insights extracted from thread
-6. Verify insights stored with sourceThreadId
+5. Check queue empty → verify knowledge items extracted from thread
+6. Verify knowledge items stored with sourceThreadId
 7. Verify thread marked completed
 8. Check team lead → verify briefing decision made
 9. If briefing → verify inbox item + conversation message
@@ -1317,10 +1317,10 @@ npx drizzle-kit studio  # Verify new tables: threads, thread_messages, insights
 4. Send message to team lead
 5. Verify contextual response returned immediately
 6. Wait for background processing
-7. Verify thread completed and insights extracted
+7. Verify thread completed and knowledge items extracted
 8. Check inbox for briefing (if significant)
 9. Check USER conversation has briefing content
-10. Check insights table for extracted professional knowledge
+10. Check knowledge_items table for extracted professional knowledge
 11. Wait 1 day (or manually trigger) → verify team lead wakes up
 12. Verify NEW thread created for proactive work
 
@@ -1336,25 +1336,25 @@ npx drizzle-kit studio  # Verify new tables: threads, thread_messages, insights
 
 - [ ] Threads table exists with proper schema
 - [ ] ThreadMessages table exists with proper schema
-- [ ] Insights table exists with proper schema
+- [ ] KnowledgeItems table exists with proper schema
 - [ ] Each work session creates NEW thread
 - [ ] Tasks have source field (delegation/user/system/self)
 - [ ] User messages queue tasks, return contextual ack
 - [ ] Background processes tasks via thread (not conversation)
 - [ ] Mid-session compaction works when context limit approached
-- [ ] Insights extracted from thread after queue cleared
-- [ ] Insights linked to sourceThreadId
-- [ ] Thread marked completed after insight extraction
+- [ ] Knowledge items extracted from thread after queue cleared
+- [ ] Knowledge items linked to sourceThreadId
+- [ ] Thread marked completed after knowledge item extraction
 - [ ] Team leads decide briefings (not automatic)
 - [ ] Briefings go to inbox (summary) + conversation (full)
 - [ ] Team leads have daily proactive trigger
 - [ ] Subordinates are purely reactive (queue-triggered only)
 - [ ] New teams bootstrap with "get to work" task
-- [ ] Insights accumulate professional knowledge over time
-- [ ] Insights sent to LLM only in background (threads)
+- [ ] Knowledge items accumulate professional knowledge over time
+- [ ] Knowledge items sent to LLM only in background (threads)
 - [ ] Memories sent to LLM only in foreground (conversations)
-- [ ] Agent can add insights from user conversation (addInsight tool)
-- [ ] Agent can show insights to user when asked (listInsights tool)
-- [ ] Agent can remove outdated insights (removeInsight tool)
+- [ ] Agent can add knowledge items from user conversation (addKnowledgeItem tool)
+- [ ] Agent can show knowledge items to user when asked (listKnowledgeItems tool)
+- [ ] Agent can remove outdated knowledge items (removeKnowledgeItem tool)
 - [ ] UI shows only user conversation (not threads)
-- [ ] CLAUDE.md updated with memories vs insights distinction
+- [ ] CLAUDE.md updated with memories vs knowledge items distinction

@@ -1,7 +1,7 @@
 import { describe, test, expect, beforeAll, afterAll } from 'vitest';
 import { db } from '@/lib/db/client';
 import {
-  users, teams, agents, threads, threadMessages, insights, agentTasks
+  users, teams, agents, threads, threadMessages, knowledgeItems, agentTasks
 } from '@/lib/db/schema';
 import { eq } from 'drizzle-orm';
 
@@ -168,36 +168,36 @@ describe('threadMessages schema', () => {
   });
 });
 
-describe('insights schema', () => {
-  test('creates insight for agent', async () => {
-    const [insight] = await db.insert(insights).values({
+describe('knowledgeItems schema', () => {
+  test('creates knowledge item for agent', async () => {
+    const [knowledgeItem] = await db.insert(knowledgeItems).values({
       agentId: testAgentId,
       type: 'fact',
       content: 'NVIDIA reports earnings in February',
     }).returning();
 
-    expect(insight.agentId).toBe(testAgentId);
-    expect(insight.type).toBe('fact');
-    expect(insight.content).toBe('NVIDIA reports earnings in February');
-    expect(insight.sourceThreadId).toBeNull();
+    expect(knowledgeItem.agentId).toBe(testAgentId);
+    expect(knowledgeItem.type).toBe('fact');
+    expect(knowledgeItem.content).toBe('NVIDIA reports earnings in February');
+    expect(knowledgeItem.sourceThreadId).toBeNull();
 
     // Cleanup
-    await db.delete(insights).where(eq(insights.id, insight.id));
+    await db.delete(knowledgeItems).where(eq(knowledgeItems.id, knowledgeItem.id));
   });
 
-  test('links insight to source thread', async () => {
+  test('links knowledge item to source thread', async () => {
     const [thread] = await db.insert(threads).values({
       agentId: testAgentId,
     }).returning();
 
-    const [insight] = await db.insert(insights).values({
+    const [knowledgeItem] = await db.insert(knowledgeItems).values({
       agentId: testAgentId,
       type: 'technique',
       content: 'Check SEC filings first',
       sourceThreadId: thread.id,
     }).returning();
 
-    expect(insight.sourceThreadId).toBe(thread.id);
+    expect(knowledgeItem.sourceThreadId).toBe(thread.id);
 
     // Cleanup
     await db.delete(threads).where(eq(threads.id, thread.id));
@@ -208,7 +208,7 @@ describe('insights schema', () => {
       agentId: testAgentId,
     }).returning();
 
-    const [insight] = await db.insert(insights).values({
+    const [knowledgeItem] = await db.insert(knowledgeItems).values({
       agentId: testAgentId,
       type: 'pattern',
       content: 'Market volatility increases before earnings',
@@ -218,44 +218,44 @@ describe('insights schema', () => {
     // Delete thread
     await db.delete(threads).where(eq(threads.id, thread.id));
 
-    // Insight should remain but with null sourceThreadId
-    const [updated] = await db.select().from(insights).where(eq(insights.id, insight.id));
+    // Knowledge item should remain but with null sourceThreadId
+    const [updated] = await db.select().from(knowledgeItems).where(eq(knowledgeItems.id, knowledgeItem.id));
     expect(updated).toBeDefined();
     expect(updated.sourceThreadId).toBeNull();
 
     // Cleanup
-    await db.delete(insights).where(eq(insights.id, insight.id));
+    await db.delete(knowledgeItems).where(eq(knowledgeItems.id, knowledgeItem.id));
   });
 
   test('stores confidence as real number', async () => {
-    const [insight] = await db.insert(insights).values({
+    const [knowledgeItem] = await db.insert(knowledgeItems).values({
       agentId: testAgentId,
       type: 'fact',
       content: 'Tech stocks tend to rally in Q4',
       confidence: 0.85,
     }).returning();
 
-    expect(insight.confidence).toBeCloseTo(0.85, 2);
+    expect(knowledgeItem.confidence).toBeCloseTo(0.85, 2);
 
     // Verify retrieval from database
-    const [retrieved] = await db.select().from(insights).where(eq(insights.id, insight.id));
+    const [retrieved] = await db.select().from(knowledgeItems).where(eq(knowledgeItems.id, knowledgeItem.id));
     expect(retrieved.confidence).toBeCloseTo(0.85, 2);
 
     // Cleanup
-    await db.delete(insights).where(eq(insights.id, insight.id));
+    await db.delete(knowledgeItems).where(eq(knowledgeItems.id, knowledgeItem.id));
   });
 
   test('confidence defaults to null when not provided', async () => {
-    const [insight] = await db.insert(insights).values({
+    const [knowledgeItem] = await db.insert(knowledgeItems).values({
       agentId: testAgentId,
       type: 'lesson',
       content: 'Always verify data sources',
     }).returning();
 
-    expect(insight.confidence).toBeNull();
+    expect(knowledgeItem.confidence).toBeNull();
 
     // Cleanup
-    await db.delete(insights).where(eq(insights.id, insight.id));
+    await db.delete(knowledgeItems).where(eq(knowledgeItems.id, knowledgeItem.id));
   });
 });
 

@@ -242,7 +242,7 @@ Always be professional, concise, and focused on your role.`;
    * 6. Returns the acknowledgment as a stream
    */
   async handleUserMessage(content: string): Promise<AsyncIterable<string>> {
-    // 1. Load memories for user context (not insights)
+    // 1. Load memories for user context (not knowledge items)
     await this.loadMemories();
     const conversation = await this.ensureConversation();
 
