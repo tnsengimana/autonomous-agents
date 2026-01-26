@@ -57,7 +57,7 @@ const DEFAULT_MAX_RESPONSE_TOKENS = 2000;
 
 // Work session configuration
 const MAX_THREAD_MESSAGES_BEFORE_COMPACT = 50;
-const TEAM_LEAD_NEXT_RUN_HOURS = 1;
+const TEAM_LEAD_NEXT_RUN_HOURS = 24; // 1 day
 
 // ============================================================================
 // Agent Class
@@ -381,7 +381,7 @@ Examples:
         await this.decideBriefing(threadId);
       }
 
-      // Schedule next run (team lead: 1 hour, subordinate: none - triggered by delegation)
+      // Schedule next run (team lead: 1 day, subordinate: none - triggered by delegation)
       if (this.isTeamLead()) {
         await this.scheduleNextRun(TEAM_LEAD_NEXT_RUN_HOURS);
       }

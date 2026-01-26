@@ -5,10 +5,10 @@
  *
  * Execution triggers:
  * 1. Event-driven: When tasks are queued to any agent
- * 2. Timer-based: Team leads run every hour (scheduled via nextRunAt)
+ * 2. Timer-based: Team leads run once per day (scheduled via nextRunAt)
  *
  * Subordinates are purely reactive - they only run when they have queued tasks.
- * Team leads get scheduled for 1 hour after each work session completion.
+ * Team leads get scheduled for 1 day after each work session completion.
  */
 
 import { Agent } from '@/lib/agents/agent';

@@ -199,7 +199,7 @@ describe('getTeamLeadsDueToRun', () => {
 
   test('returns empty array when no team leads are due', async () => {
     // Set nextRunAt to future
-    const futureDate = new Date(Date.now() + 3600000); // 1 hour from now
+    const futureDate = new Date(Date.now() + 86400000); // 1 day from now
     await updateAgentNextRunAt(testTeamLeadId, futureDate);
 
     const teamLeadIds = await getTeamLeadsDueToRun();
@@ -322,7 +322,7 @@ describe('Agent Scheduling', () => {
   });
 
   test('team lead can have nextRunAt updated', async () => {
-    const futureDate = new Date(Date.now() + 3600000);
+    const futureDate = new Date(Date.now() + 86400000); // 1 day from now
     await updateAgentNextRunAt(testTeamLeadId, futureDate);
 
     const [teamLead] = await db.select()

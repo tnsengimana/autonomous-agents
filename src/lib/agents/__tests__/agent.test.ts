@@ -314,12 +314,12 @@ describe('runWorkSession', () => {
       .where(eq(agents.id, testTeamLeadId));
     expect(updatedAgent.nextRunAt).not.toBeNull();
 
-    // Should be approximately 1 hour in the future
+    // Should be approximately 1 day (24 hours) in the future
     const nextRun = new Date(updatedAgent.nextRunAt!);
     const now = new Date();
     const diffHours = (nextRun.getTime() - now.getTime()) / (1000 * 60 * 60);
-    expect(diffHours).toBeGreaterThan(0.9);
-    expect(diffHours).toBeLessThan(1.1);
+    expect(diffHours).toBeGreaterThan(23.9);
+    expect(diffHours).toBeLessThan(24.1);
   });
 
   test('subordinate does not schedule next run', async () => {

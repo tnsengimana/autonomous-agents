@@ -48,7 +48,7 @@ Evolve the agent system from single-conversation to a sophisticated foreground/b
 |--------|-----------|-------------|
 | Task Queue | Yes | Yes |
 | Proactive | Yes (seeks work based on mission) | No (purely reactive) |
-| 1-Hour Trigger | Yes (to further mission) | No (only queue-triggered) |
+| Daily Trigger | Yes (to further mission) | No (only queue-triggered) |
 | Can Send Briefings | Yes (decides after work) | No |
 | Knowledge Extraction | Yes (after clearing queue) | Yes (after clearing queue) |
 
@@ -72,7 +72,7 @@ Task picked up → Load thread (or create new)
                   → Extract insights from thread → insights table
                   → Team lead only: decide if briefing needed
                   → If briefing: create inbox item + message in user conversation
-                  → Schedule next run (team lead: 1 hour, subordinate: none)
+                  → Schedule next run (team lead: 1 day, subordinate: none)
 ```
 
 **Team Creation Bootstrap**:
@@ -776,7 +776,7 @@ describe('insight tools (foreground)', () => {
 Change from polling all team leads to:
 - Listen for agents with pending tasks OR nextRunAt <= now
 - Process one agent at a time
-- Team leads: schedule next run 1 hour after completion
+- Team leads: schedule next run 1 day after completion
 - Workers: no next run scheduling (purely reactive)
 
 #### Task 5.2: Add immediate trigger on task queue
@@ -831,7 +831,7 @@ describe('background worker scheduling', () => {
     expect(agentsDue.some(a => a.id === subordinateId)).toBe(false);
   });
 
-  test('schedules team lead for 1 hour after completion', async () => {
+  test('schedules team lead for 1 day after completion', async () => {
     server.use(
       http.post('https://api.openai.com/v1/chat/completions', () => {
         return HttpResponse.json({
@@ -846,8 +846,8 @@ describe('background worker scheduling', () => {
     await agent.runWorkSession();
 
     const updatedAgent = await getAgentById(teamLeadId);
-    const oneHourFromNow = Date.now() + 60 * 60 * 1000;
-    expect(updatedAgent.nextRunAt.getTime()).toBeCloseTo(oneHourFromNow, -4); // within 10 seconds
+    const oneDayFromNow = Date.now() + 24 * 60 * 60 * 1000;
+    expect(updatedAgent.nextRunAt.getTime()).toBeCloseTo(oneDayFromNow, -4); // within 10 seconds
   });
 
   test('does not schedule subordinate after completion', async () => {
@@ -1062,7 +1062,7 @@ Update to reflect new architecture:
    - Background: Task → thread → insights → briefing (maybe)
 
 4. **Background Worker section** - Update to describe:
-   - Event-driven (task queued) + timer-based (team lead 1-hour)
+   - Event-driven (task queued) + timer-based (team lead daily)
    - Subordinates purely reactive, team leads proactive
 
 5. **Commands section** - Verify worker command still accurate
@@ -1120,15 +1120,15 @@ Update to reflect new architecture:
 │ 10. Decide briefing: "Yes, found significant news"              │
 │ 11. Create inbox item (summary)                                 │
 │ 12. Add full briefing to USER CONVERSATION                      │
-│ 13. Schedule next run: now + 1 hour                             │
+│ 13. Schedule next run: now + 1 day                              │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-### Team Lead Proactive Cycle (1-Hour Trigger)
+### Team Lead Proactive Cycle (Daily Trigger)
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│ BACKGROUND (Worker Process - 1 Hour Timer)                      │
+│ BACKGROUND (Worker Process - Daily Timer)                       │
 ├─────────────────────────────────────────────────────────────────┤
 │ 1. Worker picks up team lead (nextRunAt <= now)                 │
 │ 2. runWorkSession() starts                                      │
@@ -1141,7 +1141,7 @@ Update to reflect new architecture:
 │ 9. When done: extract insights from thread → insights table     │
 │ 10. Mark thread completed                                       │
 │ 11. Decide briefing based on significance                       │
-│ 12. Schedule next run: now + 1 hour                             │
+│ 12. Schedule next run: now + 1 day                              │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -1321,7 +1321,7 @@ npx drizzle-kit studio  # Verify new tables: threads, thread_messages, insights
 8. Check inbox for briefing (if significant)
 9. Check USER conversation has briefing content
 10. Check insights table for extracted professional knowledge
-11. Wait 1 hour (or manually trigger) → verify team lead wakes up
+11. Wait 1 day (or manually trigger) → verify team lead wakes up
 12. Verify NEW thread created for proactive work
 
 ### 5. Thread Compaction Test
@@ -1347,7 +1347,7 @@ npx drizzle-kit studio  # Verify new tables: threads, thread_messages, insights
 - [ ] Thread marked completed after insight extraction
 - [ ] Team leads decide briefings (not automatic)
 - [ ] Briefings go to inbox (summary) + conversation (full)
-- [ ] Team leads have 1-hour proactive trigger
+- [ ] Team leads have daily proactive trigger
 - [ ] Subordinates are purely reactive (queue-triggered only)
 - [ ] New teams bootstrap with "get to work" task
 - [ ] Insights accumulate professional knowledge over time
