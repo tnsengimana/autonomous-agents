@@ -21,6 +21,12 @@ import {
 } from '@/lib/db/schema';
 import { eq, and } from 'drizzle-orm';
 import * as llm from '@/lib/agents/llm';
+import type { TaskOwnerInfo } from '@/lib/agents/taskQueue';
+
+// Helper to create ownerInfo for teams
+function teamOwnerInfo(teamId: string): TaskOwnerInfo {
+  return { teamId };
+}
 
 // ============================================================================
 // Test Setup
@@ -210,7 +216,7 @@ describe('Team Creation API (/api/teams)', () => {
     // Queue the bootstrap task (this is what the API now does)
     await queueSystemTask(
       newTeamLead.id,
-      newTeam.id,
+      teamOwnerInfo(newTeam.id),
       'Get to work on your mission. Review your purpose and start taking actions to fulfill it.'
     );
 
@@ -375,7 +381,7 @@ describe('API Response Patterns', () => {
     // Queue user task
     const userTask = await queueUserTask(
       testTeamLeadId,
-      testTeamId,
+      teamOwnerInfo(testTeamId),
       'User requested analysis'
     );
     expect(userTask.source).toBe('user');
@@ -383,7 +389,7 @@ describe('API Response Patterns', () => {
     // Queue system task
     const systemTask = await queueSystemTask(
       testTeamLeadId,
-      testTeamId,
+      teamOwnerInfo(testTeamId),
       'System bootstrap task'
     );
     expect(systemTask.source).toBe('system');

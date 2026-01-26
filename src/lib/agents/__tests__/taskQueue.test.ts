@@ -18,6 +18,7 @@ import {
   queueDelegationTask,
   getQueueStatus,
   claimNextTask,
+  type TaskOwnerInfo,
 } from '@/lib/agents/taskQueue';
 
 // Import lower-level functions for verification
@@ -26,6 +27,11 @@ import {
   completeTaskWithResult,
   failTask,
 } from '@/lib/db/queries/agentTasks';
+
+// Helper to create ownerInfo for teams
+function teamOwnerInfo(teamId: string): TaskOwnerInfo {
+  return { teamId };
+}
 
 // ============================================================================
 // Test Setup
@@ -86,7 +92,7 @@ async function cleanupTasks(taskIds: string[]) {
 
 describe('queueUserTask', () => {
   test('creates a task with user source', async () => {
-    const task = await queueUserTask(testAgentId, testTeamId, 'User message content');
+    const task = await queueUserTask(testAgentId, teamOwnerInfo(testTeamId), 'User message content');
 
     expect(task.id).toBeDefined();
     expect(task.assignedToId).toBe(testAgentId);
@@ -100,7 +106,7 @@ describe('queueUserTask', () => {
 
   test('preserves full user message', async () => {
     const longMessage = 'This is a detailed user message with multiple sentences. It contains specific instructions. The agent should process all of it.';
-    const task = await queueUserTask(testAgentId, testTeamId, longMessage);
+    const task = await queueUserTask(testAgentId, teamOwnerInfo(testTeamId), longMessage);
 
     expect(task.task).toBe(longMessage);
 
@@ -111,7 +117,7 @@ describe('queueUserTask', () => {
     const multilineMessage = `Line 1
 Line 2
 Line 3`;
-    const task = await queueUserTask(testAgentId, testTeamId, multilineMessage);
+    const task = await queueUserTask(testAgentId, teamOwnerInfo(testTeamId), multilineMessage);
 
     expect(task.task).toBe(multilineMessage);
 
@@ -125,7 +131,7 @@ Line 3`;
 
 describe('queueSystemTask', () => {
   test('creates a task with system source', async () => {
-    const task = await queueSystemTask(testAgentId, testTeamId, 'Bootstrap: Get to work');
+    const task = await queueSystemTask(testAgentId, teamOwnerInfo(testTeamId), 'Bootstrap: Get to work');
 
     expect(task.id).toBeDefined();
     expect(task.source).toBe('system');
@@ -137,7 +143,7 @@ describe('queueSystemTask', () => {
 
   test('typical bootstrap task', async () => {
     const bootstrapMessage = 'Your team has been activated. Review your mission and begin proactive work.';
-    const task = await queueSystemTask(testAgentId, testTeamId, bootstrapMessage);
+    const task = await queueSystemTask(testAgentId, teamOwnerInfo(testTeamId), bootstrapMessage);
 
     expect(task.source).toBe('system');
     expect(task.task).toBe(bootstrapMessage);
@@ -152,7 +158,7 @@ describe('queueSystemTask', () => {
 
 describe('queueSelfTask', () => {
   test('creates a task with self source', async () => {
-    const task = await queueSelfTask(testAgentId, testTeamId, 'Proactive monitoring check');
+    const task = await queueSelfTask(testAgentId, teamOwnerInfo(testTeamId), 'Proactive monitoring check');
 
     expect(task.id).toBeDefined();
     expect(task.source).toBe('self');
@@ -164,9 +170,9 @@ describe('queueSelfTask', () => {
   });
 
   test('agent can queue multiple self tasks', async () => {
-    const task1 = await queueSelfTask(testAgentId, testTeamId, 'Check market data');
-    const task2 = await queueSelfTask(testAgentId, testTeamId, 'Analyze trends');
-    const task3 = await queueSelfTask(testAgentId, testTeamId, 'Generate report');
+    const task1 = await queueSelfTask(testAgentId, teamOwnerInfo(testTeamId), 'Check market data');
+    const task2 = await queueSelfTask(testAgentId, teamOwnerInfo(testTeamId), 'Analyze trends');
+    const task3 = await queueSelfTask(testAgentId, teamOwnerInfo(testTeamId), 'Generate report');
 
     expect(task1.source).toBe('self');
     expect(task2.source).toBe('self');
@@ -184,7 +190,7 @@ describe('queueDelegationTask', () => {
   test('creates a task with delegation source and correct assignedById', async () => {
     const task = await queueDelegationTask(
       testAgentId,  // assigned TO
-      testTeamId,
+      teamOwnerInfo(testTeamId),
       'Research this topic',
       testAgent2Id  // assigned BY
     );
@@ -201,7 +207,7 @@ describe('queueDelegationTask', () => {
   test('delegation tracks the delegating agent', async () => {
     const task = await queueDelegationTask(
       testAgentId,
-      testTeamId,
+      teamOwnerInfo(testTeamId),
       'Delegated work item',
       testAgent2Id
     );
@@ -229,9 +235,9 @@ describe('getQueueStatus', () => {
   });
 
   test('counts pending tasks correctly', async () => {
-    const task1 = await queueUserTask(testAgentId, testTeamId, 'Task 1');
-    const task2 = await queueUserTask(testAgentId, testTeamId, 'Task 2');
-    const task3 = await queueUserTask(testAgentId, testTeamId, 'Task 3');
+    const task1 = await queueUserTask(testAgentId, teamOwnerInfo(testTeamId), 'Task 1');
+    const task2 = await queueUserTask(testAgentId, teamOwnerInfo(testTeamId), 'Task 2');
+    const task3 = await queueUserTask(testAgentId, teamOwnerInfo(testTeamId), 'Task 3');
 
     const status = await getQueueStatus(testAgentId);
 
@@ -243,8 +249,8 @@ describe('getQueueStatus', () => {
   });
 
   test('counts in_progress tasks correctly', async () => {
-    const task1 = await queueUserTask(testAgentId, testTeamId, 'Task 1');
-    const task2 = await queueUserTask(testAgentId, testTeamId, 'Task 2');
+    const task1 = await queueUserTask(testAgentId, teamOwnerInfo(testTeamId), 'Task 1');
+    const task2 = await queueUserTask(testAgentId, teamOwnerInfo(testTeamId), 'Task 2');
     await startTask(task1.id);
 
     const status = await getQueueStatus(testAgentId);
@@ -257,8 +263,8 @@ describe('getQueueStatus', () => {
   });
 
   test('excludes completed tasks from counts', async () => {
-    const pending = await queueUserTask(testAgentId, testTeamId, 'Pending');
-    const completed = await queueUserTask(testAgentId, testTeamId, 'Completed');
+    const pending = await queueUserTask(testAgentId, teamOwnerInfo(testTeamId), 'Pending');
+    const completed = await queueUserTask(testAgentId, teamOwnerInfo(testTeamId), 'Completed');
     await startTask(completed.id);
     await completeTaskWithResult(completed.id, 'Done');
 
@@ -271,8 +277,8 @@ describe('getQueueStatus', () => {
   });
 
   test('excludes failed tasks from counts', async () => {
-    const pending = await queueUserTask(testAgentId, testTeamId, 'Pending');
-    const failed = await queueUserTask(testAgentId, testTeamId, 'Failed');
+    const pending = await queueUserTask(testAgentId, teamOwnerInfo(testTeamId), 'Pending');
+    const failed = await queueUserTask(testAgentId, teamOwnerInfo(testTeamId), 'Failed');
     await startTask(failed.id);
     await failTask(failed.id, 'Error');
 
@@ -286,7 +292,7 @@ describe('getQueueStatus', () => {
 
   test('hasPendingWork is true with any actionable task', async () => {
     // Only in_progress
-    const inProgress = await queueUserTask(testAgentId, testTeamId, 'In progress');
+    const inProgress = await queueUserTask(testAgentId, teamOwnerInfo(testTeamId), 'In progress');
     await startTask(inProgress.id);
 
     let status = await getQueueStatus(testAgentId);
@@ -295,7 +301,7 @@ describe('getQueueStatus', () => {
     await cleanupTasks([inProgress.id]);
 
     // Only pending
-    const pending = await queueUserTask(testAgentId, testTeamId, 'Pending');
+    const pending = await queueUserTask(testAgentId, teamOwnerInfo(testTeamId), 'Pending');
 
     status = await getQueueStatus(testAgentId);
     expect(status.hasPendingWork).toBe(true);
@@ -304,8 +310,8 @@ describe('getQueueStatus', () => {
   });
 
   test('returns status for specific agent only', async () => {
-    const agent1Task = await queueUserTask(testAgentId, testTeamId, 'Agent 1 task');
-    const agent2Task = await queueUserTask(testAgent2Id, testTeamId, 'Agent 2 task');
+    const agent1Task = await queueUserTask(testAgentId, teamOwnerInfo(testTeamId), 'Agent 1 task');
+    const agent2Task = await queueUserTask(testAgent2Id, teamOwnerInfo(testTeamId), 'Agent 2 task');
 
     const agent1Status = await getQueueStatus(testAgentId);
     const agent2Status = await getQueueStatus(testAgent2Id);
@@ -328,9 +334,9 @@ describe('claimNextTask', () => {
   });
 
   test('claims oldest pending task (FIFO)', async () => {
-    const task1 = await queueUserTask(testAgentId, testTeamId, 'First task');
+    const task1 = await queueUserTask(testAgentId, teamOwnerInfo(testTeamId), 'First task');
     await new Promise(resolve => setTimeout(resolve, 10));
-    const task2 = await queueUserTask(testAgentId, testTeamId, 'Second task');
+    const task2 = await queueUserTask(testAgentId, teamOwnerInfo(testTeamId), 'Second task');
 
     const claimed = await claimNextTask(testAgentId);
 
@@ -342,7 +348,7 @@ describe('claimNextTask', () => {
   });
 
   test('marks claimed task as in_progress', async () => {
-    const task = await queueUserTask(testAgentId, testTeamId, 'Task to claim');
+    const task = await queueUserTask(testAgentId, teamOwnerInfo(testTeamId), 'Task to claim');
 
     const claimed = await claimNextTask(testAgentId);
 
@@ -352,11 +358,11 @@ describe('claimNextTask', () => {
   });
 
   test('subsequent claims get next pending task', async () => {
-    const task1 = await queueUserTask(testAgentId, testTeamId, 'First');
+    const task1 = await queueUserTask(testAgentId, teamOwnerInfo(testTeamId), 'First');
     await new Promise(resolve => setTimeout(resolve, 10));
-    const task2 = await queueUserTask(testAgentId, testTeamId, 'Second');
+    const task2 = await queueUserTask(testAgentId, teamOwnerInfo(testTeamId), 'Second');
     await new Promise(resolve => setTimeout(resolve, 10));
-    const task3 = await queueUserTask(testAgentId, testTeamId, 'Third');
+    const task3 = await queueUserTask(testAgentId, teamOwnerInfo(testTeamId), 'Third');
 
     const claimed1 = await claimNextTask(testAgentId);
     expect(claimed1!.id).toBe(task1.id);
@@ -374,11 +380,11 @@ describe('claimNextTask', () => {
   });
 
   test('does not claim completed tasks', async () => {
-    const completed = await queueUserTask(testAgentId, testTeamId, 'Completed');
+    const completed = await queueUserTask(testAgentId, teamOwnerInfo(testTeamId), 'Completed');
     await startTask(completed.id);
     await completeTaskWithResult(completed.id, 'Done');
 
-    const pending = await queueUserTask(testAgentId, testTeamId, 'Pending');
+    const pending = await queueUserTask(testAgentId, teamOwnerInfo(testTeamId), 'Pending');
 
     const claimed = await claimNextTask(testAgentId);
 
@@ -388,7 +394,7 @@ describe('claimNextTask', () => {
   });
 
   test('only claims tasks for the specific agent', async () => {
-    const agent2Task = await queueUserTask(testAgent2Id, testTeamId, 'Agent 2 task');
+    const agent2Task = await queueUserTask(testAgent2Id, teamOwnerInfo(testTeamId), 'Agent 2 task');
 
     const claimedAgent1 = await claimNextTask(testAgentId);
     expect(claimedAgent1).toBeNull();
@@ -408,7 +414,7 @@ describe('claimNextTask', () => {
 describe('Full Workflow', () => {
   test('user task workflow: queue -> claim -> complete', async () => {
     // 1. User sends message
-    const task = await queueUserTask(testAgentId, testTeamId, 'User: What is 2+2?');
+    const task = await queueUserTask(testAgentId, teamOwnerInfo(testTeamId), 'User: What is 2+2?');
     expect(task.source).toBe('user');
     expect(task.status).toBe('pending');
 
@@ -442,7 +448,7 @@ describe('Full Workflow', () => {
     // 1. System queues bootstrap task when team activated
     const task = await queueSystemTask(
       testAgentId,
-      testTeamId,
+      teamOwnerInfo(testTeamId),
       'Your team has been activated. Review your mission and begin proactive work.'
     );
     expect(task.source).toBe('system');
@@ -458,7 +464,7 @@ describe('Full Workflow', () => {
 
   test('proactive self-task workflow', async () => {
     // 1. Agent queues proactive work
-    const task = await queueSelfTask(testAgentId, testTeamId, 'Check for new market data');
+    const task = await queueSelfTask(testAgentId, teamOwnerInfo(testTeamId), 'Check for new market data');
     expect(task.source).toBe('self');
     expect(task.assignedById).toBe(testAgentId);
 
@@ -475,7 +481,7 @@ describe('Full Workflow', () => {
     // 1. Team lead delegates to subordinate
     const task = await queueDelegationTask(
       testAgentId,    // subordinate
-      testTeamId,
+      teamOwnerInfo(testTeamId),
       'Research NVIDIA earnings report',
       testAgent2Id    // team lead
     );
@@ -493,11 +499,11 @@ describe('Full Workflow', () => {
 
   test('mixed task sources maintain FIFO ordering', async () => {
     // Queue tasks from different sources
-    const userTask = await queueUserTask(testAgentId, testTeamId, 'User task');
+    const userTask = await queueUserTask(testAgentId, teamOwnerInfo(testTeamId), 'User task');
     await new Promise(resolve => setTimeout(resolve, 10));
-    const systemTask = await queueSystemTask(testAgentId, testTeamId, 'System task');
+    const systemTask = await queueSystemTask(testAgentId, teamOwnerInfo(testTeamId), 'System task');
     await new Promise(resolve => setTimeout(resolve, 10));
-    const selfTask = await queueSelfTask(testAgentId, testTeamId, 'Self task');
+    const selfTask = await queueSelfTask(testAgentId, teamOwnerInfo(testTeamId), 'Self task');
 
     // Claim in FIFO order regardless of source
     const claim1 = await claimNextTask(testAgentId);
@@ -513,7 +519,7 @@ describe('Full Workflow', () => {
   });
 
   test('failed task workflow', async () => {
-    const task = await queueUserTask(testAgentId, testTeamId, 'Task that will fail');
+    const task = await queueUserTask(testAgentId, teamOwnerInfo(testTeamId), 'Task that will fail');
 
     const claimed = await claimNextTask(testAgentId);
     await failTask(claimed!.id, 'External API unavailable');
@@ -533,9 +539,9 @@ describe('Full Workflow', () => {
 describe('Edge Cases', () => {
   test('handles rapid task creation', async () => {
     const tasks = await Promise.all([
-      queueUserTask(testAgentId, testTeamId, 'Task 1'),
-      queueUserTask(testAgentId, testTeamId, 'Task 2'),
-      queueUserTask(testAgentId, testTeamId, 'Task 3'),
+      queueUserTask(testAgentId, teamOwnerInfo(testTeamId), 'Task 1'),
+      queueUserTask(testAgentId, teamOwnerInfo(testTeamId), 'Task 2'),
+      queueUserTask(testAgentId, teamOwnerInfo(testTeamId), 'Task 3'),
     ]);
 
     const status = await getQueueStatus(testAgentId);
@@ -545,7 +551,7 @@ describe('Edge Cases', () => {
   });
 
   test('handles empty task content', async () => {
-    const task = await queueUserTask(testAgentId, testTeamId, '');
+    const task = await queueUserTask(testAgentId, teamOwnerInfo(testTeamId), '');
 
     expect(task.task).toBe('');
 
@@ -554,9 +560,141 @@ describe('Edge Cases', () => {
 
   test('handles agent with no team context', async () => {
     // Create a task for an agent and verify team association
-    const task = await queueUserTask(testAgentId, testTeamId, 'Task with team');
+    const task = await queueUserTask(testAgentId, teamOwnerInfo(testTeamId), 'Task with team');
 
     expect(task.teamId).toBe(testTeamId);
+
+    await cleanupTasks([task.id]);
+  });
+});
+
+// ============================================================================
+// Aide Owner Info Pattern Tests
+// ============================================================================
+
+describe('Aide Owner Info Pattern', () => {
+  let testAideId: string;
+  let testAideAgentId: string;
+
+  beforeAll(async () => {
+    // Create an aide for testing
+    const { aides } = await import('@/lib/db/schema');
+    const [aide] = await db.insert(aides).values({
+      userId: testUserId,
+      name: 'Task Queue Test Aide',
+      status: 'active',
+    }).returning();
+    testAideId = aide.id;
+
+    // Create an agent for the aide
+    const [aideAgent] = await db.insert(agents).values({
+      aideId: testAideId,
+      teamId: null,
+      name: 'Task Queue Test Aide Agent',
+      role: 'Assistant',
+    }).returning();
+    testAideAgentId = aideAgent.id;
+  });
+
+  afterAll(async () => {
+    // Cleanup aide (cascades to agents)
+    const { aides } = await import('@/lib/db/schema');
+    await db.delete(aides).where(eq(aides.id, testAideId));
+  });
+
+  // Helper to create ownerInfo for aides
+  function aideOwnerInfo(aideId: string): TaskOwnerInfo {
+    return { aideId };
+  }
+
+  test('queueUserTask with aide ownerInfo sets aideId and null teamId', async () => {
+    const task = await queueUserTask(testAideAgentId, aideOwnerInfo(testAideId), 'Aide user task');
+
+    expect(task.aideId).toBe(testAideId);
+    expect(task.teamId).toBeNull();
+    expect(task.source).toBe('user');
+
+    await cleanupTasks([task.id]);
+  });
+
+  test('queueSystemTask with aide ownerInfo sets aideId and null teamId', async () => {
+    const task = await queueSystemTask(testAideAgentId, aideOwnerInfo(testAideId), 'Aide system task');
+
+    expect(task.aideId).toBe(testAideId);
+    expect(task.teamId).toBeNull();
+    expect(task.source).toBe('system');
+
+    await cleanupTasks([task.id]);
+  });
+
+  test('queueSelfTask with aide ownerInfo sets aideId and null teamId', async () => {
+    const task = await queueSelfTask(testAideAgentId, aideOwnerInfo(testAideId), 'Aide self task');
+
+    expect(task.aideId).toBe(testAideId);
+    expect(task.teamId).toBeNull();
+    expect(task.source).toBe('self');
+
+    await cleanupTasks([task.id]);
+  });
+
+  test('queueDelegationTask with aide ownerInfo sets aideId and null teamId', async () => {
+    const task = await queueDelegationTask(
+      testAideAgentId,
+      aideOwnerInfo(testAideId),
+      'Aide delegation task',
+      testAideAgentId
+    );
+
+    expect(task.aideId).toBe(testAideId);
+    expect(task.teamId).toBeNull();
+    expect(task.source).toBe('delegation');
+
+    await cleanupTasks([task.id]);
+  });
+
+  test('aide tasks can be claimed and processed', async () => {
+    const task = await queueUserTask(testAideAgentId, aideOwnerInfo(testAideId), 'Claimable aide task');
+
+    const claimed = await claimNextTask(testAideAgentId);
+
+    expect(claimed).not.toBeNull();
+    expect(claimed!.id).toBe(task.id);
+    expect(claimed!.aideId).toBe(testAideId);
+
+    await cleanupTasks([task.id]);
+  });
+
+  test('getQueueStatus works for aide agents', async () => {
+    const task1 = await queueUserTask(testAideAgentId, aideOwnerInfo(testAideId), 'Aide task 1');
+    const task2 = await queueUserTask(testAideAgentId, aideOwnerInfo(testAideId), 'Aide task 2');
+
+    const status = await getQueueStatus(testAideAgentId);
+
+    expect(status.hasPendingWork).toBe(true);
+    expect(status.pendingCount).toBe(2);
+
+    await cleanupTasks([task1.id, task2.id]);
+  });
+
+  test('full workflow with aide ownerInfo', async () => {
+    // 1. Queue task
+    const task = await queueUserTask(testAideAgentId, aideOwnerInfo(testAideId), 'Full workflow aide task');
+    expect(task.aideId).toBe(testAideId);
+
+    // 2. Check status
+    let status = await getQueueStatus(testAideAgentId);
+    expect(status.hasPendingWork).toBe(true);
+
+    // 3. Claim
+    const claimed = await claimNextTask(testAideAgentId);
+    expect(claimed!.id).toBe(task.id);
+
+    // 4. Complete
+    await completeTaskWithResult(task.id, 'Done');
+
+    // 5. Verify completion
+    status = await getQueueStatus(testAideAgentId);
+    expect(status.hasPendingWork).toBe(false);
 
     await cleanupTasks([task.id]);
   });

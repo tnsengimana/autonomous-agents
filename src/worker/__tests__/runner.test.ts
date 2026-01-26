@@ -26,8 +26,13 @@ import {
   getTeamLeadsDueToRun,
 } from '@/lib/db/queries/agents';
 
-import { queueUserTask } from '@/lib/agents/taskQueue';
+import { queueUserTask, type TaskOwnerInfo } from '@/lib/agents/taskQueue';
 import { updateAgentNextRunAt } from '@/lib/db/queries/agents';
+
+// Helper to create ownerInfo for teams
+function teamOwnerInfo(teamId: string): TaskOwnerInfo {
+  return { teamId };
+}
 
 // ============================================================================
 // Test Setup
@@ -130,7 +135,7 @@ describe('getAgentsWithPendingTasks', () => {
   });
 
   test('returns agent IDs with pending tasks', async () => {
-    const task = await queueUserTask(testSubordinateId, testTeamId, 'Pending task');
+    const task = await queueUserTask(testSubordinateId, teamOwnerInfo(testTeamId), 'Pending task');
 
     const agentIds = await getAgentsWithPendingTasks();
 
@@ -140,7 +145,7 @@ describe('getAgentsWithPendingTasks', () => {
   });
 
   test('returns agent IDs with in_progress tasks', async () => {
-    const task = await queueUserTask(testSubordinateId, testTeamId, 'In progress task');
+    const task = await queueUserTask(testSubordinateId, teamOwnerInfo(testTeamId), 'In progress task');
 
     // Start the task to make it in_progress
     const { startTask } = await import('@/lib/db/queries/agentTasks');
@@ -154,7 +159,7 @@ describe('getAgentsWithPendingTasks', () => {
   });
 
   test('does not return agents with only completed tasks', async () => {
-    const task = await queueUserTask(testSubordinateId, testTeamId, 'Completed task');
+    const task = await queueUserTask(testSubordinateId, teamOwnerInfo(testTeamId), 'Completed task');
 
     // Complete the task
     const { startTask, completeTaskWithResult } = await import('@/lib/db/queries/agentTasks');
@@ -171,9 +176,9 @@ describe('getAgentsWithPendingTasks', () => {
   });
 
   test('returns distinct agent IDs even with multiple tasks', async () => {
-    const task1 = await queueUserTask(testSubordinateId, testTeamId, 'Task 1');
-    const task2 = await queueUserTask(testSubordinateId, testTeamId, 'Task 2');
-    const task3 = await queueUserTask(testSubordinateId, testTeamId, 'Task 3');
+    const task1 = await queueUserTask(testSubordinateId, teamOwnerInfo(testTeamId), 'Task 1');
+    const task2 = await queueUserTask(testSubordinateId, teamOwnerInfo(testTeamId), 'Task 2');
+    const task3 = await queueUserTask(testSubordinateId, teamOwnerInfo(testTeamId), 'Task 3');
 
     const agentIds = await getAgentsWithPendingTasks();
 
@@ -289,7 +294,7 @@ describe('Task Queue Integration', () => {
   test('queueUserTask calls notifyWorkerRunner', async () => {
     // Create a task - this should internally call notifyTaskQueued
     // We can verify by checking the task was created successfully
-    const task = await queueUserTask(testSubordinateId, testTeamId, 'Integration test task');
+    const task = await queueUserTask(testSubordinateId, teamOwnerInfo(testTeamId), 'Integration test task');
 
     expect(task).toBeDefined();
     expect(task.assignedToId).toBe(testSubordinateId);
@@ -347,7 +352,7 @@ describe('Combined Agent Selection', () => {
   });
 
   test('agents with pending tasks are selected', async () => {
-    const task = await queueUserTask(testSubordinateId, testTeamId, 'Subordinate task');
+    const task = await queueUserTask(testSubordinateId, teamOwnerInfo(testTeamId), 'Subordinate task');
 
     const agentsWithTasks = await getAgentsWithPendingTasks();
     expect(agentsWithTasks).toContain(testSubordinateId);
@@ -365,7 +370,7 @@ describe('Combined Agent Selection', () => {
 
   test('both sources can contribute agents', async () => {
     // Subordinate has pending task
-    const task = await queueUserTask(testSubordinateId, testTeamId, 'Subordinate task');
+    const task = await queueUserTask(testSubordinateId, teamOwnerInfo(testTeamId), 'Subordinate task');
 
     // Team lead is due to run
     const pastDate = new Date(Date.now() - 1000);
@@ -414,9 +419,9 @@ describe('Edge Cases', () => {
   test('handles concurrent task creation', async () => {
     // Create multiple tasks concurrently
     const tasks = await Promise.all([
-      queueUserTask(testSubordinateId, testTeamId, 'Task 1'),
-      queueUserTask(testSubordinateId, testTeamId, 'Task 2'),
-      queueUserTask(testSubordinateId, testTeamId, 'Task 3'),
+      queueUserTask(testSubordinateId, teamOwnerInfo(testTeamId), 'Task 1'),
+      queueUserTask(testSubordinateId, teamOwnerInfo(testTeamId), 'Task 2'),
+      queueUserTask(testSubordinateId, teamOwnerInfo(testTeamId), 'Task 3'),
     ]);
 
     const agentsWithTasks = await getAgentsWithPendingTasks();
@@ -427,7 +432,7 @@ describe('Edge Cases', () => {
 
   test('deduplicates agents from multiple sources', async () => {
     // Team lead has both: pending task AND is due to run
-    const task = await queueUserTask(testTeamLeadId, testTeamId, 'Team lead task');
+    const task = await queueUserTask(testTeamLeadId, teamOwnerInfo(testTeamId), 'Team lead task');
     const pastDate = new Date(Date.now() - 1000);
     await updateAgentNextRunAt(testTeamLeadId, pastDate);
 
