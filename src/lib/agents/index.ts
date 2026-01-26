@@ -82,7 +82,7 @@ export {
 export {
   registerSubordinateTools,
   reportToLeadTool,
-  requestInputTool,
+  requestLeadInputTool,
 } from "./tools/subordinate-tools";
 
 // Knowledge extraction and management

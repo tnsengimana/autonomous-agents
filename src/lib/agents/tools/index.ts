@@ -7,7 +7,7 @@
  * - Tool execution engine
  */
 
-import { z } from 'zod';
+import { z } from "zod";
 
 // ============================================================================
 // Tool Schema Types
@@ -15,7 +15,7 @@ import { z } from 'zod';
 
 export interface ToolParameter {
   name: string;
-  type: 'string' | 'number' | 'boolean' | 'object' | 'array';
+  type: "string" | "number" | "boolean" | "object" | "array";
   description: string;
   required?: boolean;
   enum?: string[];
@@ -42,7 +42,7 @@ export interface ToolResult {
 
 export type ToolHandler = (
   params: Record<string, unknown>,
-  context: ToolContext
+  context: ToolContext,
 ) => Promise<ToolResult>;
 
 export interface Tool {
@@ -83,13 +83,13 @@ export function getAllTools(): Tool[] {
 export function getLeadTools(): Tool[] {
   return getAllTools().filter((tool) =>
     [
-      'delegateToAgent',
-      'getTeamStatus',
-      'createInboxItem',
-      'tavilySearch',
-      'tavilyExtract',
-      'tavilyResearch',
-    ].includes(tool.schema.name)
+      "delegateToAgent",
+      "getTeamStatus",
+      "createInboxItem",
+      "tavilySearch",
+      "tavilyExtract",
+      "tavilyResearch",
+    ].includes(tool.schema.name),
   );
 }
 
@@ -98,7 +98,9 @@ export function getLeadTools(): Tool[] {
  */
 export function getKnowledgeItemTools(): Tool[] {
   return getAllTools().filter((tool) =>
-    ['addKnowledgeItem', 'listKnowledgeItems', 'removeKnowledgeItem'].includes(tool.schema.name)
+    ["addKnowledgeItem", "listKnowledgeItems", "removeKnowledgeItem"].includes(
+      tool.schema.name,
+    ),
   );
 }
 
@@ -109,15 +111,15 @@ export function getKnowledgeItemTools(): Tool[] {
 export function getForegroundTools(): Tool[] {
   // All tools except background coordination tools
   const backgroundOnlyTools = [
-    'delegateToAgent',
-    'createBriefing',
-    'createInboxItem',
-    'reportToLead',
-    'requestInput',
+    "delegateToAgent",
+    "createBriefing",
+    "createInboxItem",
+    "reportToLead",
+    "requestLeadInputTool",
   ];
 
   return getAllTools().filter(
-    (tool) => !backgroundOnlyTools.includes(tool.schema.name)
+    (tool) => !backgroundOnlyTools.includes(tool.schema.name),
   );
 }
 
@@ -127,15 +129,9 @@ export function getForegroundTools(): Tool[] {
  */
 export function getBackgroundTools(isLead: boolean): Tool[] {
   if (isLead) {
-    return [
-      ...getLeadTools(),
-      ...getKnowledgeItemTools(),
-    ];
+    return [...getLeadTools(), ...getKnowledgeItemTools()];
   }
-  return [
-    ...getSubordinateTools(),
-    ...getKnowledgeItemTools(),
-  ];
+  return [...getSubordinateTools(), ...getKnowledgeItemTools()];
 }
 
 /**
@@ -143,7 +139,7 @@ export function getBackgroundTools(isLead: boolean): Tool[] {
  */
 export function getSubordinateTools(): Tool[] {
   return getAllTools().filter((tool) =>
-    ['reportToLead', 'requestInput'].includes(tool.schema.name)
+    ["reportToLead", "requestLeadInputTool"].includes(tool.schema.name),
   );
 }
 
@@ -164,7 +160,7 @@ export function getToolSchemas(tools: Tool[]): ToolSchema[] {
 export async function executeTool(
   name: string,
   params: Record<string, unknown>,
-  context: ToolContext
+  context: ToolContext,
 ): Promise<ToolResult> {
   const tool = getTool(name);
 
@@ -180,7 +176,7 @@ export async function executeTool(
   } catch (error) {
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'Unknown error occurred',
+      error: error instanceof Error ? error.message : "Unknown error occurred",
     };
   }
 }
@@ -190,47 +186,54 @@ export async function executeTool(
 // ============================================================================
 
 export const DelegateToAgentParamsSchema = z.object({
-  agentId: z.string().uuid().describe('The subordinate agent ID to delegate to'),
-  task: z.string().min(1).describe('The task description'),
+  agentId: z
+    .string()
+    .uuid()
+    .describe("The subordinate agent ID to delegate to"),
+  task: z.string().min(1).describe("The task description"),
 });
 
 export const CreateInboxItemParamsSchema = z.object({
-  type: z
-    .enum(['signal', 'alert'])
-    .describe('The type of inbox item'),
-  title: z.string().min(1).describe('The title of the inbox item'),
-  summary: z.string().min(1).describe('A brief summary for the inbox notification (1-2 sentences)'),
-  fullMessage: z.string().min(1).describe('The full message content to be added to the conversation'),
-});
-
-export const CreateBriefingParamsSchema = z.object({
-  title: z.string().min(1).describe('The title of the briefing'),
+  type: z.enum(["signal", "alert"]).describe("The type of inbox item"),
+  title: z.string().min(1).describe("The title of the inbox item"),
   summary: z
     .string()
     .min(1)
-    .describe('A brief summary for the inbox notification (1-2 sentences)'),
+    .describe("A brief summary for the inbox notification (1-2 sentences)"),
   fullMessage: z
     .string()
     .min(1)
-    .describe('The full briefing content for the user'),
+    .describe("The full message content to be added to the conversation"),
+});
+
+export const CreateBriefingParamsSchema = z.object({
+  title: z.string().min(1).describe("The title of the briefing"),
+  summary: z
+    .string()
+    .min(1)
+    .describe("A brief summary for the inbox notification (1-2 sentences)"),
+  fullMessage: z
+    .string()
+    .min(1)
+    .describe("The full briefing content for the user"),
 });
 
 export const ReportToLeadParamsSchema = z.object({
-  result: z.string().min(1).describe('The result of the task'),
-  status: z
-    .enum(['success'])
-    .describe('Whether the task succeeded'),
+  result: z.string().min(1).describe("The result of the task"),
+  status: z.enum(["success"]).describe("Whether the task succeeded"),
 });
 
-export const RequestInputParamsSchema = z.object({
-  question: z.string().min(1).describe('The question to ask the lead'),
+export const RequestLeadInputParamsSchema = z.object({
+  question: z.string().min(1).describe("The question to ask the lead"),
 });
 
 export type DelegateToAgentParams = z.infer<typeof DelegateToAgentParamsSchema>;
 export type CreateInboxItemParams = z.infer<typeof CreateInboxItemParamsSchema>;
 export type CreateBriefingParams = z.infer<typeof CreateBriefingParamsSchema>;
 export type ReportToLeadParams = z.infer<typeof ReportToLeadParamsSchema>;
-export type RequestInputParams = z.infer<typeof RequestInputParamsSchema>;
+export type RequestLeadInputParams = z.infer<
+  typeof RequestLeadInputParamsSchema
+>;
 
 // ============================================================================
 // Tool Format Conversion
@@ -239,15 +242,13 @@ export type RequestInputParams = z.infer<typeof RequestInputParamsSchema>;
 /**
  * Convert tool schemas to OpenAI function format
  */
-export function toolSchemasToOpenAIFunctions(
-  schemas: ToolSchema[]
-): Array<{
-  type: 'function';
+export function toolSchemasToOpenAIFunctions(schemas: ToolSchema[]): Array<{
+  type: "function";
   function: {
     name: string;
     description: string;
     parameters: {
-      type: 'object';
+      type: "object";
       properties: Record<string, unknown>;
       required: string[];
     };
@@ -269,12 +270,12 @@ export function toolSchemasToOpenAIFunctions(
     }
 
     return {
-      type: 'function' as const,
+      type: "function" as const,
       function: {
         name: schema.name,
         description: schema.description,
         parameters: {
-          type: 'object',
+          type: "object",
           properties,
           required,
         },
