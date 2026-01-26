@@ -124,7 +124,7 @@ export default async function AideDetailPage({
         </div>
       </div>
 
-      {/* Agents */}
+      {/* Lead Agent */}
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between">
@@ -137,39 +137,34 @@ export default async function AideDetailPage({
           </div>
         </CardHeader>
         <CardContent>
-          {aide.agents.length === 0 ? (
-            <p className="text-muted-foreground">No agents yet.</p>
+          {!leadAgent ? (
+            <p className="text-muted-foreground">No lead agent yet.</p>
           ) : (
-            <div className="space-y-4">
-              {aide.agents.map((agent) => (
-                <Link
-                  key={agent.id}
-                  href={`/aides/${aide.id}/agents/${agent.id}`}
-                  className="block"
-                >
-                  <div className="flex items-center justify-between rounded-lg border p-4 transition-colors hover:bg-accent">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium">{agent.name}</span>
-                        <Badge variant="outline" className="text-xs">
-                          {agent.parentAgentId ? "subordinate" : "lead"}
-                        </Badge>
-                      </div>
-                      <div className="text-sm text-muted-foreground">
-                        {agent.role}
-                      </div>
-                    </div>
-                    <Badge
-                      variant={
-                        agent.status === "running" ? "default" : "secondary"
-                      }
-                    >
-                      {agent.status}
+            <Link
+              href={`/aides/${aide.id}/agents/${leadAgent.id}`}
+              className="block"
+            >
+              <div className="flex items-center justify-between rounded-lg border p-4 transition-colors hover:bg-accent">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium">{leadAgent.name}</span>
+                    <Badge variant="outline" className="text-xs">
+                      lead
                     </Badge>
                   </div>
-                </Link>
-              ))}
-            </div>
+                  <div className="text-sm text-muted-foreground">
+                    {leadAgent.role}
+                  </div>
+                </div>
+                <Badge
+                  variant={
+                    leadAgent.status === "running" ? "default" : "secondary"
+                  }
+                >
+                  {leadAgent.status}
+                </Badge>
+              </div>
+            </Link>
           )}
         </CardContent>
       </Card>
