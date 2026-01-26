@@ -9,6 +9,7 @@ import {
   appendMessage as dbAppendMessage,
   getRecentMessages,
   getLastMessage,
+  getConversationContext,
 } from '@/lib/db/queries/messages';
 import type {
   Conversation,
@@ -54,12 +55,24 @@ export async function getCurrentConversation(
 // ============================================================================
 
 /**
- * Load full conversation history
+ * Load full conversation history (all messages, no compaction awareness)
+ * Use loadConversationContext for compaction-aware loading
  */
 export async function loadConversationHistory(
   conversationId: string
 ): Promise<Message[]> {
   return getMessagesByConversationId(conversationId);
+}
+
+/**
+ * Load conversation context with compaction awareness
+ * Returns: latest summary (if any) + all messages created after it
+ * If no summary exists, returns all messages
+ */
+export async function loadConversationContext(
+  conversationId: string
+): Promise<Message[]> {
+  return getConversationContext(conversationId);
 }
 
 /**
@@ -132,26 +145,57 @@ export async function getConversationLastMessage(
 
 /**
  * Convert database messages to LLM message format
+ * Handles new roles: tool and summary are mapped to appropriate LLM roles
  */
 export function messagesToLLMFormat(messages: Message[]): LLMMessage[] {
   return messages
     .filter((m) => m.role !== 'system') // System messages are handled separately
     .map((m) => ({
-      role: m.role as 'user' | 'assistant',
+      role: mapRoleToLLMRole(m.role),
       content: m.content,
     }));
 }
 
 /**
+ * Map database message roles to LLM roles
+ * - user -> user
+ * - assistant -> assistant
+ * - summary -> assistant (summaries are context from the assistant's perspective)
+ * - tool -> assistant (tool results are assistant-side context)
+ */
+function mapRoleToLLMRole(role: string): 'user' | 'assistant' {
+  switch (role) {
+    case 'user':
+      return 'user';
+    case 'assistant':
+    case 'summary':
+    case 'tool':
+      return 'assistant';
+    default:
+      return 'assistant';
+  }
+}
+
+/**
  * Build the message context for an LLM call
- * Includes conversation history, optionally trimmed for context window
+ * Uses compaction-aware loading (summary + recent messages if compacted)
+ * Falls back to recent history if context is still too large
  */
 export async function buildMessageContext(
   conversationId: string,
   maxMessages: number = 50
 ): Promise<LLMMessage[]> {
-  const messages = await loadRecentHistory(conversationId, maxMessages);
-  return messagesToLLMFormat(messages);
+  // Use compaction-aware context loading
+  const contextMessages = await getConversationContext(conversationId);
+
+  // If context is within limit, use it directly
+  if (contextMessages.length <= maxMessages) {
+    return messagesToLLMFormat(contextMessages);
+  }
+
+  // If still too large, fall back to most recent messages
+  const recentMessages = await loadRecentHistory(conversationId, maxMessages);
+  return messagesToLLMFormat(recentMessages);
 }
 
 /**
