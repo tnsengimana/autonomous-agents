@@ -2,10 +2,10 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { useUnreadCount } from "@/hooks/useUnreadCount";
 
 const navItems = [
   { href: "/inbox", label: "Inbox", showUnreadCount: true },
@@ -15,28 +15,7 @@ const navItems = [
 
 export function Nav() {
   const pathname = usePathname();
-  const [unreadCount, setUnreadCount] = useState(0);
-
-  // Fetch unread count on mount and periodically
-  useEffect(() => {
-    async function fetchUnreadCount() {
-      try {
-        const response = await fetch("/api/inbox/unread-count");
-        if (response.ok) {
-          const data = await response.json();
-          setUnreadCount(data.unreadCount || 0);
-        }
-      } catch (error) {
-        console.error("Failed to fetch unread count:", error);
-      }
-    }
-
-    fetchUnreadCount();
-
-    // Refresh every 30 seconds
-    const interval = setInterval(fetchUnreadCount, 30000);
-    return () => clearInterval(interval);
-  }, []);
+  const unreadCount = useUnreadCount();
 
   return (
     <nav className="flex flex-col gap-1 p-4">
@@ -68,28 +47,7 @@ export function Nav() {
 
 export function MobileNav() {
   const pathname = usePathname();
-  const [unreadCount, setUnreadCount] = useState(0);
-
-  // Fetch unread count on mount and periodically
-  useEffect(() => {
-    async function fetchUnreadCount() {
-      try {
-        const response = await fetch("/api/inbox/unread-count");
-        if (response.ok) {
-          const data = await response.json();
-          setUnreadCount(data.unreadCount || 0);
-        }
-      } catch (error) {
-        console.error("Failed to fetch unread count:", error);
-      }
-    }
-
-    fetchUnreadCount();
-
-    // Refresh every 30 seconds
-    const interval = setInterval(fetchUnreadCount, 30000);
-    return () => clearInterval(interval);
-  }, []);
+  const unreadCount = useUnreadCount();
 
   return (
     <nav className="flex gap-1 overflow-x-auto p-2">

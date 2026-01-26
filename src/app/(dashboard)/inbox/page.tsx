@@ -80,7 +80,7 @@ export default function InboxPage() {
   const [selectedItem, setSelectedItem] = useState<InboxItem | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  // Fetch inbox items
+  // Fetch inbox items on mount and periodically
   useEffect(() => {
     async function fetchInbox() {
       try {
@@ -94,13 +94,19 @@ export default function InboxPage() {
         if (data.items.length > 0) {
           setSelectedItem((current) => current ?? data.items[0]);
         }
+        setError(null);
       } catch (err) {
         setError(err instanceof Error ? err.message : "An error occurred");
       } finally {
         setLoading(false);
       }
     }
+
     fetchInbox();
+
+    // Refresh every 30 seconds (same cadence as nav unread count)
+    const interval = setInterval(fetchInbox, 30000);
+    return () => clearInterval(interval);
   }, []);
 
   // Mark item as read when selected
