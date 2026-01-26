@@ -10,5 +10,4 @@ export * from './knowledge-items';
 export * from './messages';
 export * from './memories';
 export * from './teams';
-export * from './threads';
 export * from './userApiKeys';

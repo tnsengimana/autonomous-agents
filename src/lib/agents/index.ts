@@ -46,33 +46,13 @@ export {
   type ConversationSummary,
 } from './conversation';
 
-// Thread management (ephemeral work sessions)
+// Conversation compaction
 export {
-  startWorkSession,
-  getOrStartWorkSession,
-  endWorkSession,
-  hasActiveSession,
-  getSessionThread,
-  addToThread,
-  addUserMessage as addThreadUserMessage,
-  addAssistantMessage as addThreadAssistantMessage,
-  addSystemMessage as addThreadSystemMessage,
-  getMessages as getThreadMessages,
-  buildThreadContext,
-  threadMessagesToLLMFormat,
-  estimateTokenCount as estimateThreadTokenCount,
-  trimMessagesToTokenBudget as trimThreadMessagesToTokenBudget,
   shouldCompact,
   compactIfNeeded,
-  compactWithSummary,
-  clearThread,
-  getThreadStats,
-  initializeThreadWithPrompt,
-  type WorkSession,
-  type ThreadContext,
-  type ThreadStats,
-  type SummarizeFn,
-} from './thread';
+  compactConversation,
+  generateConversationSummary,
+} from './compaction';
 
 // Tools infrastructure
 export {
