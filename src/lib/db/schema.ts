@@ -118,7 +118,7 @@ export const agents = pgTable('agents', {
     .references(() => aides.id, { onDelete: 'cascade' }), // NEW - agent belongs to team OR aide
   parentAgentId: uuid('parent_agent_id').references((): AnyPgColumn => agents.id, { onDelete: 'cascade' }), // null for team leads
   name: text('name').notNull(),
-  role: text('role').notNull(),
+  type: text('type').notNull(), // 'lead' | 'subordinate'
   systemPrompt: text('system_prompt'),
   status: text('status').notNull().default('idle'), // 'idle', 'running', 'paused'
   leadNextRunAt: timestamp('lead_next_run_at', { mode: 'date' }), // Only used for lead agents (team leads, aide leads)
