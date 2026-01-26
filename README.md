@@ -14,8 +14,11 @@ You can start editing the page by modifying `app/page.tsx`. The page auto-update
 
 ## Learn More
 
-* This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
-* The project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+The project uses the following libraries:
+
+* [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+* [Drizzle](https://orm.drizzle.team/) for ORM and database migration. See [their documentation](https://orm.drizzle.team/docs/overview) for more details.
+* [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 
 ## Deployment
 

@@ -8,9 +8,8 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 
 const navItems = [
-  { href: "/dashboard", label: "Dashboard" },
-  { href: "/teams", label: "Teams" },
   { href: "/inbox", label: "Inbox", showUnreadCount: true },
+  { href: "/teams", label: "Teams" },
   { href: "/settings", label: "Settings" },
 ];
 

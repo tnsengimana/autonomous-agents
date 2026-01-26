@@ -1,7 +1,15 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
+import { auth } from "@/lib/auth/config";
 import { Button } from "@/components/ui/button";
 
-export default function Home() {
+export default async function Home() {
+  const session = await auth();
+
+  if (session?.user) {
+    redirect("/inbox");
+  }
+
   return (
     <div className="flex min-h-screen flex-col bg-background font-sans">
       {/* Hero Section */}

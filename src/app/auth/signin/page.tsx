@@ -27,7 +27,7 @@ export default function SignInPage() {
       const result = await signIn('nodemailer', {
         email,
         redirect: false,
-        callbackUrl: '/dashboard',
+        callbackUrl: '/inbox',
       });
 
       if (result?.error) {

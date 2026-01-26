@@ -154,7 +154,7 @@ export async function markAllAsRead(userId: string): Promise<void> {
 }
 
 /**
- * Get recent inbox items for a user (for dashboard preview)
+ * Get recent inbox items for a user (for inbox preview)
  */
 export async function getRecentInboxItems(
   userId: string,
