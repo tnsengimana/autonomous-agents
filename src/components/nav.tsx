@@ -30,7 +30,7 @@ export function Nav() {
               className={cn("w-full justify-start", isActive && "bg-secondary")}
             >
               <span className="flex-1 text-left">{item.label}</span>
-              {unreadCount > 0 && (
+              {item.href.endsWith("/inbox") && unreadCount > 0 && (
                 <Badge variant="destructive" className="ml-2 px-2 py-0 text-xs">
                   {unreadCount > 99 ? "99+" : unreadCount}
                 </Badge>
@@ -60,7 +60,7 @@ export function MobileNav() {
               className={cn(isActive && "bg-secondary", "relative")}
             >
               {item.label}
-              {unreadCount > 0 && (
+              {item.href.endsWith("/inbox") && unreadCount > 0 && (
                 <Badge
                   variant="destructive"
                   className="ml-1 px-1.5 py-0 text-xs min-w-[1.25rem] h-5"
