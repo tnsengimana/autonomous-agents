@@ -152,6 +152,7 @@ export async function createInboxItem(data: {
   type: string;
   title: string;
   content: string;
+  briefingId?: string | null;
 } & InboxItemOwnerInfo): Promise<InboxItem> {
   const result = await db
     .insert(inboxItems)
@@ -160,6 +161,7 @@ export async function createInboxItem(data: {
       teamId: 'teamId' in data ? data.teamId : null,
       aideId: 'aideId' in data ? data.aideId : null,
       agentId: data.agentId,
+      briefingId: data.briefingId ?? null,
       type: data.type,
       title: data.title,
       content: data.content,

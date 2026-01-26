@@ -34,6 +34,7 @@ export async function GET() {
       aideId: item.aideId,
       aideName,
       agentId: item.agentId,
+      briefingId: item.briefingId,
       read: item.readAt !== null,
       readAt: item.readAt,
       createdAt: item.createdAt,

@@ -10,6 +10,7 @@ import {
   type ToolResult,
   type ToolContext,
   DelegateToAgentParamsSchema,
+  CreateBriefingParamsSchema,
   CreateInboxItemParamsSchema,
 } from './index';
 import { createAgentTask } from '@/lib/db/queries/agentTasks';
@@ -19,7 +20,7 @@ import { getAideUserId } from '@/lib/db/queries/aides';
 import { getOrCreateConversation } from '@/lib/db/queries/conversations';
 import { appendMessage } from '@/lib/db/queries/messages';
 import { db } from '@/lib/db/client';
-import { inboxItems } from '@/lib/db/schema';
+import { briefings, inboxItems } from '@/lib/db/schema';
 
 /**
  * Helper to get owner info from context
@@ -178,6 +179,107 @@ const getTeamStatusTool: Tool = {
 };
 
 // ============================================================================
+// createBriefing
+// ============================================================================
+
+const createBriefingTool: Tool = {
+  schema: {
+    name: 'createBriefing',
+    description:
+      "Create a briefing for the user and push a notification to the inbox. Use only when the update is material and user-facing.",
+    parameters: [
+      {
+        name: 'title',
+        type: 'string',
+        description: 'A concise, specific title for the briefing',
+        required: true,
+      },
+      {
+        name: 'summary',
+        type: 'string',
+        description:
+          'A brief summary for the inbox notification (1-2 sentences)',
+        required: true,
+      },
+      {
+        name: 'fullMessage',
+        type: 'string',
+        description: 'The full briefing content for the user',
+        required: true,
+      },
+    ],
+  },
+  handler: async (params, context): Promise<ToolResult> => {
+    const parsed = CreateBriefingParamsSchema.safeParse(params);
+    if (!parsed.success) {
+      return {
+        success: false,
+        error: `Invalid parameters: ${parsed.error.message}`,
+      };
+    }
+
+    const { title, summary, fullMessage } = parsed.data;
+
+    if (!context.isLead) {
+      return {
+        success: false,
+        error: 'Only leads can create briefings',
+      };
+    }
+
+    const userId = await getOwnerUserId(context);
+    if (!userId) {
+      return {
+        success: false,
+        error: 'Could not find user for this team/aide',
+      };
+    }
+
+    const ownerInfo = getOwnerInfo(context);
+
+    const result = await db.transaction(async (tx) => {
+      const [briefing] = await tx
+        .insert(briefings)
+        .values({
+          userId,
+          teamId: 'teamId' in ownerInfo ? ownerInfo.teamId : null,
+          aideId: 'aideId' in ownerInfo ? ownerInfo.aideId : null,
+          agentId: context.agentId,
+          title,
+          summary,
+          content: fullMessage,
+        })
+        .returning();
+
+      const [inboxItem] = await tx
+        .insert(inboxItems)
+        .values({
+          userId,
+          teamId: 'teamId' in ownerInfo ? ownerInfo.teamId : null,
+          aideId: 'aideId' in ownerInfo ? ownerInfo.aideId : null,
+          agentId: context.agentId,
+          briefingId: briefing.id,
+          type: 'briefing',
+          title,
+          content: summary,
+        })
+        .returning();
+
+      return { briefing, inboxItem };
+    });
+
+    return {
+      success: true,
+      data: {
+        briefingId: result.briefing.id,
+        inboxItemId: result.inboxItem.id,
+        message: `Created briefing and inbox notification: ${title}`,
+      },
+    };
+  },
+};
+
+// ============================================================================
 // createInboxItem
 // ============================================================================
 
@@ -192,7 +294,7 @@ const createInboxItemTool: Tool = {
         type: 'string',
         description: 'The type of inbox item',
         required: true,
-        enum: ['briefing', 'signal', 'alert'],
+        enum: ['signal', 'alert'],
       },
       {
         name: 'title',
@@ -277,8 +379,14 @@ const createInboxItemTool: Tool = {
 export function registerLeadTools(): void {
   registerTool(delegateToAgentTool);
   registerTool(getTeamStatusTool);
+  registerTool(createBriefingTool);
   registerTool(createInboxItemTool);
 }
 
 // Export individual tools for testing
-export { delegateToAgentTool, getTeamStatusTool, createInboxItemTool };
+export {
+  delegateToAgentTool,
+  getTeamStatusTool,
+  createBriefingTool,
+  createInboxItemTool,
+};

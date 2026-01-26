@@ -94,9 +94,10 @@ The system separates user interactions (foreground) from agent work (background)
 2. Agent uses background conversation (persistent, with automatic compaction)
 3. Agent loads KNOWLEDGE ITEMS (professional knowledge)
 4. Processes task with tools in background conversation
-5. After queue empty: extracts knowledge from conversation
-6. Lead only: decides whether to brief user
-7. Next run scheduled
+5. After queue empty: lead appends a briefing-decision turn in the background conversation
+6. Lead only: may call `createBriefing` (writes `briefings` + inbox item; no foreground message)
+7. After briefing-decision turn: extracts knowledge from conversation
+8. Next run scheduled
 
 ### Key Patterns
 

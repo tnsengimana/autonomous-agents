@@ -9,7 +9,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth/config';
 import {
-  getInboxItemWithTeam,
+  getInboxItemWithSource,
   markAsRead,
   markAsUnread,
   deleteInboxItem,
@@ -33,12 +33,12 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     const { id } = await params;
 
     // 2. Get the inbox item with team info
-    const result = await getInboxItemWithTeam(id);
+    const result = await getInboxItemWithSource(id);
     if (!result) {
       return NextResponse.json({ error: 'Item not found' }, { status: 404 });
     }
 
-    const { item, teamName } = result;
+    const { item, teamName, aideName } = result;
 
     // 3. Verify user owns this item
     if (item.userId !== session.user.id) {
@@ -58,9 +58,12 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       content: item.content,
       teamId: item.teamId,
       teamName,
+      aideId: item.aideId,
+      aideName,
       read: true,
       readAt: item.readAt || new Date(),
       createdAt: item.createdAt,
+      briefingId: item.briefingId,
     });
   } catch (error) {
     console.error('Get inbox item error:', error);
@@ -85,7 +88,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     const { id } = await params;
 
     // 2. Get the inbox item
-    const result = await getInboxItemWithTeam(id);
+    const result = await getInboxItemWithSource(id);
     if (!result) {
       return NextResponse.json({ error: 'Item not found' }, { status: 404 });
     }
@@ -143,7 +146,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
     const { id } = await params;
 
     // 2. Get the inbox item
-    const result = await getInboxItemWithTeam(id);
+    const result = await getInboxItemWithSource(id);
     if (!result) {
       return NextResponse.json({ error: 'Item not found' }, { status: 404 });
     }

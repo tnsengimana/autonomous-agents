@@ -12,7 +12,6 @@ import { agentTasks } from "@/lib/db/schema";
 import {
   getActiveConversation,
   buildMessageContext,
-  addAssistantMessage,
   trimMessagesToTokenBudget,
   loadConversationHistory,
   messagesToLLMFormat,
@@ -27,6 +26,7 @@ import {
 import {
   getBackgroundTools,
   getForegroundTools,
+  getTool,
   type ToolContext,
 } from "./tools";
 import { extractAndPersistMemories, buildMemoryContextBlock } from "./memory";
@@ -443,8 +443,8 @@ Examples:
    * 2. Loads KNOWLEDGE for work context (not memories)
    * 3. Processes all pending tasks in queue
    * 4. When queue empty:
-   *    - Extracts knowledge from conversation
    *    - Lead: decides on briefing
+   *    - Extracts knowledge from conversation
    *    - Schedules next run
    *
    * Note: Background conversation is persistent across work sessions (unlike the old session model)
@@ -517,7 +517,12 @@ Examples:
         );
       }
 
-      // Extract knowledge from background conversation
+      // Lead: decide on briefing
+      if (this.isLead() && !encounteredFailure) {
+        await this.decideBriefing(conversationId);
+      }
+
+      // Extract knowledge from background conversation (after briefing decision turn)
       const conversationMessages = await getConversationContext(conversationId);
       const newKnowledge = await this.extractKnowledgeFromConversation(
         conversationId,
@@ -528,11 +533,6 @@ Examples:
       );
 
       // No session to end - conversation persists across sessions
-
-      // Lead: decide on briefing
-      if (this.isLead()) {
-        await this.decideBriefing(conversationId);
-      }
 
       // Schedule next run (lead: 1 day, subordinate: none - triggered by delegation)
       if (this.isLead() && !encounteredFailure) {
@@ -728,101 +728,107 @@ Examples:
       .join("\n\n")
       .slice(0, 2000); // Limit context size
 
-    // Schema for briefing decision
-    const BriefingDecisionSchema = z.object({
-      shouldBrief: z
-        .boolean()
-        .describe("Whether this work warrants notifying the user"),
-      reason: z.string().describe("Brief reason for the decision"),
-      title: z
-        .string()
-        .optional()
-        .describe("Title for the briefing if shouldBrief is true"),
-      summary: z
-        .string()
-        .optional()
-        .describe("Summary for inbox if shouldBrief is true"),
-      fullMessage: z
-        .string()
-        .optional()
-        .describe("Full briefing message if shouldBrief is true"),
-    });
+    // Get user ID based on owner type
+    let userId: string | null = null;
+    if (this.teamId) {
+      const { getTeamUserId } = await import("@/lib/db/queries/teams");
+      userId = await getTeamUserId(this.teamId);
+    } else if (this.aideId) {
+      const { getAideUserId } = await import("@/lib/db/queries/aides");
+      userId = await getAideUserId(this.aideId);
+    }
 
-    // Ask LLM to decide
-    const decisionPrompt = `Review this work session and decide if the user should be briefed.
+    if (!userId) {
+      console.error(`[Agent ${this.name}] No user found for team/aide`);
+      return;
+    }
+
+    const { getRecentBriefingsByOwner } = await import(
+      "@/lib/db/queries/briefings",
+    );
+    const recentBriefings = await getRecentBriefingsByOwner(
+      { userId, ...this.getOwnerInfo() },
+      5,
+    );
+    const recentBriefingsBlock =
+      recentBriefings.length === 0
+        ? "None."
+        : recentBriefings
+            .map((briefing) => {
+              const dateLabel = briefing.createdAt
+                .toISOString()
+                .slice(0, 10);
+              return `- ${dateLabel}: ${briefing.title} — ${briefing.summary}`;
+            })
+            .join("\n");
+
+    const decisionPrompt = `You are reviewing a completed background work session. Decide whether to notify the user by creating a briefing.
 
 Work completed:
-${workSummary}
+${workSummary || "No assistant output yet."}
 
-Guidelines for briefing:
-- Brief if there are significant findings, insights, or completed user requests
-- Brief if there are important market signals or alerts
-- DO NOT brief for routine maintenance, minor updates, or no-op sessions
-- The user should not be overwhelmed with notifications
+Recent briefings (most recent first):
+${recentBriefingsBlock}
 
-If briefing is warranted, provide:
-- A concise title
-- A brief summary (1-2 sentences for the inbox)
-- A full message with details for the conversation`;
+Briefing rules (read carefully):
+- Briefings are OPTIONAL. Default to NO briefing.
+- Only brief when there is material, user-visible progress or a significant insight the user should act on.
+- Do NOT brief for routine steps, partial progress, internal notes, minor updates, or repeated information.
+- If the outcome is not clearly useful or timely for the user, skip the briefing.
+- Avoid duplicating prior briefings; if this overlaps with recent briefings, do not brief.
+- When in doubt, do NOT brief.
+
+If a briefing is truly warranted, call the createBriefing tool with:
+- title: concise and specific
+- summary: 1-2 sentences for the inbox
+- fullMessage: the full briefing content (clear, actionable, and user-facing)
+
+If no briefing is warranted, respond with a short sentence starting with \"No briefing:\" and do NOT call any tools.`;
 
     try {
-      const decision = await generateLLMObject(
-        [{ role: "user", content: decisionPrompt }],
-        BriefingDecisionSchema,
-        "You are a thoughtful assistant deciding what warrants user attention.",
+      const createBriefingTool = getTool("createBriefing");
+      if (!createBriefingTool) {
+        console.error(
+          `[Agent ${this.name}] createBriefing tool not registered`,
+        );
+        return;
+      }
+
+      const toolContext: ToolContext = {
+        agentId: this.id,
+        teamId: this.teamId,
+        aideId: this.aideId,
+        isLead: this.isLead(),
+      };
+
+      const contextWithPrompt: LLMMessage[] = [
+        ...this.messagesToLLMFormat(messages),
+        { role: "user", content: decisionPrompt },
+      ];
+      const result = await streamLLMResponseWithTools(
+        contextWithPrompt,
+        this.buildBackgroundSystemPrompt(),
         {
           ...this.llmOptions,
-          temperature: 0,
+          tools: [createBriefingTool],
+          toolContext,
+          maxSteps: 3,
+          maxOutputTokens: DEFAULT_MAX_RESPONSE_TOKENS,
         },
       );
 
-      if (
-        decision.shouldBrief &&
-        decision.title &&
-        decision.summary &&
-        decision.fullMessage
-      ) {
-        console.log(
-          `[Agent ${this.name}] Creating briefing: ${decision.title}`,
+      const fullResponse = await result.fullResponse;
+
+      await db.transaction(async (tx) => {
+        await createTurnMessagesInTransaction(
+          tx,
+          conversationId,
+          { role: "user", content: decisionPrompt },
+          { role: "assistant", content: fullResponse.text },
         );
+      });
 
-        // Get user ID based on owner type
-        let userId: string | null = null;
-        if (this.teamId) {
-          const { getTeamUserId } = await import("@/lib/db/queries/teams");
-          userId = await getTeamUserId(this.teamId);
-        } else if (this.aideId) {
-          const { getAideUserId } = await import("@/lib/db/queries/aides");
-          userId = await getAideUserId(this.aideId);
-        }
-
-        if (!userId) {
-          console.error(`[Agent ${this.name}] No user found for team/aide`);
-          return;
-        }
-
-        // Create inbox item with appropriate owner
-        const { createInboxItem } = await import("@/lib/db/queries/inboxItems");
-        const ownerInfo = this.getOwnerInfo();
-        await createInboxItem({
-          userId,
-          ...ownerInfo,
-          agentId: this.id,
-          type: "briefing",
-          title: decision.title,
-          content: decision.summary,
-        });
-
-        // Add full message to user conversation
-        const conversation = await this.ensureConversation();
-        await addAssistantMessage(conversation.id, decision.fullMessage);
-
-        console.log(`[Agent ${this.name}] Briefing sent successfully`);
-      } else {
-        console.log(
-          `[Agent ${this.name}] No briefing needed: ${decision.reason}`,
-        );
-      }
+      console.log(`[Agent ${this.name}] Briefing decision recorded`);
     } catch (error) {
       console.error(`[Agent ${this.name}] Failed to decide briefing:`, error);
     }

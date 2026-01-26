@@ -12,7 +12,17 @@
 
 import { describe, test, expect, beforeAll, afterAll, beforeEach, vi } from 'vitest';
 import { db } from '@/lib/db/client';
-import { users, teams, agents, agentTasks, knowledgeItems, conversations, messages } from '@/lib/db/schema';
+import {
+  users,
+  teams,
+  agents,
+  agentTasks,
+  knowledgeItems,
+  conversations,
+  messages,
+  briefings,
+  inboxItems,
+} from '@/lib/db/schema';
 import { eq, and } from 'drizzle-orm';
 
 // Import the Agent class and related functions
@@ -28,6 +38,7 @@ import { getTool, executeTool, type ToolContext } from '@/lib/agents/tools';
 import { createKnowledgeItem, getKnowledgeItemsByAgentId, deleteKnowledgeItem } from '@/lib/db/queries/knowledge-items';
 import { getOrCreateConversation } from '@/lib/db/queries/conversations';
 import * as llm from '@/lib/agents/llm';
+import { registerLeadTools } from '@/lib/agents/tools/lead-tools';
 
 // ============================================================================
 // Test Setup
@@ -78,6 +89,7 @@ beforeAll(async () => {
 
   // Register knowledge item tools
   registerKnowledgeItemTools();
+  registerLeadTools();
 });
 
 afterAll(async () => {
@@ -92,6 +104,8 @@ async function cleanupTestData() {
   await db.delete(agentTasks).where(eq(agentTasks.teamId, testTeamId));
   await db.delete(knowledgeItems).where(eq(knowledgeItems.agentId, testTeamLeadId));
   await db.delete(knowledgeItems).where(eq(knowledgeItems.agentId, testSubordinateId));
+  await db.delete(inboxItems).where(eq(inboxItems.userId, testUserId));
+  await db.delete(briefings).where(eq(briefings.userId, testUserId));
   await db.delete(conversations).where(eq(conversations.agentId, testTeamLeadId));
   await db.delete(conversations).where(eq(conversations.agentId, testSubordinateId));
 }
@@ -467,12 +481,75 @@ describe('decideBriefing', () => {
     expect(messagesAfter.length).toBe(countBefore);
   });
 
+  test('lead decideBriefing appends a decision turn to background conversation', async () => {
+    const bgConversation = await getOrCreateConversation(testTeamLeadId, 'background');
+    await db.insert(messages).values({
+      conversationId: bgConversation.id,
+      role: 'assistant',
+      content: 'Completed a research sweep on the market.',
+    });
+
+    const agent = await createAgent(testTeamLeadId);
+
+    const beforeMessages = await db.select().from(messages)
+      .where(eq(messages.conversationId, bgConversation.id));
+
+    await agent!.decideBriefing(bgConversation.id);
+
+    const afterMessages = await db.select().from(messages)
+      .where(eq(messages.conversationId, bgConversation.id));
+
+    expect(afterMessages.length).toBe(beforeMessages.length + 2);
+  });
+
   test('isTeamLead check works in decideBriefing', async () => {
     const subordinateAgent = await createAgent(testSubordinateId);
     const teamLeadAgent = await createAgent(testTeamLeadId);
 
     expect(subordinateAgent!.isLead()).toBe(false);
     expect(teamLeadAgent!.isLead()).toBe(true);
+  });
+});
+
+// ============================================================================
+// createBriefing Tool Tests
+// ============================================================================
+
+describe('createBriefing tool', () => {
+  test('creates briefing + inbox item without touching foreground conversation', async () => {
+    const toolContext: ToolContext = {
+      agentId: testTeamLeadId,
+      teamId: testTeamId,
+      aideId: null,
+      isLead: true,
+    };
+
+    const fgConversation = await getOrCreateConversation(testTeamLeadId, 'foreground');
+    const beforeMessages = await db.select().from(messages)
+      .where(eq(messages.conversationId, fgConversation.id));
+
+    const result = await executeTool('createBriefing', {
+      title: 'Market Update: Key Movement',
+      summary: 'A notable shift was detected in the market.',
+      fullMessage: 'Full briefing details for the user.',
+    }, toolContext);
+
+    expect(result.success).toBe(true);
+    expect(result.data).toHaveProperty('briefingId');
+    expect(result.data).toHaveProperty('inboxItemId');
+
+    const [briefing] = await db.select().from(briefings)
+      .where(eq(briefings.userId, testUserId));
+    const [inboxItem] = await db.select().from(inboxItems)
+      .where(eq(inboxItems.userId, testUserId));
+
+    expect(briefing).toBeDefined();
+    expect(inboxItem).toBeDefined();
+    expect(inboxItem.briefingId).toBe(briefing.id);
+
+    const afterMessages = await db.select().from(messages)
+      .where(eq(messages.conversationId, fgConversation.id));
+    expect(afterMessages.length).toBe(beforeMessages.length);
   });
 });
 

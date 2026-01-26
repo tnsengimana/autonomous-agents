@@ -24,6 +24,7 @@ interface InboxItem {
   aideId: string | null;
   aideName: string | null;
   agentId: string;
+  briefingId: string | null;
   read: boolean;
   readAt: string | null;
   createdAt: string;
@@ -38,7 +39,14 @@ function getSourceLabel(item: InboxItem): string {
   return item.teamId ? "Team" : "Aide";
 }
 
-function getConversationLink(item: InboxItem): string {
+function getItemLink(item: InboxItem): string {
+  if (item.type === "briefing" && item.briefingId) {
+    if (item.teamId) {
+      return `/teams/${item.teamId}/briefings/${item.briefingId}`;
+    }
+    return `/aides/${item.aideId}/briefings/${item.briefingId}`;
+  }
+
   if (item.teamId) {
     return `/teams/${item.teamId}/agents/${item.agentId}/chat`;
   }
@@ -363,8 +371,8 @@ export default function InboxPage() {
                   <Separator className="my-6" />
                   <div className="flex justify-center">
                     <Button asChild>
-                      <Link href={getConversationLink(selectedItem)}>
-                        View Conversation
+                      <Link href={getItemLink(selectedItem)}>
+                        {selectedItem.type === "briefing" ? "View Briefing" : "View Conversation"}
                       </Link>
                     </Button>
                   </div>

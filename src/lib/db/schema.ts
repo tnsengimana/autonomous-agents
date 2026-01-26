@@ -183,12 +183,45 @@ export const inboxItems = pgTable('inbox_items', {
   agentId: uuid('agent_id')
     .notNull()
     .references(() => agents.id, { onDelete: 'cascade' }),
+  briefingId: uuid('briefing_id').references(() => briefings.id, {
+    onDelete: 'set null',
+  }),
   type: text('type').notNull(), // 'insight', 'question', 'alert', etc.
   title: text('title').notNull(),
   content: text('content').notNull(),
   readAt: timestamp('read_at', { mode: 'date' }),
   createdAt: timestamp('created_at', { mode: 'date' }).defaultNow().notNull(),
 });
+
+export const briefings = pgTable(
+  'briefings',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    teamId: uuid('team_id').references(() => teams.id, {
+      onDelete: 'cascade',
+    }),
+    aideId: uuid('aide_id').references(() => aides.id, {
+      onDelete: 'cascade',
+    }),
+    agentId: uuid('agent_id')
+      .notNull()
+      .references(() => agents.id, { onDelete: 'cascade' }),
+    title: text('title').notNull(),
+    summary: text('summary').notNull(),
+    content: text('content').notNull(),
+    createdAt: timestamp('created_at', { mode: 'date' }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { mode: 'date' }).defaultNow().notNull(),
+  },
+  (table) => [
+    index('briefings_user_id_idx').on(table.userId),
+    index('briefings_team_id_idx').on(table.teamId),
+    index('briefings_aide_id_idx').on(table.aideId),
+    index('briefings_agent_id_idx').on(table.agentId),
+  ]
+);
 
 export const agentTasks = pgTable('agent_tasks', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -238,6 +271,7 @@ export const usersRelations = relations(users, ({ many }) => ({
   teams: many(teams),
   aides: many(aides),
   inboxItems: many(inboxItems),
+  briefings: many(briefings),
 }));
 
 export const accountsRelations = relations(accounts, ({ one }) => ({
@@ -268,6 +302,7 @@ export const teamsRelations = relations(teams, ({ one, many }) => ({
   }),
   agents: many(agents),
   inboxItems: many(inboxItems),
+  briefings: many(briefings),
   agentTasks: many(agentTasks),
 }));
 
@@ -278,6 +313,7 @@ export const aidesRelations = relations(aides, ({ one, many }) => ({
   }),
   agents: many(agents),
   inboxItems: many(inboxItems),
+  briefings: many(briefings),
   agentTasks: many(agentTasks),
 }));
 
@@ -301,6 +337,7 @@ export const agentsRelations = relations(agents, ({ one, many }) => ({
   conversations: many(conversations),
   memories: many(memories),
   inboxItems: many(inboxItems),
+  briefings: many(briefings),
   assignedTasks: many(agentTasks, {
     relationName: 'assignedTasks',
   }),
@@ -361,6 +398,29 @@ export const inboxItemsRelations = relations(inboxItems, ({ one }) => ({
   }),
   agent: one(agents, {
     fields: [inboxItems.agentId],
+    references: [agents.id],
+  }),
+  briefing: one(briefings, {
+    fields: [inboxItems.briefingId],
+    references: [briefings.id],
+  }),
+}));
+
+export const briefingsRelations = relations(briefings, ({ one }) => ({
+  user: one(users, {
+    fields: [briefings.userId],
+    references: [users.id],
+  }),
+  team: one(teams, {
+    fields: [briefings.teamId],
+    references: [teams.id],
+  }),
+  aide: one(aides, {
+    fields: [briefings.aideId],
+    references: [aides.id],
+  }),
+  agent: one(agents, {
+    fields: [briefings.agentId],
     references: [agents.id],
   }),
 }));

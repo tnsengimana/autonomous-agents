@@ -74,6 +74,7 @@ export {
   registerLeadTools,
   delegateToAgentTool,
   getTeamStatusTool,
+  createBriefingTool,
   createInboxItemTool,
 } from "./tools/lead-tools";
 

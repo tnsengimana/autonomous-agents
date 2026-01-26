@@ -10,6 +10,7 @@ import type {
   agents,
   agentTasks,
   aides,
+  briefings,
   conversations,
   knowledgeItems,
   memories,
@@ -25,6 +26,7 @@ import type {
 export type Agent = InferSelectModel<typeof agents>;
 export type AgentTask = InferSelectModel<typeof agentTasks>;
 export type Aide = InferSelectModel<typeof aides>;
+export type Briefing = InferSelectModel<typeof briefings>;
 export type Conversation = InferSelectModel<typeof conversations>;
 export type KnowledgeItem = InferSelectModel<typeof knowledgeItems>;
 export type Memory = InferSelectModel<typeof memories>;
@@ -125,6 +127,7 @@ export interface InboxItem {
   teamId: string | null;
   aideId: string | null;
   agentId: string;
+  briefingId: string | null;
   type: InboxItemType;
   title: string;
   content: string;

@@ -110,6 +110,7 @@ export function getForegroundTools(): Tool[] {
   // All tools except background coordination tools
   const backgroundOnlyTools = [
     'delegateToAgent',
+    'createBriefing',
     'createInboxItem',
     'reportToLead',
     'requestInput',
@@ -195,11 +196,23 @@ export const DelegateToAgentParamsSchema = z.object({
 
 export const CreateInboxItemParamsSchema = z.object({
   type: z
-    .enum(['briefing', 'signal', 'alert'])
+    .enum(['signal', 'alert'])
     .describe('The type of inbox item'),
   title: z.string().min(1).describe('The title of the inbox item'),
   summary: z.string().min(1).describe('A brief summary for the inbox notification (1-2 sentences)'),
   fullMessage: z.string().min(1).describe('The full message content to be added to the conversation'),
+});
+
+export const CreateBriefingParamsSchema = z.object({
+  title: z.string().min(1).describe('The title of the briefing'),
+  summary: z
+    .string()
+    .min(1)
+    .describe('A brief summary for the inbox notification (1-2 sentences)'),
+  fullMessage: z
+    .string()
+    .min(1)
+    .describe('The full briefing content for the user'),
 });
 
 export const ReportToLeadParamsSchema = z.object({
@@ -215,6 +228,7 @@ export const RequestInputParamsSchema = z.object({
 
 export type DelegateToAgentParams = z.infer<typeof DelegateToAgentParamsSchema>;
 export type CreateInboxItemParams = z.infer<typeof CreateInboxItemParamsSchema>;
+export type CreateBriefingParams = z.infer<typeof CreateBriefingParamsSchema>;
 export type ReportToLeadParams = z.infer<typeof ReportToLeadParamsSchema>;
 export type RequestInputParams = z.infer<typeof RequestInputParamsSchema>;
 
