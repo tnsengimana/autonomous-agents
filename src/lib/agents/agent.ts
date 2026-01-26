@@ -6,6 +6,8 @@ import {
   addUserMessage,
   addAssistantMessage,
   trimMessagesToTokenBudget,
+  loadConversationHistory,
+  messagesToLLMFormat,
 } from './conversation';
 import {
   streamLLMResponse,
@@ -16,6 +18,7 @@ import {
 } from './llm';
 import {
   getBackgroundTools,
+  getForegroundTools,
   type ToolContext,
 } from './tools';
 import {
@@ -58,6 +61,17 @@ const DEFAULT_MAX_RESPONSE_TOKENS = 2000;
 // Work session configuration
 const MAX_THREAD_MESSAGES_BEFORE_COMPACT = 50;
 const TEAM_LEAD_NEXT_RUN_HOURS = 24; // 1 day
+
+// ============================================================================
+// User Intent Classification
+// ============================================================================
+
+const UserIntentSchema = z.object({
+  intent: z.enum(['work_request', 'regular_chat']),
+  reasoning: z.string().describe('Brief explanation of classification'),
+});
+
+type UserIntent = 'work_request' | 'regular_chat';
 
 // ============================================================================
 // Agent Class
@@ -214,6 +228,27 @@ Always be professional, concise, and focused on your role.`;
   }
 
   /**
+   * Build the system prompt for foreground chat (with chat guidelines)
+   */
+  buildForegroundSystemPrompt(): string {
+    const basePrompt = this.buildSystemPrompt();
+
+    const foregroundGuidance = `
+
+## Chat Guidelines
+
+You are chatting directly with the user. You have access to tools for looking up information.
+
+If the user's question would benefit from deeper research or extended analysis:
+- Answer what you can now
+- Suggest: "Would you like me to research this more thoroughly? I can work on it in the background and notify you when I have results."
+
+Do NOT automatically queue background work - let the user decide if they want deeper research.`;
+
+    return basePrompt + foregroundGuidance;
+  }
+
+  /**
    * Build the complete context for an LLM call
    */
   async buildContext(
@@ -227,6 +262,96 @@ Always be professional, concise, and focused on your role.`;
   }
 
   // ============================================================================
+  // Intent Classification and Response Generation
+  // ============================================================================
+
+  /**
+   * Classify user intent as work_request or regular_chat
+   */
+  private async classifyUserIntent(content: string): Promise<UserIntent> {
+    const prompt = `Classify this user message:
+"${content}"
+
+- work_request: User explicitly asks for work, research, or analysis to be done
+  Examples: "Research NVIDIA earnings", "Analyze my portfolio", "Find articles about AI"
+
+- regular_chat: Questions, greetings, feedback, discussion, simple lookups
+  Examples: "Hi", "Thanks!", "What do you think about tech stocks?", "What's TSLA at?"`;
+
+    const result = await generateLLMObject(
+      [{ role: 'user', content: prompt }],
+      UserIntentSchema,
+      'Classify user intent',
+      { ...this.llmOptions, maxOutputTokens: 100, temperature: 0 }
+    );
+
+    return result.intent;
+  }
+
+  /**
+   * Generate a brief acknowledgment for work requests
+   */
+  private async generateWorkAcknowledgment(content: string): Promise<string> {
+    const prompt = `The user just submitted this work request:
+"${content}"
+
+Generate a brief acknowledgment (1-2 sentences) that:
+1. Shows you understand what they're asking for
+2. Mentions you'll work on it and notify them via their inbox when done
+
+Examples:
+- "I'll research the latest NVIDIA earnings and notify you via your inbox when I have results."
+- "I'll analyze your portfolio performance. You'll get a notification in your inbox once I'm done."`;
+
+    const response = await generateLLMResponse(
+      [{ role: 'user', content: prompt }],
+      this.buildSystemPrompt(),
+      { ...this.llmOptions, maxOutputTokens: 100, temperature: 0.7 }
+    );
+
+    return response.content;
+  }
+
+  /**
+   * Generate a full chat response with tools for regular conversation
+   */
+  private async generateChatResponse(
+    content: string,
+    conversation: Conversation
+  ): Promise<string> {
+    // Load conversation history
+    const history = await loadConversationHistory(conversation.id);
+    const messages = messagesToLLMFormat(history);
+
+    // Add the current user message
+    const messagesWithNew: LLMMessage[] = [...messages, { role: 'user', content }];
+
+    const systemPrompt = this.buildForegroundSystemPrompt();
+    const tools = getForegroundTools();
+    const toolContext: ToolContext = {
+      agentId: this.id,
+      teamId: this.teamId,
+      isTeamLead: this.isTeamLead(),
+    };
+
+    const result = await streamLLMResponseWithTools(
+      messagesWithNew,
+      systemPrompt,
+      {
+        ...this.llmOptions,
+        tools,
+        toolContext,
+        maxSteps: 5,
+        maxOutputTokens: DEFAULT_MAX_RESPONSE_TOKENS,
+      }
+    );
+
+    // Consume the stream and get full response
+    const fullResponse = await result.fullResponse;
+    return fullResponse.text;
+  }
+
+  // ============================================================================
   // NEW: Foreground Message Handling (User Conversations)
   // ============================================================================
 
@@ -236,10 +361,11 @@ Always be professional, concise, and focused on your role.`;
    * This method:
    * 1. Loads MEMORIES for user context
    * 2. Adds user message to conversation
-   * 3. Generates a quick contextual acknowledgment
-   * 4. Adds ack to conversation
-   * 5. Queues the task for background processing
-   * 6. Returns the acknowledgment as a stream
+   * 3. Classifies intent (work_request or regular_chat)
+   * 4a. Work request: generates ack, queues task
+   * 4b. Regular chat: generates full response with tools
+   * 5. Extracts memories in background
+   * 6. Returns the response as a stream
    */
   async handleUserMessage(content: string): Promise<AsyncIterable<string>> {
     // 1. Load memories for user context (not knowledge items)
@@ -249,50 +375,39 @@ Always be professional, concise, and focused on your role.`;
     // 2. Add user message to conversation
     await addUserMessage(conversation.id, content);
 
-    // 3. Generate quick contextual acknowledgment
-    const ackPrompt = `The user just sent you this message:
-"${content}"
+    // 3. Classify intent
+    const intent = await this.classifyUserIntent(content);
 
-Generate a brief, natural acknowledgment (1-2 sentences) that shows you understand what they're asking for.
-Don't answer the question yet - just acknowledge that you'll look into it.
-Examples:
-- "I'll look into the latest NVIDIA earnings for you."
-- "Let me research current market trends for semiconductor stocks."
-- "I'll analyze your portfolio's performance and get back to you."`;
+    let response: string;
 
-    const systemPrompt = this.buildSystemPrompt();
-    const ackResponse = await generateLLMResponse(
-      [{ role: 'user', content: ackPrompt }],
-      systemPrompt,
-      {
-        ...this.llmOptions,
-        maxOutputTokens: 100, // Keep it short
-        temperature: 0.7,
-      }
-    );
-
-    const acknowledgment = ackResponse.content;
-
-    // 4. Add acknowledgment to conversation
-    await addAssistantMessage(conversation.id, acknowledgment);
-
-    // 5. Queue task for background processing
-    await queueUserTask(this.id, this.teamId, content);
-
-    // 6. Return the acknowledgment as a stream (for API compatibility)
-    async function* streamAck(): AsyncGenerator<string> {
-      // Yield the acknowledgment in chunks for streaming feel
-      const words = acknowledgment.split(' ');
-      for (const word of words) {
-        yield word + ' ';
-        await new Promise((resolve) => setTimeout(resolve, 20));
-      }
+    if (intent === 'work_request') {
+      // 4a. Work request: Quick ack + queue task
+      response = await this.generateWorkAcknowledgment(content);
+      await addAssistantMessage(conversation.id, response);
+      await queueUserTask(this.id, this.teamId, content);
+    } else {
+      // 4b. Regular chat: Full response with tools
+      response = await this.generateChatResponse(content, conversation);
+      await addAssistantMessage(conversation.id, response);
+      // No task queued
     }
 
-    // Extract memories in background (from user message + ack)
-    this.extractMemoriesInBackground(content, acknowledgment, '');
+    // 5. Extract memories in background
+    this.extractMemoriesInBackground(content, response, '');
 
-    return streamAck();
+    // 6. Return response as stream
+    return this.streamResponse(response);
+  }
+
+  /**
+   * Helper to stream a pre-generated response (for API compatibility)
+   */
+  private async *streamResponse(response: string): AsyncGenerator<string> {
+    const words = response.split(' ');
+    for (const word of words) {
+      yield word + ' ';
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    }
   }
 
   // ============================================================================

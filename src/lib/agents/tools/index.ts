@@ -106,7 +106,17 @@ export function getKnowledgeItemTools(): Tool[] {
  * These help agents manage knowledge shared by users
  */
 export function getForegroundTools(): Tool[] {
-  return getKnowledgeItemTools();
+  // All tools except background coordination tools
+  const backgroundOnlyTools = [
+    'delegateToAgent',
+    'createInboxItem',
+    'reportToLead',
+    'requestInput',
+  ];
+
+  return getAllTools().filter(
+    (tool) => !backgroundOnlyTools.includes(tool.schema.name)
+  );
 }
 
 /**

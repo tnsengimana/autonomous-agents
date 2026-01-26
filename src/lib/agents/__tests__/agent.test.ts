@@ -10,7 +10,7 @@
  * Uses MOCK_LLM=true for testing without real API calls.
  */
 
-import { describe, test, expect, beforeAll, afterAll, beforeEach } from 'vitest';
+import { describe, test, expect, beforeAll, afterAll, beforeEach, vi } from 'vitest';
 import { db } from '@/lib/db/client';
 import { users, teams, agents, agentTasks, knowledgeItems, threads, threadMessages, messages } from '@/lib/db/schema';
 import { eq, and } from 'drizzle-orm';
@@ -22,6 +22,7 @@ import { registerKnowledgeItemTools } from '@/lib/agents/tools/knowledge-item-to
 import { getTool, executeTool, type ToolContext } from '@/lib/agents/tools';
 import { createKnowledgeItem, getKnowledgeItemsByAgentId, deleteKnowledgeItem } from '@/lib/db/queries/knowledge-items';
 import { createThread } from '@/lib/db/queries/threads';
+import * as llm from '@/lib/agents/llm';
 
 // ============================================================================
 // Test Setup
@@ -146,15 +147,21 @@ describe('Agent Class', () => {
 });
 
 // ============================================================================
-// handleUserMessage Tests
+// handleUserMessage Tests (legacy tests - updated for intent classification)
 // ============================================================================
 
 describe('handleUserMessage', () => {
-  test('queues task with source=user', async () => {
+  test('queues task with source=user when classified as work_request', async () => {
     const agent = await createAgent(testTeamLeadId);
     const userMessage = 'What is the current price of NVDA?';
 
-    // Call handleUserMessage (uses mock LLM)
+    // Mock intent classification to return work_request
+    const mockGenerateLLMObject = vi.spyOn(llm, 'generateLLMObject').mockResolvedValueOnce({
+      intent: 'work_request',
+      reasoning: 'User is requesting price information',
+    });
+
+    // Call handleUserMessage
     const stream = await agent!.handleUserMessage(userMessage);
 
     // Consume the stream
@@ -173,10 +180,19 @@ describe('handleUserMessage', () => {
       ));
     expect(task.source).toBe('user');
     expect(task.task).toBe(userMessage);
+
+    mockGenerateLLMObject.mockRestore();
   });
 
-  test('returns acknowledgment stream', async () => {
+  test('returns response stream', async () => {
     const agent = await createAgent(testTeamLeadId);
+
+    // Mock intent classification to return regular_chat
+    const mockGenerateLLMObject = vi.spyOn(llm, 'generateLLMObject').mockResolvedValueOnce({
+      intent: 'regular_chat',
+      reasoning: 'User is asking about something',
+    });
+
     const stream = await agent!.handleUserMessage('Tell me about NVIDIA');
 
     // Consume the stream and verify it yields chunks
@@ -191,11 +207,19 @@ describe('handleUserMessage', () => {
     expect(chunkCount).toBeGreaterThan(1);
     // Content should be non-empty (mock response)
     expect(fullResponse.trim().length).toBeGreaterThan(0);
+
+    mockGenerateLLMObject.mockRestore();
   });
 
-  test('adds user message and acknowledgment to conversation', async () => {
+  test('adds user message and assistant response to conversation', async () => {
     const agent = await createAgent(testTeamLeadId);
     const userMessage = 'Check my portfolio';
+
+    // Mock intent classification to return regular_chat
+    const mockGenerateLLMObject = vi.spyOn(llm, 'generateLLMObject').mockResolvedValueOnce({
+      intent: 'regular_chat',
+      reasoning: 'User is checking something',
+    });
 
     // Call handleUserMessage
     const stream = await agent!.handleUserMessage(userMessage);
@@ -206,20 +230,28 @@ describe('handleUserMessage', () => {
     const conversationMessages = await db.select().from(messages)
       .where(eq(messages.conversationId, conversation.id));
 
-    // Should have at least 2 messages (user + assistant acknowledgment)
+    // Should have at least 2 messages (user + assistant response)
     expect(conversationMessages.length).toBeGreaterThanOrEqual(2);
 
     // Find user message
     const userMsg = conversationMessages.find(m => m.role === 'user' && m.content === userMessage);
     expect(userMsg).toBeDefined();
 
-    // Find assistant acknowledgment
+    // Find assistant response
     const assistantMsg = conversationMessages.find(m => m.role === 'assistant');
     expect(assistantMsg).toBeDefined();
+
+    mockGenerateLLMObject.mockRestore();
   });
 
-  test('loads memories before generating acknowledgment', async () => {
+  test('loads memories before generating response', async () => {
     const agent = await createAgent(testTeamLeadId);
+
+    // Mock intent classification to return regular_chat
+    const mockGenerateLLMObject = vi.spyOn(llm, 'generateLLMObject').mockResolvedValueOnce({
+      intent: 'regular_chat',
+      reasoning: 'Test message',
+    });
 
     // Initially no memories loaded
     expect(agent!.getMemories()).toHaveLength(0);
@@ -229,6 +261,8 @@ describe('handleUserMessage', () => {
 
     // Memories should now be loaded (empty array, but loaded)
     expect(agent!.getMemories()).toEqual([]);
+
+    mockGenerateLLMObject.mockRestore();
   });
 });
 
@@ -710,12 +744,264 @@ describe('Agent Status', () => {
 });
 
 // ============================================================================
+// Intent Classification Tests
+// ============================================================================
+
+describe('Intent Classification', () => {
+  test('classifyUserIntent returns work_request when LLM classifies as work_request', async () => {
+    const agent = await createAgent(testTeamLeadId);
+
+    // Mock generateLLMObject to return work_request
+    const mockGenerateLLMObject = vi.spyOn(llm, 'generateLLMObject').mockResolvedValueOnce({
+      intent: 'work_request',
+      reasoning: 'User is requesting research',
+    });
+
+    // Access the private method via type assertion for testing
+    const classifyIntent = (agent as unknown as { classifyUserIntent: (content: string) => Promise<'work_request' | 'regular_chat'> }).classifyUserIntent.bind(agent);
+
+    const intent = await classifyIntent('Research NVIDIA earnings');
+    expect(intent).toBe('work_request');
+
+    mockGenerateLLMObject.mockRestore();
+  });
+
+  test('classifyUserIntent returns work_request for analysis requests', async () => {
+    const agent = await createAgent(testTeamLeadId);
+
+    const mockGenerateLLMObject = vi.spyOn(llm, 'generateLLMObject').mockResolvedValueOnce({
+      intent: 'work_request',
+      reasoning: 'User is requesting portfolio analysis',
+    });
+
+    const classifyIntent = (agent as unknown as { classifyUserIntent: (content: string) => Promise<'work_request' | 'regular_chat'> }).classifyUserIntent.bind(agent);
+
+    const intent = await classifyIntent('Analyze my portfolio performance over the last quarter');
+    expect(intent).toBe('work_request');
+
+    mockGenerateLLMObject.mockRestore();
+  });
+
+  test('classifyUserIntent returns regular_chat when LLM classifies as regular_chat', async () => {
+    const agent = await createAgent(testTeamLeadId);
+
+    // Mock mode already returns regular_chat, but let's be explicit
+    const mockGenerateLLMObject = vi.spyOn(llm, 'generateLLMObject').mockResolvedValueOnce({
+      intent: 'regular_chat',
+      reasoning: 'User is greeting',
+    });
+
+    const classifyIntent = (agent as unknown as { classifyUserIntent: (content: string) => Promise<'work_request' | 'regular_chat'> }).classifyUserIntent.bind(agent);
+
+    const intent = await classifyIntent('Hi');
+    expect(intent).toBe('regular_chat');
+
+    mockGenerateLLMObject.mockRestore();
+  });
+
+  test('classifyUserIntent returns regular_chat for simple questions', async () => {
+    const agent = await createAgent(testTeamLeadId);
+
+    const mockGenerateLLMObject = vi.spyOn(llm, 'generateLLMObject').mockResolvedValueOnce({
+      intent: 'regular_chat',
+      reasoning: 'User is asking for opinion',
+    });
+
+    const classifyIntent = (agent as unknown as { classifyUserIntent: (content: string) => Promise<'work_request' | 'regular_chat'> }).classifyUserIntent.bind(agent);
+
+    const intent = await classifyIntent('What do you think?');
+    expect(intent).toBe('regular_chat');
+
+    mockGenerateLLMObject.mockRestore();
+  });
+
+  test('classifyUserIntent returns regular_chat for thank you messages', async () => {
+    const agent = await createAgent(testTeamLeadId);
+
+    const mockGenerateLLMObject = vi.spyOn(llm, 'generateLLMObject').mockResolvedValueOnce({
+      intent: 'regular_chat',
+      reasoning: 'User is expressing gratitude',
+    });
+
+    const classifyIntent = (agent as unknown as { classifyUserIntent: (content: string) => Promise<'work_request' | 'regular_chat'> }).classifyUserIntent.bind(agent);
+
+    const intent = await classifyIntent('Thanks!');
+    expect(intent).toBe('regular_chat');
+
+    mockGenerateLLMObject.mockRestore();
+  });
+});
+
+// ============================================================================
+// handleUserMessage Flow Tests (Intent-Based Routing)
+// ============================================================================
+
+describe('handleUserMessage Flow', () => {
+  test('work_request: queues task AND returns acknowledgment', async () => {
+    const agent = await createAgent(testTeamLeadId);
+    const workRequest = 'Research the latest NVIDIA earnings report';
+
+    // Mock to return work_request classification
+    const mockGenerateLLMObject = vi.spyOn(llm, 'generateLLMObject').mockResolvedValueOnce({
+      intent: 'work_request',
+      reasoning: 'User is requesting research',
+    });
+
+    // Call handleUserMessage
+    const stream = await agent!.handleUserMessage(workRequest);
+
+    // Consume the stream
+    let response = '';
+    for await (const chunk of stream) {
+      response += chunk;
+    }
+
+    // Verify task was queued
+    const status = await getQueueStatus(testTeamLeadId);
+    expect(status.hasPendingWork).toBe(true);
+    expect(status.pendingCount).toBe(1);
+
+    // Verify task content
+    const [task] = await db.select().from(agentTasks)
+      .where(and(
+        eq(agentTasks.assignedToId, testTeamLeadId),
+        eq(agentTasks.status, 'pending')
+      ));
+    expect(task.task).toBe(workRequest);
+    expect(task.source).toBe('user');
+
+    // Verify response is non-empty
+    expect(response.trim().length).toBeGreaterThan(0);
+
+    mockGenerateLLMObject.mockRestore();
+  });
+
+  test('regular_chat: does NOT queue task, returns full response', async () => {
+    const agent = await createAgent(testTeamLeadId);
+    const chatMessage = 'Hi, how are you?';
+
+    // Mock to return regular_chat classification
+    const mockGenerateLLMObject = vi.spyOn(llm, 'generateLLMObject').mockResolvedValueOnce({
+      intent: 'regular_chat',
+      reasoning: 'User is greeting',
+    });
+
+    // Call handleUserMessage
+    const stream = await agent!.handleUserMessage(chatMessage);
+
+    // Consume the stream
+    let response = '';
+    for await (const chunk of stream) {
+      response += chunk;
+    }
+
+    // Verify NO task was queued
+    const status = await getQueueStatus(testTeamLeadId);
+    expect(status.hasPendingWork).toBe(false);
+    expect(status.pendingCount).toBe(0);
+
+    // Verify response is non-empty
+    expect(response.trim().length).toBeGreaterThan(0);
+
+    mockGenerateLLMObject.mockRestore();
+  });
+
+  test('regular_chat with question: does NOT queue task', async () => {
+    const agent = await createAgent(testTeamLeadId);
+    const question = 'What do you think about the current market conditions?';
+
+    // Mock to return regular_chat classification
+    const mockGenerateLLMObject = vi.spyOn(llm, 'generateLLMObject').mockResolvedValueOnce({
+      intent: 'regular_chat',
+      reasoning: 'User is asking for opinion',
+    });
+
+    // Call handleUserMessage
+    const stream = await agent!.handleUserMessage(question);
+    for await (const _ of stream) { /* consume */ }
+
+    // Verify NO task was queued
+    const status = await getQueueStatus(testTeamLeadId);
+    expect(status.hasPendingWork).toBe(false);
+
+    mockGenerateLLMObject.mockRestore();
+  });
+
+  test('work_request adds both user message and assistant ack to conversation', async () => {
+    const agent = await createAgent(testTeamLeadId);
+    const workRequest = 'Analyze TSLA stock performance';
+
+    // Mock to return work_request classification
+    const mockGenerateLLMObject = vi.spyOn(llm, 'generateLLMObject').mockResolvedValueOnce({
+      intent: 'work_request',
+      reasoning: 'User is requesting analysis',
+    });
+
+    const stream = await agent!.handleUserMessage(workRequest);
+    for await (const _ of stream) { /* consume */ }
+
+    // Get conversation messages
+    const conversation = await agent!.getConversation();
+    const conversationMessages = await db.select().from(messages)
+      .where(eq(messages.conversationId, conversation.id));
+
+    // Should have user message and assistant acknowledgment
+    expect(conversationMessages.length).toBeGreaterThanOrEqual(2);
+
+    const userMsg = conversationMessages.find(m => m.role === 'user' && m.content === workRequest);
+    expect(userMsg).toBeDefined();
+
+    const assistantMsg = conversationMessages.find(m => m.role === 'assistant');
+    expect(assistantMsg).toBeDefined();
+
+    mockGenerateLLMObject.mockRestore();
+  });
+
+  test('regular_chat adds both user message and assistant response to conversation', async () => {
+    const agent = await createAgent(testTeamLeadId);
+    const chatMessage = 'Thanks for your help!';
+
+    // Mock to return regular_chat classification
+    const mockGenerateLLMObject = vi.spyOn(llm, 'generateLLMObject').mockResolvedValueOnce({
+      intent: 'regular_chat',
+      reasoning: 'User is expressing gratitude',
+    });
+
+    const stream = await agent!.handleUserMessage(chatMessage);
+    for await (const _ of stream) { /* consume */ }
+
+    // Get conversation messages
+    const conversation = await agent!.getConversation();
+    const conversationMessages = await db.select().from(messages)
+      .where(eq(messages.conversationId, conversation.id));
+
+    // Should have user message and assistant response
+    expect(conversationMessages.length).toBeGreaterThanOrEqual(2);
+
+    const userMsg = conversationMessages.find(m => m.role === 'user' && m.content === chatMessage);
+    expect(userMsg).toBeDefined();
+
+    const assistantMsg = conversationMessages.find(m => m.role === 'assistant');
+    expect(assistantMsg).toBeDefined();
+
+    mockGenerateLLMObject.mockRestore();
+  });
+});
+
+// ============================================================================
 // Edge Cases and Error Handling
 // ============================================================================
 
 describe('Edge Cases', () => {
-  test('handleUserMessage handles empty message', async () => {
+  test('handleUserMessage handles empty message with regular_chat', async () => {
     const agent = await createAgent(testTeamLeadId);
+
+    // Mock to return regular_chat classification
+    const mockGenerateLLMObject = vi.spyOn(llm, 'generateLLMObject').mockResolvedValueOnce({
+      intent: 'regular_chat',
+      reasoning: 'Empty message defaults to regular chat',
+    });
+
     const stream = await agent!.handleUserMessage('');
 
     let response = '';
@@ -725,13 +1011,53 @@ describe('Edge Cases', () => {
 
     expect(response).toBeTruthy();
 
-    // Task should still be queued
+    // Regular chat does NOT queue task
     const status = await getQueueStatus(testTeamLeadId);
-    expect(status.pendingCount).toBe(1);
+    expect(status.pendingCount).toBe(0);
+
+    mockGenerateLLMObject.mockRestore();
   });
 
-  test('multiple concurrent handleUserMessage calls queue tasks correctly', async () => {
+  test('handleUserMessage handles empty message with work_request', async () => {
     const agent = await createAgent(testTeamLeadId);
+
+    // Mock to return work_request classification
+    const mockGenerateLLMObject = vi.spyOn(llm, 'generateLLMObject').mockResolvedValueOnce({
+      intent: 'work_request',
+      reasoning: 'Classified as work request',
+    });
+
+    const stream = await agent!.handleUserMessage('');
+
+    let response = '';
+    for await (const chunk of stream) {
+      response += chunk;
+    }
+
+    expect(response).toBeTruthy();
+
+    // Work request queues task
+    const status = await getQueueStatus(testTeamLeadId);
+    expect(status.pendingCount).toBe(1);
+
+    mockGenerateLLMObject.mockRestore();
+  });
+
+  test('multiple concurrent handleUserMessage calls with work_request queue tasks correctly', async () => {
+    const agent = await createAgent(testTeamLeadId);
+
+    // Mock to always return work_request for intent classification
+    // Use mockImplementation to handle all concurrent calls and memory extraction
+    const mockGenerateLLMObject = vi.spyOn(llm, 'generateLLMObject')
+      .mockImplementation(async (_messages, schema) => {
+        // Check if this is an intent classification call by checking the schema structure
+        const schemaStr = JSON.stringify(schema);
+        if (schemaStr.includes('work_request') || schemaStr.includes('regular_chat')) {
+          return { intent: 'work_request', reasoning: 'Work request' };
+        }
+        // For memory extraction, return empty memories
+        return { memories: [] };
+      });
 
     // Send multiple messages concurrently
     const promises = [
@@ -747,8 +1073,10 @@ describe('Edge Cases', () => {
       for await (const _ of stream) { /* consume */ }
     }
 
-    // All tasks should be queued
+    // All tasks should be queued (since all classified as work_request)
     const status = await getQueueStatus(testTeamLeadId);
     expect(status.pendingCount).toBe(3);
+
+    mockGenerateLLMObject.mockRestore();
   });
 });
