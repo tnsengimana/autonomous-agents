@@ -117,7 +117,7 @@ For teams to run autonomously and deliver proactive insights:
 
 ## Workflow Preferences
 
-**Plans**: Always save implementation plans to `docs/plans/` with the naming convention `YYYY-MM-DD-<topic>.md`. This keeps plans version-controlled with the project.
+**IMPORTANT - Plans Location**: ALL implementation plans go in `docs/plans/` with naming `YYYY-MM-DD-<topic>.md`. Never use `.claude/plans/` or any other location. This is non-negotiable.
 
 **Subagent Usage**: Always prefer to use subagents for implementation tasks:
 1. **Implementation subagent** - Writes code, creates files, installs dependencies
