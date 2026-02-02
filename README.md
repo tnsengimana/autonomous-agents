@@ -1,3 +1,7 @@
+## Project Management
+
+- Kanban board (in-repo): `docs/tasks.md`
+
 ## Getting Started
 
 `docker compose up` starts Postgres, runs migrations, and launches the Next.js dev server and background worker.
