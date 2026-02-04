@@ -1,5 +1,5 @@
 {
-  "id": "6e319f85-eb5b-4e39-ba25-5d7b5b49338e",
+  "id": "49dbbf77-bb4f-47b7-84e7-d16e461b2b9e",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -105,308 +105,6 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
-    "public.agent_tasks": {
-      "name": "agent_tasks",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "entity_id": {
-          "name": "entity_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "assigned_to_id": {
-          "name": "assigned_to_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "assigned_by_id": {
-          "name": "assigned_by_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "task": {
-          "name": "task",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "result": {
-          "name": "result",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "status": {
-          "name": "status",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'pending'"
-        },
-        "source": {
-          "name": "source",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'delegation'"
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "completed_at": {
-          "name": "completed_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": false
-        }
-      },
-      "indexes": {
-        "agent_tasks_entity_id_idx": {
-          "name": "agent_tasks_entity_id_idx",
-          "columns": [
-            {
-              "expression": "entity_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "agent_tasks_entity_id_entities_id_fk": {
-          "name": "agent_tasks_entity_id_entities_id_fk",
-          "tableFrom": "agent_tasks",
-          "tableTo": "entities",
-          "columnsFrom": [
-            "entity_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "agent_tasks_assigned_to_id_agents_id_fk": {
-          "name": "agent_tasks_assigned_to_id_agents_id_fk",
-          "tableFrom": "agent_tasks",
-          "tableTo": "agents",
-          "columnsFrom": [
-            "assigned_to_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "agent_tasks_assigned_by_id_agents_id_fk": {
-          "name": "agent_tasks_assigned_by_id_agents_id_fk",
-          "tableFrom": "agent_tasks",
-          "tableTo": "agents",
-          "columnsFrom": [
-            "assigned_by_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.agents": {
-      "name": "agents",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "entity_id": {
-          "name": "entity_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "parent_agent_id": {
-          "name": "parent_agent_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "name": {
-          "name": "name",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "type": {
-          "name": "type",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "system_prompt": {
-          "name": "system_prompt",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "status": {
-          "name": "status",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'idle'"
-        },
-        "lead_next_run_at": {
-          "name": "lead_next_run_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "backoff_next_run_at": {
-          "name": "backoff_next_run_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "backoff_attempt_count": {
-          "name": "backoff_attempt_count",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 0
-        },
-        "last_completed_at": {
-          "name": "last_completed_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "agents_entity_id_idx": {
-          "name": "agents_entity_id_idx",
-          "columns": [
-            {
-              "expression": "entity_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "agents_lead_next_run_at_idx": {
-          "name": "agents_lead_next_run_at_idx",
-          "columns": [
-            {
-              "expression": "lead_next_run_at",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "agents_backoff_next_run_at_idx": {
-          "name": "agents_backoff_next_run_at_idx",
-          "columns": [
-            {
-              "expression": "backoff_next_run_at",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "agents_entity_id_entities_id_fk": {
-          "name": "agents_entity_id_entities_id_fk",
-          "tableFrom": "agents",
-          "tableTo": "entities",
-          "columnsFrom": [
-            "entity_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "agents_parent_agent_id_agents_id_fk": {
-          "name": "agents_parent_agent_id_agents_id_fk",
-          "tableFrom": "agents",
-          "tableTo": "agents",
-          "columnsFrom": [
-            "parent_agent_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
     "public.briefings": {
       "name": "briefings",
       "schema": "",
@@ -426,12 +124,6 @@
         },
         "entity_id": {
           "name": "entity_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "agent_id": {
-          "name": "agent_id",
           "type": "uuid",
           "primaryKey": false,
           "notNull": true
@@ -499,21 +191,6 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
-        },
-        "briefings_agent_id_idx": {
-          "name": "briefings_agent_id_idx",
-          "columns": [
-            {
-              "expression": "agent_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
         }
       },
       "foreignKeys": {
@@ -542,19 +219,6 @@
           ],
           "onDelete": "cascade",
           "onUpdate": "no action"
-        },
-        "briefings_agent_id_agents_id_fk": {
-          "name": "briefings_agent_id_agents_id_fk",
-          "tableFrom": "briefings",
-          "tableTo": "agents",
-          "columnsFrom": [
-            "agent_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -574,18 +238,11 @@
           "notNull": true,
           "default": "gen_random_uuid()"
         },
-        "agent_id": {
-          "name": "agent_id",
+        "entity_id": {
+          "name": "entity_id",
           "type": "uuid",
           "primaryKey": false,
           "notNull": true
-        },
-        "mode": {
-          "name": "mode",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'foreground'"
         },
         "created_at": {
           "name": "created_at",
@@ -604,12 +261,12 @@
       },
       "indexes": {},
       "foreignKeys": {
-        "conversations_agent_id_agents_id_fk": {
-          "name": "conversations_agent_id_agents_id_fk",
+        "conversations_entity_id_entities_id_fk": {
+          "name": "conversations_entity_id_entities_id_fk",
           "tableFrom": "conversations",
-          "tableTo": "agents",
+          "tableTo": "entities",
           "columnsFrom": [
-            "agent_id"
+            "entity_id"
           ],
           "columnsTo": [
             "id"
@@ -641,12 +298,6 @@
           "primaryKey": false,
           "notNull": true
         },
-        "type": {
-          "name": "type",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
         "name": {
           "name": "name",
           "type": "text",
@@ -658,6 +309,12 @@
           "type": "text",
           "primaryKey": false,
           "notNull": false
+        },
+        "system_prompt": {
+          "name": "system_prompt",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
         },
         "status": {
           "name": "status",
@@ -696,21 +353,6 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
-        },
-        "entities_type_idx": {
-          "name": "entities_type_idx",
-          "columns": [
-            {
-              "expression": "type",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
         }
       },
       "foreignKeys": {
@@ -725,6 +367,696 @@
             "id"
           ],
           "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.graph_edge_type_source_types": {
+      "name": "graph_edge_type_source_types",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "edge_type_id": {
+          "name": "edge_type_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "node_type_id": {
+          "name": "node_type_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "graph_edge_type_source_types_edge_idx": {
+          "name": "graph_edge_type_source_types_edge_idx",
+          "columns": [
+            {
+              "expression": "edge_type_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "graph_edge_type_source_types_node_idx": {
+          "name": "graph_edge_type_source_types_node_idx",
+          "columns": [
+            {
+              "expression": "node_type_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "graph_edge_type_source_types_edge_type_id_graph_edge_types_id_fk": {
+          "name": "graph_edge_type_source_types_edge_type_id_graph_edge_types_id_fk",
+          "tableFrom": "graph_edge_type_source_types",
+          "tableTo": "graph_edge_types",
+          "columnsFrom": [
+            "edge_type_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "graph_edge_type_source_types_node_type_id_graph_node_types_id_fk": {
+          "name": "graph_edge_type_source_types_node_type_id_graph_node_types_id_fk",
+          "tableFrom": "graph_edge_type_source_types",
+          "tableTo": "graph_node_types",
+          "columnsFrom": [
+            "node_type_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.graph_edge_type_target_types": {
+      "name": "graph_edge_type_target_types",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "edge_type_id": {
+          "name": "edge_type_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "node_type_id": {
+          "name": "node_type_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "graph_edge_type_target_types_edge_idx": {
+          "name": "graph_edge_type_target_types_edge_idx",
+          "columns": [
+            {
+              "expression": "edge_type_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "graph_edge_type_target_types_node_idx": {
+          "name": "graph_edge_type_target_types_node_idx",
+          "columns": [
+            {
+              "expression": "node_type_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "graph_edge_type_target_types_edge_type_id_graph_edge_types_id_fk": {
+          "name": "graph_edge_type_target_types_edge_type_id_graph_edge_types_id_fk",
+          "tableFrom": "graph_edge_type_target_types",
+          "tableTo": "graph_edge_types",
+          "columnsFrom": [
+            "edge_type_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "graph_edge_type_target_types_node_type_id_graph_node_types_id_fk": {
+          "name": "graph_edge_type_target_types_node_type_id_graph_node_types_id_fk",
+          "tableFrom": "graph_edge_type_target_types",
+          "tableTo": "graph_node_types",
+          "columnsFrom": [
+            "node_type_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.graph_edge_types": {
+      "name": "graph_edge_types",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "entity_id": {
+          "name": "entity_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "description": {
+          "name": "description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "properties_schema": {
+          "name": "properties_schema",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "example_properties": {
+          "name": "example_properties",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_by": {
+          "name": "created_by",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'system'"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "graph_edge_types_entity_id_idx": {
+          "name": "graph_edge_types_entity_id_idx",
+          "columns": [
+            {
+              "expression": "entity_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "graph_edge_types_entity_id_entities_id_fk": {
+          "name": "graph_edge_types_entity_id_entities_id_fk",
+          "tableFrom": "graph_edge_types",
+          "tableTo": "entities",
+          "columnsFrom": [
+            "entity_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.graph_edges": {
+      "name": "graph_edges",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "entity_id": {
+          "name": "entity_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "type": {
+          "name": "type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "source_id": {
+          "name": "source_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "target_id": {
+          "name": "target_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "properties": {
+          "name": "properties",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'::jsonb"
+        },
+        "source_conversation_id": {
+          "name": "source_conversation_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "graph_edges_entity_id_idx": {
+          "name": "graph_edges_entity_id_idx",
+          "columns": [
+            {
+              "expression": "entity_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "graph_edges_type_idx": {
+          "name": "graph_edges_type_idx",
+          "columns": [
+            {
+              "expression": "type",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "graph_edges_source_id_idx": {
+          "name": "graph_edges_source_id_idx",
+          "columns": [
+            {
+              "expression": "source_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "graph_edges_target_id_idx": {
+          "name": "graph_edges_target_id_idx",
+          "columns": [
+            {
+              "expression": "target_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "graph_edges_entity_id_entities_id_fk": {
+          "name": "graph_edges_entity_id_entities_id_fk",
+          "tableFrom": "graph_edges",
+          "tableTo": "entities",
+          "columnsFrom": [
+            "entity_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "graph_edges_source_id_graph_nodes_id_fk": {
+          "name": "graph_edges_source_id_graph_nodes_id_fk",
+          "tableFrom": "graph_edges",
+          "tableTo": "graph_nodes",
+          "columnsFrom": [
+            "source_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "graph_edges_target_id_graph_nodes_id_fk": {
+          "name": "graph_edges_target_id_graph_nodes_id_fk",
+          "tableFrom": "graph_edges",
+          "tableTo": "graph_nodes",
+          "columnsFrom": [
+            "target_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "graph_edges_source_conversation_id_conversations_id_fk": {
+          "name": "graph_edges_source_conversation_id_conversations_id_fk",
+          "tableFrom": "graph_edges",
+          "tableTo": "conversations",
+          "columnsFrom": [
+            "source_conversation_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.graph_node_types": {
+      "name": "graph_node_types",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "entity_id": {
+          "name": "entity_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "description": {
+          "name": "description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "properties_schema": {
+          "name": "properties_schema",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "example_properties": {
+          "name": "example_properties",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "notify_user": {
+          "name": "notify_user",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "created_by": {
+          "name": "created_by",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'system'"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "graph_node_types_entity_id_idx": {
+          "name": "graph_node_types_entity_id_idx",
+          "columns": [
+            {
+              "expression": "entity_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "graph_node_types_entity_id_entities_id_fk": {
+          "name": "graph_node_types_entity_id_entities_id_fk",
+          "tableFrom": "graph_node_types",
+          "tableTo": "entities",
+          "columnsFrom": [
+            "entity_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.graph_nodes": {
+      "name": "graph_nodes",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "entity_id": {
+          "name": "entity_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "type": {
+          "name": "type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "properties": {
+          "name": "properties",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'::jsonb"
+        },
+        "source_conversation_id": {
+          "name": "source_conversation_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "graph_nodes_entity_id_idx": {
+          "name": "graph_nodes_entity_id_idx",
+          "columns": [
+            {
+              "expression": "entity_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "graph_nodes_type_idx": {
+          "name": "graph_nodes_type_idx",
+          "columns": [
+            {
+              "expression": "type",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "graph_nodes_entity_type_idx": {
+          "name": "graph_nodes_entity_type_idx",
+          "columns": [
+            {
+              "expression": "entity_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "type",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "graph_nodes_entity_id_entities_id_fk": {
+          "name": "graph_nodes_entity_id_entities_id_fk",
+          "tableFrom": "graph_nodes",
+          "tableTo": "entities",
+          "columnsFrom": [
+            "entity_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "graph_nodes_source_conversation_id_conversations_id_fk": {
+          "name": "graph_nodes_source_conversation_id_conversations_id_fk",
+          "tableFrom": "graph_nodes",
+          "tableTo": "conversations",
+          "columnsFrom": [
+            "source_conversation_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
           "onUpdate": "no action"
         }
       },
@@ -751,8 +1083,8 @@
           "primaryKey": false,
           "notNull": true
         },
-        "agent_id": {
-          "name": "agent_id",
+        "entity_id": {
+          "name": "entity_id",
           "type": "uuid",
           "primaryKey": false,
           "notNull": true
@@ -810,12 +1142,12 @@
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
-        "inbox_items_agent_id_agents_id_fk": {
-          "name": "inbox_items_agent_id_agents_id_fk",
+        "inbox_items_entity_id_entities_id_fk": {
+          "name": "inbox_items_entity_id_entities_id_fk",
           "tableFrom": "inbox_items",
-          "tableTo": "agents",
+          "tableTo": "entities",
           "columnsFrom": [
-            "agent_id"
+            "entity_id"
           ],
           "columnsTo": [
             "id"
@@ -843,8 +1175,8 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
-    "public.knowledge_items": {
-      "name": "knowledge_items",
+    "public.llm_interactions": {
+      "name": "llm_interactions",
       "schema": "",
       "columns": {
         "id": {
@@ -854,33 +1186,27 @@
           "notNull": true,
           "default": "gen_random_uuid()"
         },
-        "agent_id": {
-          "name": "agent_id",
+        "entity_id": {
+          "name": "entity_id",
           "type": "uuid",
           "primaryKey": false,
           "notNull": true
         },
-        "type": {
-          "name": "type",
+        "system_prompt": {
+          "name": "system_prompt",
           "type": "text",
           "primaryKey": false,
           "notNull": true
         },
-        "content": {
-          "name": "content",
-          "type": "text",
+        "request": {
+          "name": "request",
+          "type": "jsonb",
           "primaryKey": false,
           "notNull": true
         },
-        "source_conversation_id": {
-          "name": "source_conversation_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "confidence": {
-          "name": "confidence",
-          "type": "real",
+        "response": {
+          "name": "response",
+          "type": "jsonb",
           "primaryKey": false,
           "notNull": false
         },
@@ -890,14 +1216,35 @@
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
+        },
+        "completed_at": {
+          "name": "completed_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
         }
       },
       "indexes": {
-        "knowledge_items_agent_id_idx": {
-          "name": "knowledge_items_agent_id_idx",
+        "llm_interactions_entity_id_idx": {
+          "name": "llm_interactions_entity_id_idx",
           "columns": [
             {
-              "expression": "agent_id",
+              "expression": "entity_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "llm_interactions_created_at_idx": {
+          "name": "llm_interactions_created_at_idx",
+          "columns": [
+            {
+              "expression": "created_at",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -910,30 +1257,17 @@
         }
       },
       "foreignKeys": {
-        "knowledge_items_agent_id_agents_id_fk": {
-          "name": "knowledge_items_agent_id_agents_id_fk",
-          "tableFrom": "knowledge_items",
-          "tableTo": "agents",
+        "llm_interactions_entity_id_entities_id_fk": {
+          "name": "llm_interactions_entity_id_entities_id_fk",
+          "tableFrom": "llm_interactions",
+          "tableTo": "entities",
           "columnsFrom": [
-            "agent_id"
+            "entity_id"
           ],
           "columnsTo": [
             "id"
           ],
           "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "knowledge_items_source_conversation_id_conversations_id_fk": {
-          "name": "knowledge_items_source_conversation_id_conversations_id_fk",
-          "tableFrom": "knowledge_items",
-          "tableTo": "conversations",
-          "columnsFrom": [
-            "source_conversation_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "set null",
           "onUpdate": "no action"
         }
       },
@@ -954,8 +1288,8 @@
           "notNull": true,
           "default": "gen_random_uuid()"
         },
-        "agent_id": {
-          "name": "agent_id",
+        "entity_id": {
+          "name": "entity_id",
           "type": "uuid",
           "primaryKey": false,
           "notNull": true
@@ -995,12 +1329,12 @@
       },
       "indexes": {},
       "foreignKeys": {
-        "memories_agent_id_agents_id_fk": {
-          "name": "memories_agent_id_agents_id_fk",
+        "memories_entity_id_entities_id_fk": {
+          "name": "memories_entity_id_entities_id_fk",
           "tableFrom": "memories",
-          "tableTo": "agents",
+          "tableTo": "entities",
           "columnsFrom": [
-            "agent_id"
+            "entity_id"
           ],
           "columnsTo": [
             "id"

@@ -8,6 +8,7 @@ import {
   jsonb,
   index,
   type AnyPgColumn,
+  boolean,
 } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
 import type { AdapterAccountType } from 'next-auth/adapters';
@@ -90,45 +91,21 @@ export const entities = pgTable('entities', {
   userId: uuid('user_id')
     .notNull()
     .references(() => users.id, { onDelete: 'cascade' }),
-  type: text('type').notNull(), // 'team' | 'aide'
   name: text('name').notNull(),
   purpose: text('purpose'),
+  systemPrompt: text('system_prompt').notNull(),
   status: text('status').notNull().default('active'), // 'active', 'paused', 'archived'
   createdAt: timestamp('created_at', { mode: 'date' }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { mode: 'date' }).defaultNow().notNull(),
 }, (table) => [
   index('entities_user_id_idx').on(table.userId),
-  index('entities_type_idx').on(table.type),
-]);
-
-export const agents = pgTable('agents', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  entityId: uuid('entity_id')
-    .notNull()
-    .references(() => entities.id, { onDelete: 'cascade' }),
-  parentAgentId: uuid('parent_agent_id').references((): AnyPgColumn => agents.id, { onDelete: 'cascade' }), // null for leads
-  name: text('name').notNull(),
-  type: text('type').notNull(), // 'lead' | 'subordinate'
-  systemPrompt: text('system_prompt'),
-  status: text('status').notNull().default('idle'), // 'idle', 'running', 'paused'
-  leadNextRunAt: timestamp('lead_next_run_at', { mode: 'date' }), // Only used for lead agents
-  backoffNextRunAt: timestamp('backoff_next_run_at', { mode: 'date' }),
-  backoffAttemptCount: integer('backoff_attempt_count').notNull().default(0),
-  lastCompletedAt: timestamp('last_completed_at', { mode: 'date' }),
-  createdAt: timestamp('created_at', { mode: 'date' }).defaultNow().notNull(),
-  updatedAt: timestamp('updated_at', { mode: 'date' }).defaultNow().notNull(),
-}, (table) => [
-  index('agents_entity_id_idx').on(table.entityId),
-  index('agents_lead_next_run_at_idx').on(table.leadNextRunAt),
-  index('agents_backoff_next_run_at_idx').on(table.backoffNextRunAt),
 ]);
 
 export const conversations = pgTable('conversations', {
   id: uuid('id').primaryKey().defaultRandom(),
-  agentId: uuid('agent_id')
+  entityId: uuid('entity_id')
     .notNull()
-    .references(() => agents.id, { onDelete: 'cascade' }),
-  mode: text('mode').notNull().default('foreground'), // 'foreground' | 'background'
+    .references(() => entities.id, { onDelete: 'cascade' }),
   createdAt: timestamp('created_at', { mode: 'date' }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { mode: 'date' }).defaultNow().notNull(),
 });
@@ -149,9 +126,9 @@ export const messages = pgTable('messages', {
 
 export const memories = pgTable('memories', {
   id: uuid('id').primaryKey().defaultRandom(),
-  agentId: uuid('agent_id')
+  entityId: uuid('entity_id')
     .notNull()
-    .references(() => agents.id, { onDelete: 'cascade' }),
+    .references(() => entities.id, { onDelete: 'cascade' }),
   type: text('type').notNull(), // 'preference' | 'insight' | 'fact'
   content: text('content').notNull(),
   sourceMessageId: uuid('source_message_id').references(() => messages.id, {
@@ -166,13 +143,13 @@ export const inboxItems = pgTable('inbox_items', {
   userId: uuid('user_id')
     .notNull()
     .references(() => users.id, { onDelete: 'cascade' }),
-  agentId: uuid('agent_id')
+  entityId: uuid('entity_id')
     .notNull()
-    .references(() => agents.id, { onDelete: 'cascade' }),
+    .references(() => entities.id, { onDelete: 'cascade' }),
   briefingId: uuid('briefing_id').references(() => briefings.id, {
     onDelete: 'set null',
   }),
-  type: text('type').notNull(), // 'briefing' | 'feedback'
+  type: text('type').notNull(), // 'briefing' | 'feedback' | 'insight'
   title: text('title').notNull(),
   content: text('content').notNull(),
   readAt: timestamp('read_at', { mode: 'date' }),
@@ -189,9 +166,6 @@ export const briefings = pgTable(
     entityId: uuid('entity_id')
       .notNull()
       .references(() => entities.id, { onDelete: 'cascade' }),
-    agentId: uuid('agent_id')
-      .notNull()
-      .references(() => agents.id, { onDelete: 'cascade' }),
     title: text('title').notNull(),
     summary: text('summary').notNull(),
     content: text('content').notNull(),
@@ -201,29 +175,26 @@ export const briefings = pgTable(
   (table) => [
     index('briefings_user_id_idx').on(table.userId),
     index('briefings_entity_id_idx').on(table.entityId),
-    index('briefings_agent_id_idx').on(table.agentId),
   ]
 );
 
-export const agentTasks = pgTable('agent_tasks', {
+// ============================================================================
+// LLM Interactions (Background Trace)
+// ============================================================================
+
+export const llmInteractions = pgTable('llm_interactions', {
   id: uuid('id').primaryKey().defaultRandom(),
   entityId: uuid('entity_id')
     .notNull()
     .references(() => entities.id, { onDelete: 'cascade' }),
-  assignedToId: uuid('assigned_to_id')
-    .notNull()
-    .references(() => agents.id, { onDelete: 'cascade' }),
-  assignedById: uuid('assigned_by_id')
-    .notNull()
-    .references(() => agents.id, { onDelete: 'cascade' }),
-  task: text('task').notNull(),
-  result: text('result'),
-  status: text('status').notNull().default('pending'), // 'pending', 'completed'
-  source: text('source').notNull().default('delegation'), // 'delegation' | 'user' | 'system' | 'self'
+  systemPrompt: text('system_prompt').notNull(),
+  request: jsonb('request').notNull(),
+  response: jsonb('response'),
   createdAt: timestamp('created_at', { mode: 'date' }).defaultNow().notNull(),
   completedAt: timestamp('completed_at', { mode: 'date' }),
 }, (table) => [
-  index('agent_tasks_entity_id_idx').on(table.entityId),
+  index('llm_interactions_entity_id_idx').on(table.entityId),
+  index('llm_interactions_created_at_idx').on(table.createdAt),
 ]);
 
 // ============================================================================
@@ -237,6 +208,7 @@ export const graphNodeTypes = pgTable('graph_node_types', {
   description: text('description').notNull(),
   propertiesSchema: jsonb('properties_schema').notNull(),  // JSON Schema for validation
   exampleProperties: jsonb('example_properties'),  // For LLM few-shot learning
+  notifyUser: boolean('notify_user').notNull().default(false),  // Whether creating nodes of this type should notify user
   createdBy: text('created_by').notNull().default('system'),  // 'system' | 'agent' | 'user'
   createdAt: timestamp('created_at', { mode: 'date' }).defaultNow().notNull(),
 }, (table) => [
@@ -348,44 +320,21 @@ export const entitiesRelations = relations(entities, ({ one, many }) => ({
     fields: [entities.userId],
     references: [users.id],
   }),
-  agents: many(agents),
+  conversations: many(conversations),
+  memories: many(memories),
+  inboxItems: many(inboxItems),
   briefings: many(briefings),
-  agentTasks: many(agentTasks),
+  llmInteractions: many(llmInteractions),
   graphNodeTypes: many(graphNodeTypes),
   graphEdgeTypes: many(graphEdgeTypes),
   graphNodes: many(graphNodes),
   graphEdges: many(graphEdges),
 }));
 
-export const agentsRelations = relations(agents, ({ one, many }) => ({
-  entity: one(entities, {
-    fields: [agents.entityId],
-    references: [entities.id],
-  }),
-  parentAgent: one(agents, {
-    fields: [agents.parentAgentId],
-    references: [agents.id],
-    relationName: 'agentHierarchy',
-  }),
-  childAgents: many(agents, {
-    relationName: 'agentHierarchy',
-  }),
-  conversations: many(conversations),
-  memories: many(memories),
-  inboxItems: many(inboxItems),
-  briefings: many(briefings),
-  assignedTasks: many(agentTasks, {
-    relationName: 'assignedTasks',
-  }),
-  delegatedTasks: many(agentTasks, {
-    relationName: 'delegatedTasks',
-  }),
-}));
-
 export const conversationsRelations = relations(conversations, ({ one, many }) => ({
-  agent: one(agents, {
-    fields: [conversations.agentId],
-    references: [agents.id],
+  entity: one(entities, {
+    fields: [conversations.entityId],
+    references: [entities.id],
   }),
   messages: many(messages),
   graphNodes: many(graphNodes),
@@ -409,9 +358,9 @@ export const messagesRelations = relations(messages, ({ one, many }) => ({
 }));
 
 export const memoriesRelations = relations(memories, ({ one }) => ({
-  agent: one(agents, {
-    fields: [memories.agentId],
-    references: [agents.id],
+  entity: one(entities, {
+    fields: [memories.entityId],
+    references: [entities.id],
   }),
   sourceMessage: one(messages, {
     fields: [memories.sourceMessageId],
@@ -424,9 +373,9 @@ export const inboxItemsRelations = relations(inboxItems, ({ one }) => ({
     fields: [inboxItems.userId],
     references: [users.id],
   }),
-  agent: one(agents, {
-    fields: [inboxItems.agentId],
-    references: [agents.id],
+  entity: one(entities, {
+    fields: [inboxItems.entityId],
+    references: [entities.id],
   }),
   briefing: one(briefings, {
     fields: [inboxItems.briefingId],
@@ -443,26 +392,12 @@ export const briefingsRelations = relations(briefings, ({ one }) => ({
     fields: [briefings.entityId],
     references: [entities.id],
   }),
-  agent: one(agents, {
-    fields: [briefings.agentId],
-    references: [agents.id],
-  }),
 }));
 
-export const agentTasksRelations = relations(agentTasks, ({ one }) => ({
+export const llmInteractionsRelations = relations(llmInteractions, ({ one }) => ({
   entity: one(entities, {
-    fields: [agentTasks.entityId],
+    fields: [llmInteractions.entityId],
     references: [entities.id],
-  }),
-  assignedTo: one(agents, {
-    fields: [agentTasks.assignedToId],
-    references: [agents.id],
-    relationName: 'assignedTasks',
-  }),
-  assignedBy: one(agents, {
-    fields: [agentTasks.assignedById],
-    references: [agents.id],
-    relationName: 'delegatedTasks',
   }),
 }));
 
