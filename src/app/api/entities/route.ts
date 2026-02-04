@@ -5,7 +5,6 @@ import { generateEntityConfiguration } from "@/lib/entities/configuration";
 import { z } from "zod";
 
 const createEntitySchema = z.object({
-  name: z.string().optional(),
   purpose: z.string().min(1, "Mission/purpose is required"),
 });
 
@@ -51,12 +50,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { name, purpose } = validation.data;
+    const { purpose } = validation.data;
 
-    // Generate configuration (name if not provided, always systemPrompt)
+    // Generate name and system prompt from mission/purpose
     const config = await generateEntityConfiguration(purpose, {
       userId: session.user.id,
-      name: name || undefined,
     });
 
     // Create the entity with generated name and systemPrompt
