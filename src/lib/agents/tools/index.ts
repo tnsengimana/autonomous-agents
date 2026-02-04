@@ -28,9 +28,7 @@ export interface ToolSchema {
 }
 
 export interface ToolContext {
-  agentId: string;
   entityId: string;
-  isLead: boolean;
   conversationId?: string;
 }
 
@@ -78,20 +76,12 @@ export function getAllTools(): Tool[] {
 }
 
 /**
- * Get tools available for leads
+ * Get tools available during user conversations (foreground)
+ * These include graph tools, tavily tools, briefings tools for answering questions
  */
-export function getLeadTools(): Tool[] {
+export function getForegroundTools(): Tool[] {
   return getAllTools().filter((tool) =>
     [
-      "delegateToAgent",
-      "getTeamStatus",
-      "createBriefing",
-      "requestUserInput",
-      "listBriefings",
-      "getBriefing",
-      "tavilySearch",
-      "tavilyExtract",
-      "tavilyResearch",
       // Graph tools
       "addGraphNode",
       "addGraphEdge",
@@ -99,55 +89,33 @@ export function getLeadTools(): Tool[] {
       "getGraphSummary",
       "createNodeType",
       "createEdgeType",
+      // Tavily tools
+      "tavilySearch",
+      "tavilyExtract",
+      "tavilyResearch",
+      // Briefings tools for answering user questions
+      "listBriefings",
+      "getBriefing",
     ].includes(tool.schema.name),
   );
 }
 
 /**
- * Get knowledge item management tools (available in user conversations)
- * @deprecated Knowledge items have been replaced by the knowledge graph system
+ * Get tools available during background work sessions
+ * Returns graph tools and tavily tools for knowledge graph manipulation
  */
-export function getKnowledgeItemTools(): Tool[] {
-  return [];
+export function getBackgroundTools(): Tool[] {
+  return [...getGraphTools(), ...getTavilyTools()];
 }
 
 /**
- * Get tools available during user conversations (foreground)
- * These help agents manage knowledge shared by users
+ * Get Tavily web search tools
  */
-export function getForegroundTools(): Tool[] {
-  // All tools except background coordination tools
-  const backgroundOnlyTools = [
-    "delegateToAgent",
-    "createBriefing",
-    "requestUserInput",
-    "reportToLead",
-    "requestLeadInput",
-  ];
-
-  return getAllTools().filter(
-    (tool) => !backgroundOnlyTools.includes(tool.schema.name),
-  );
-}
-
-/**
- * Get tools available during background work sessions (background conversations)
- * Leads get full tools, subordinates get limited set
- * All agents get graph tools for knowledge graph manipulation
- */
-export function getBackgroundTools(isLead: boolean): Tool[] {
-  if (isLead) {
-    return [...getLeadTools(), ...getGraphTools()];
-  }
-  return [...getSubordinateTools(), ...getGraphTools()];
-}
-
-/**
- * Get tools available for subordinates
- */
-export function getSubordinateTools(): Tool[] {
+export function getTavilyTools(): Tool[] {
   return getAllTools().filter((tool) =>
-    ["reportToLead", "requestLeadInput"].includes(tool.schema.name),
+    ["tavilySearch", "tavilyExtract", "tavilyResearch"].includes(
+      tool.schema.name,
+    ),
   );
 }
 
@@ -209,47 +177,6 @@ export async function executeTool(
 // Zod Schemas for Tool Parameters
 // ============================================================================
 
-export const DelegateToAgentParamsSchema = z.object({
-  agentId: z
-    .string()
-    .uuid()
-    .describe("The subordinate agent ID to delegate to"),
-  task: z.string().min(1).describe("The task description"),
-});
-
-export const RequestUserInputParamsSchema = z.object({
-  title: z.string().min(1).describe("A concise title for the feedback request"),
-  summary: z
-    .string()
-    .min(1)
-    .describe("A brief summary for the inbox notification (1-2 sentences)"),
-  fullMessage: z
-    .string()
-    .min(1)
-    .describe("The full message content to be added to the conversation"),
-});
-
-export const CreateBriefingParamsSchema = z.object({
-  title: z.string().min(1).describe("The title of the briefing"),
-  summary: z
-    .string()
-    .min(1)
-    .describe("A brief summary for the inbox notification (1-2 sentences)"),
-  fullMessage: z
-    .string()
-    .min(1)
-    .describe("The full briefing content for the user"),
-});
-
-export const ReportToLeadParamsSchema = z.object({
-  result: z.string().min(1).describe("The result of the task"),
-  status: z.enum(["success"]).describe("Whether the task succeeded"),
-});
-
-export const RequestLeadInputParamsSchema = z.object({
-  question: z.string().min(1).describe("The question to ask the lead"),
-});
-
 export const ListBriefingsParamsSchema = z.object({
   query: z
     .string()
@@ -268,15 +195,6 @@ export const GetBriefingParamsSchema = z.object({
   briefingId: z.string().uuid().describe("The briefing ID to retrieve"),
 });
 
-export type DelegateToAgentParams = z.infer<typeof DelegateToAgentParamsSchema>;
-export type CreateBriefingParams = z.infer<typeof CreateBriefingParamsSchema>;
-export type RequestUserInputParams = z.infer<
-  typeof RequestUserInputParamsSchema
->;
-export type ReportToLeadParams = z.infer<typeof ReportToLeadParamsSchema>;
-export type RequestLeadInputParams = z.infer<
-  typeof RequestLeadInputParamsSchema
->;
 export type ListBriefingsParams = z.infer<typeof ListBriefingsParamsSchema>;
 export type GetBriefingParams = z.infer<typeof GetBriefingParamsSchema>;
 

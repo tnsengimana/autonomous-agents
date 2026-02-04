@@ -2,9 +2,6 @@
  * Agent Core Runtime - re-export all agent modules
  */
 
-// Agent class and factory
-export { Agent, createAgent, createAgentFromData } from "./agent";
-
 // LLM provider abstraction
 export {
   streamLLMResponse,
@@ -56,9 +53,8 @@ export {
   registerTool,
   getTool,
   getAllTools,
-  getLeadTools,
-  getSubordinateTools,
   getGraphTools,
+  getTavilyTools,
   getBackgroundTools,
   getForegroundTools,
   getToolSchemas,
@@ -71,24 +67,6 @@ export {
   type ToolHandler,
   type ToolParameter,
 } from "./tools";
-
-// Lead tools
-export {
-  registerLeadTools,
-  delegateToAgentTool,
-  getTeamStatusTool,
-  createBriefingTool,
-  requestUserInputTool,
-  listBriefingsTool,
-  getBriefingTool,
-} from "./tools/lead-tools";
-
-// Subordinate tools
-export {
-  registerSubordinateTools,
-  reportToLeadTool,
-  requestLeadInputTool,
-} from "./tools/subordinate-tools";
 
 // Graph tools
 export {

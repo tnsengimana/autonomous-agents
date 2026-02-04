@@ -2,8 +2,6 @@
  * Database queries - re-export all query modules
  */
 
-export * from './agents';
-export * from './agentTasks';
 export * from './briefings';
 export * from './conversations';
 export * from './entities';
