@@ -10,6 +10,8 @@ import { db } from '@/lib/db/client';
 import {
   users,
   entities,
+  agents,
+  conversations,
   graphNodes,
   graphEdges,
 } from '@/lib/db/schema';
@@ -37,6 +39,8 @@ import {
 
 let testUserId: string;
 let testEntityId: string;
+let testAgentId: string;
+let testConversationId: string;
 
 beforeAll(async () => {
   // Create test user
@@ -54,6 +58,22 @@ beforeAll(async () => {
     purpose: 'Testing graph data management',
   }).returning();
   testEntityId = entity.id;
+
+  // Create test agent (needed for conversation)
+  const [agent] = await db.insert(agents).values({
+    entityId: testEntityId,
+    name: 'Graph Test Agent',
+    type: 'lead',
+    systemPrompt: 'Test system prompt',
+  }).returning();
+  testAgentId = agent.id;
+
+  // Create test conversation
+  const [conversation] = await db.insert(conversations).values({
+    agentId: testAgentId,
+    mode: 'background',
+  }).returning();
+  testConversationId = conversation.id;
 });
 
 afterAll(async () => {
@@ -115,10 +135,10 @@ describe('createNode', () => {
       entityId: testEntityId,
       type: 'Concept',
       name: 'Test Concept',
-      sourceConversationId: '00000000-0000-0000-0000-000000000001',
+      sourceConversationId: testConversationId,
     });
 
-    expect(node.sourceConversationId).toBe('00000000-0000-0000-0000-000000000001');
+    expect(node.sourceConversationId).toBe(testConversationId);
 
     await cleanupNodes([node.id]);
   });
