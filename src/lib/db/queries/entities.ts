@@ -8,6 +8,7 @@ import { eq, desc, and, isNull } from 'drizzle-orm';
 import { db } from '../client';
 import { entities, agents } from '../schema';
 import type { Entity, EntityStatus, EntityType, EntityWithAgents, Agent } from '@/lib/types';
+import { initializeAndPersistTypesForEntity } from '@/lib/agents/graph-type-initializer';
 
 // ============================================================================
 // CRUD Operations
@@ -34,7 +35,18 @@ export async function createEntity(data: {
     })
     .returning();
 
-  return result[0];
+  const entity = result[0];
+
+  // Fire and forget type initialization - don't block entity creation
+  initializeAndPersistTypesForEntity(
+    entity.id,
+    { name: entity.name, type: entity.type, purpose: entity.purpose },
+    { userId: data.userId }
+  ).catch((err) => {
+    console.error('[createEntity] Failed to initialize graph types:', err);
+  });
+
+  return entity;
 }
 
 /**

@@ -680,6 +680,31 @@ export async function generateLLMObject<T>(
         leadAgentSystemPrompt:
           "You are a capable team lead responsible for coordinating work and achieving the team mission. You communicate clearly, delegate effectively, and ensure quality outcomes.",
       },
+      // Graph type initialization result
+      {
+        nodeTypes: [
+          {
+            name: "Concept",
+            description: "A general concept or topic",
+            propertiesSchema: {
+              type: "object",
+              properties: {
+                name: { type: "string" },
+                description: { type: "string" },
+              },
+            },
+            exampleProperties: { name: "Example", description: "An example concept" },
+          },
+        ],
+        edgeTypes: [
+          {
+            name: "related_to",
+            description: "A general relationship between concepts",
+            sourceNodeTypeNames: ["Concept"],
+            targetNodeTypeNames: ["Concept"],
+          },
+        ],
+      },
       // Empty array (fallback)
       [],
       // Empty object (fallback)
