@@ -52,17 +52,21 @@ export async function POST(request: NextRequest) {
 
     const { purpose } = validation.data;
 
-    // Generate name and system prompt from mission/purpose
+    // Generate name and all four system prompts from mission/purpose
     const config = await generateEntityConfiguration(purpose, {
       userId: session.user.id,
     });
 
-    // Create the entity with generated name and systemPrompt
+    // Create the entity with generated name and all four system prompts
     const entity = await createEntity({
       userId: session.user.id,
       name: config.name,
       purpose,
-      systemPrompt: config.systemPrompt,
+      systemPrompt: config.conversationSystemPrompt, // For backwards compatibility
+      conversationSystemPrompt: config.conversationSystemPrompt,
+      classificationSystemPrompt: config.classificationSystemPrompt,
+      insightSynthesisSystemPrompt: config.insightSynthesisSystemPrompt,
+      graphConstructionSystemPrompt: config.graphConstructionSystemPrompt,
       status: "active",
     });
 

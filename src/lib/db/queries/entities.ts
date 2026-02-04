@@ -22,6 +22,10 @@ export async function createEntity(data: {
   name: string;
   purpose?: string | null;
   systemPrompt: string;
+  conversationSystemPrompt?: string | null;
+  classificationSystemPrompt?: string | null;
+  insightSynthesisSystemPrompt?: string | null;
+  graphConstructionSystemPrompt?: string | null;
   status?: EntityStatus;
 }): Promise<Entity> {
   const result = await db
@@ -31,6 +35,10 @@ export async function createEntity(data: {
       name: data.name,
       purpose: data.purpose ?? null,
       systemPrompt: data.systemPrompt,
+      conversationSystemPrompt: data.conversationSystemPrompt ?? null,
+      classificationSystemPrompt: data.classificationSystemPrompt ?? null,
+      insightSynthesisSystemPrompt: data.insightSynthesisSystemPrompt ?? null,
+      graphConstructionSystemPrompt: data.graphConstructionSystemPrompt ?? null,
       status: data.status ?? "active",
     })
     .returning();
