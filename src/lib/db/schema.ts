@@ -94,6 +94,11 @@ export const entities = pgTable('entities', {
   name: text('name').notNull(),
   purpose: text('purpose'),
   systemPrompt: text('system_prompt').notNull(),
+  // Phase-specific system prompts (multi-phase architecture)
+  conversationSystemPrompt: text('conversation_system_prompt'),
+  classificationSystemPrompt: text('classification_system_prompt'),
+  insightSynthesisSystemPrompt: text('insight_synthesis_system_prompt'),
+  graphConstructionSystemPrompt: text('graph_construction_system_prompt'),
   status: text('status').notNull().default('active'), // 'active', 'paused', 'archived'
   createdAt: timestamp('created_at', { mode: 'date' }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { mode: 'date' }).defaultNow().notNull(),
@@ -185,6 +190,7 @@ export const llmInteractions = pgTable('llm_interactions', {
     .notNull()
     .references(() => entities.id, { onDelete: 'cascade' }),
   systemPrompt: text('system_prompt').notNull(),
+  phase: text('phase'), // 'classification' | 'insight_synthesis' | 'graph_construction' | 'conversation'
   request: jsonb('request').notNull(),
   response: jsonb('response'),
   createdAt: timestamp('created_at', { mode: 'date' }).defaultNow().notNull(),
