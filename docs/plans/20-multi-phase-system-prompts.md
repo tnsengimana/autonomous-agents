@@ -454,7 +454,7 @@ const systemPrompt = entity.conversationSystemPrompt || entity.systemPrompt;
 
 **New column**:
 ```typescript
-phase: text('phase'), // 'classification' | 'insight_synthesis' | 'graph_construction' | 'conversation'
+phase: text('phase'), // 'classification' | 'insight_synthesis' | 'graph_construction'
 ```
 
 **Deliverable**: Every LLM interaction is tagged with its phase for debugging/auditing.

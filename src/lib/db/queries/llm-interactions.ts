@@ -26,6 +26,7 @@ export interface CreateLLMInteractionInput {
   entityId: string;
   systemPrompt: string;
   request: Record<string, unknown>;
+  phase?: string; // 'classification' | 'insight_synthesis' | 'graph_construction' | 'conversation'
 }
 
 export interface UpdateLLMInteractionInput {
@@ -49,6 +50,7 @@ export async function createLLMInteraction(
       entityId: data.entityId,
       systemPrompt: data.systemPrompt,
       request: data.request,
+      phase: data.phase,
     })
     .returning();
 
