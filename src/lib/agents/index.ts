@@ -58,6 +58,10 @@ export {
   getAllTools,
   getLeadTools,
   getSubordinateTools,
+  getGraphTools,
+  getBackgroundTools,
+  getForegroundTools,
+  getKnowledgeItemTools,
   getToolSchemas,
   executeTool,
   toolSchemasToOpenAIFunctions,
@@ -86,6 +90,19 @@ export {
   reportToLeadTool,
   requestLeadInputTool,
 } from "./tools/subordinate-tools";
+
+// Graph tools
+export {
+  registerGraphTools,
+  addGraphNodeTool,
+  addGraphEdgeTool,
+  queryGraphTool,
+  getGraphSummaryTool,
+  createNodeTypeTool,
+  createEdgeTypeTool,
+  getGraphToolNames,
+  type GraphToolContext,
+} from "./tools/graph-tools";
 
 // Knowledge extraction and management
 export {

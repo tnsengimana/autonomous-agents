@@ -31,6 +31,7 @@ export interface ToolContext {
   agentId: string;
   entityId: string;
   isLead: boolean;
+  conversationId?: string;
 }
 
 export interface ToolResult {
@@ -91,6 +92,13 @@ export function getLeadTools(): Tool[] {
       "tavilySearch",
       "tavilyExtract",
       "tavilyResearch",
+      // Graph tools
+      "addGraphNode",
+      "addGraphEdge",
+      "queryGraph",
+      "getGraphSummary",
+      "createNodeType",
+      "createEdgeType",
     ].includes(tool.schema.name),
   );
 }
@@ -128,12 +136,13 @@ export function getForegroundTools(): Tool[] {
 /**
  * Get tools available during background work sessions (background conversations)
  * Leads get full tools, subordinates get limited set
+ * All agents get graph tools for knowledge graph manipulation
  */
 export function getBackgroundTools(isLead: boolean): Tool[] {
   if (isLead) {
     return [...getLeadTools(), ...getKnowledgeItemTools()];
   }
-  return [...getSubordinateTools(), ...getKnowledgeItemTools()];
+  return [...getSubordinateTools(), ...getKnowledgeItemTools(), ...getGraphTools()];
 }
 
 /**
@@ -142,6 +151,22 @@ export function getBackgroundTools(isLead: boolean): Tool[] {
 export function getSubordinateTools(): Tool[] {
   return getAllTools().filter((tool) =>
     ["reportToLead", "requestLeadInput"].includes(tool.schema.name),
+  );
+}
+
+/**
+ * Get graph manipulation tools (available in background work sessions)
+ */
+export function getGraphTools(): Tool[] {
+  return getAllTools().filter((tool) =>
+    [
+      "addGraphNode",
+      "addGraphEdge",
+      "queryGraph",
+      "getGraphSummary",
+      "createNodeType",
+      "createEdgeType",
+    ].includes(tool.schema.name),
   );
 }
 

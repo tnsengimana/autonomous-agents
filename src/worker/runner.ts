@@ -152,10 +152,14 @@ export async function startRunner(): Promise<void> {
   const { registerTavilyTools } = await import(
     '@/lib/agents/tools/tavily-tools'
   );
+  const { registerGraphTools } = await import(
+    '@/lib/agents/tools/graph-tools'
+  );
 
   registerLeadTools();
   registerSubordinateTools();
   registerTavilyTools();
+  registerGraphTools();
   log('Tools registered');
 
   while (!isShuttingDown) {
