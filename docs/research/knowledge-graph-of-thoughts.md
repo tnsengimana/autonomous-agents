@@ -636,17 +636,245 @@ Creates/updates:
 └─────────────────────────────────────────────────────────────────────┘
 
 ┌─────────────────────────────────────────────────────────────────────┐
-│  KNOWLEDGE GRAPH (discovered, interconnected knowledge)             │
+│  KNOWLEDGE GRAPH SCHEMA (dynamic, evolvable types)                  │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                     │
+│  graph_node_types                                                   │
+│  ├── id, entity_id, name, description                              │
+│  ├── properties_schema (JSONB - JSON Schema for validation)        │
+│  ├── example_properties (JSONB - for LLM few-shot)                 │
+│  └── created_at, created_by ('system' | 'agent' | 'user')          │
+│                                                                     │
+│  graph_edge_types                                                   │
+│  ├── id, entity_id, name, description                              │
+│  ├── source_node_types (VARCHAR[] - allowed source types)          │
+│  ├── target_node_types (VARCHAR[] - allowed target types)          │
+│  ├── properties_schema (JSONB - JSON Schema for validation)        │
+│  ├── example_properties (JSONB - for LLM few-shot)                 │
+│  └── created_at, created_by ('system' | 'agent' | 'user')          │
+│                                                                     │
+└─────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────┐
+│  KNOWLEDGE GRAPH DATA (instances)                                   │
 ├─────────────────────────────────────────────────────────────────────┤
 │                                                                     │
 │  graph_nodes                                                        │
-│  ├── id, entity_id, type, name, properties, created_at, expires_at │
+│  ├── id, entity_id, type (FK to graph_node_types.name)             │
+│  ├── name, properties (JSONB - validated against type schema)      │
+│  └── created_at, expires_at                                        │
 │                                                                     │
 │  graph_edges                                                        │
-│  ├── id, entity_id, source_id, target_id, type, properties         │
+│  ├── id, entity_id, type (FK to graph_edge_types.name)             │
+│  ├── source_id, target_id (FK to graph_nodes)                      │
+│  ├── properties (JSONB - validated against type schema)            │
+│  └── created_at                                                     │
 │                                                                     │
 └─────────────────────────────────────────────────────────────────────┘
 ```
+
+### Dynamic Schema Design
+
+The schema is **evolvable** - the LLM can create new node and edge types at runtime. This makes the system an **ontology learning** system that grows its knowledge structure over time.
+
+#### Benefits
+
+| Benefit | Description |
+|---------|-------------|
+| **Flexibility** | Agent can propose new types when it discovers knowledge that doesn't fit existing categories |
+| **Self-documenting** | Type definitions live in the database with descriptions and examples |
+| **Validation** | Nodes/edges are validated against their type's JSON Schema |
+| **LLM Context** | Type definitions are fed to the LLM so it prefers existing types |
+| **Multi-tenant** | Different aides can evolve different type sets for their domain |
+
+#### Seed Types
+
+The 8 node types and 8 edge types defined above are **seed types** - inserted at system initialization with `created_by='system'` and `entity_id=NULL` (global). The agent adds more over time as needed.
+
+#### Example Node Type Definition
+
+```jsonc
+// graph_node_types row for "Company"
+{
+  "id": "uuid-...",
+  "entity_id": null,  // global type
+  "name": "Company",
+  "description": "Legal entity that issues securities. Use for corporations, partnerships, or other business entities that have tradeable instruments.",
+  "properties_schema": {
+    "type": "object",
+    "required": ["name"],
+    "properties": {
+      "name": { "type": "string", "description": "Legal company name" },
+      "ticker": { "type": "string", "description": "Primary stock ticker" },
+      "country": { "type": "string", "description": "Country of incorporation" },
+      "sector": { "type": "string", "description": "Primary business sector" }
+    }
+  },
+  "example_properties": {
+    "name": "Apple Inc.",
+    "ticker": "AAPL",
+    "country": "USA",
+    "sector": "Technology"
+  },
+  "created_by": "system"
+}
+```
+
+#### Example Edge Type Definition
+
+```jsonc
+// graph_edge_types row for "affects"
+{
+  "id": "uuid-...",
+  "entity_id": null,  // global type
+  "name": "affects",
+  "description": "Indicates that an event or institution has impact on an entity. Use when a MarketEvent or Institution causes changes to an Asset, Company, Sector, or AssetClass.",
+  "source_node_types": ["MarketEvent", "Institution"],
+  "target_node_types": ["Asset", "Company", "Sector", "AssetClass"],
+  "properties_schema": {
+    "type": "object",
+    "properties": {
+      "direction": {
+        "type": "string",
+        "enum": ["positive", "negative", "neutral"],
+        "description": "Whether the impact is beneficial or detrimental"
+      },
+      "magnitude": {
+        "type": "number",
+        "minimum": 0,
+        "maximum": 1,
+        "description": "Strength of the impact (0=negligible, 1=severe)"
+      }
+    }
+  },
+  "example_properties": {
+    "direction": "positive",
+    "magnitude": 0.7
+  },
+  "created_by": "system"
+}
+```
+
+#### LLM Context Building
+
+When the agent populates the graph, it receives type definitions in the prompt:
+
+```xml
+<available_node_types>
+- Asset: Financial instrument (stocks, bonds, ETFs, crypto)
+  Required: symbol
+  Optional: type, name
+  Example: {"symbol": "AAPL", "type": "stock", "name": "Apple Inc."}
+
+- Company: Legal entity that issues securities
+  Required: name
+  Optional: ticker, country, sector
+  Example: {"name": "Apple Inc.", "ticker": "AAPL", "country": "USA"}
+
+- Institution: Central banks, regulators, international bodies
+  Required: name
+  Optional: type, country
+  Example: {"name": "Federal Reserve", "type": "central_bank", "country": "USA"}
+
+[... other types ...]
+</available_node_types>
+
+<available_edge_types>
+- issued_by: Asset → Company
+  Description: Asset issued by a company
+  Example: {}
+
+- affects: MarketEvent|Institution → Asset|Company|Sector|AssetClass
+  Description: Event or institution impacts an entity
+  Example: {"direction": "positive", "magnitude": 0.7}
+
+- correlated: Asset ↔ Asset
+  Description: Statistical correlation between assets
+  Example: {"coefficient": 0.85, "period": "1y"}
+
+[... other types ...]
+</available_edge_types>
+
+<instructions>
+Use existing types when possible. If you discover knowledge that truly
+doesn't fit any existing type, you may propose a new type by calling
+the create_node_type or create_edge_type tool with:
+- name: PascalCase for nodes, snake_case for edges
+- description: Clear explanation for future LLM context
+- properties_schema: JSON Schema defining the properties
+- example_properties: Realistic example for few-shot learning
+- justification: Why existing types don't suffice
+</instructions>
+```
+
+#### New Type Creation Flow
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│  LLM encounters knowledge that doesn't fit existing types           │
+│  Example: "SEC Rule 10b-5 restricts insider trading"                │
+└─────────────────────────────────────────────────────────────────────┘
+                                │
+                                ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│  LLM proposes new type via tool call:                               │
+│  {                                                                  │
+│    "tool": "create_node_type",                                      │
+│    "name": "Regulation",                                            │
+│    "description": "Government or regulatory rule affecting         │
+│                    financial markets or market participants",       │
+│    "properties_schema": {                                           │
+│      "type": "object",                                              │
+│      "required": ["name", "regulator"],                             │
+│      "properties": {                                                │
+│        "name": {"type": "string"},                                  │
+│        "regulator": {"type": "string"},                             │
+│        "effective_date": {"type": "string", "format": "date"},      │
+│        "summary": {"type": "string"}                                │
+│      }                                                              │
+│    },                                                               │
+│    "example_properties": {                                          │
+│      "name": "Rule 10b-5",                                          │
+│      "regulator": "SEC",                                            │
+│      "summary": "Prohibits fraud in securities transactions"        │
+│    },                                                               │
+│    "justification": "Regulations are persistent rules, not events. │
+│                      They constrain behavior over time unlike       │
+│                      one-time MarketEvents."                        │
+│  }                                                                  │
+└─────────────────────────────────────────────────────────────────────┘
+                                │
+                                ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│  System validates:                                                  │
+│  ✓ Name not already taken                                          │
+│  ✓ JSON Schema is valid                                            │
+│  ✓ Name follows conventions (PascalCase for nodes)                 │
+│  ✓ Description is non-empty                                        │
+└─────────────────────────────────────────────────────────────────────┘
+                                │
+                                ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│  Insert into graph_node_types:                                      │
+│  - created_by: 'agent'                                              │
+│  - entity_id: current entity (or NULL if should be global)         │
+│  Log for optional human review                                      │
+└─────────────────────────────────────────────────────────────────────┘
+                                │
+                                ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│  LLM can now use the new type in subsequent graph operations       │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+#### Open Questions
+
+| Question | Options |
+|----------|---------|
+| **Approval workflow** | Auto-approve all, require human approval, or approve only "safe" additions? |
+| **Type merging** | What if agent creates redundant type? Manual merge, or LLM-assisted deduplication? |
+| **Schema evolution** | If type schema changes, migrate existing nodes or version the types? |
+| **Scoping** | Global types shared across aides, or each aide has isolated types? |
 
 ### How They Work Together
 
@@ -721,5 +949,108 @@ No user data in the graph. Just discovered knowledge and its relationships.
 | **Graph lifecycle** | Per-question (ephemeral) | Per-entity (persistent, grows over time) |
 | **Goal** | Answer one question | Monitor continuously, alert when relevant |
 | **RETRIEVE triggers** | "Can I answer the question?" | "Is there a briefing-worthy insight?" |
-| **Data freshness** | N/A (one-shot) | Critical - need `expires_at` for stale data |
+| **Data freshness** | N/A (one-shot) | Critical - need temporal model |
 | **User context** | Implicit in question | Loaded from relational tables, not in graph |
+
+---
+
+## Temporal Model
+
+Because our graph is **persistent** (unlike KGoT's ephemeral per-question graph), we must handle time carefully. Knowledge becomes stale, relationships change, and events have distinct timestamps.
+
+### Temporal Fields in Type Schemas
+
+Temporal behavior is defined at the **type level**, not as system columns. Each node type's `properties_schema` specifies what temporal fields that type has:
+
+| Node Type | Temporal Properties in Schema |
+|-----------|-------------------------------|
+| **Asset** | None (semi-permanent) |
+| **Company** | None (semi-permanent) |
+| **Sector** | None (permanent) |
+| **AssetClass** | None (permanent) |
+| **Institution** | None (permanent) |
+| **MarketEvent** | `occurred_at` (when the event happened) |
+| **News** | `published_at` (when published) |
+| **Insight** | `generated_at` (when insight was derived) |
+
+The agent reasons about freshness based on these properties and the current date. For example, when querying insights about AAPL, the agent can filter by `generated_at` to focus on recent insights.
+
+### Example Type Schemas with Temporal Fields
+
+```jsonc
+// MarketEvent type - has occurred_at
+{
+  "name": "MarketEvent",
+  "properties_schema": {
+    "type": "object",
+    "required": ["type", "summary", "occurred_at"],
+    "properties": {
+      "type": { "type": "string", "enum": ["earnings", "fed_decision", "ipo", ...] },
+      "summary": { "type": "string" },
+      "occurred_at": { "type": "string", "format": "date-time" }
+    }
+  }
+}
+
+// Insight type - has generated_at
+{
+  "name": "Insight",
+  "properties_schema": {
+    "type": "object",
+    "required": ["type", "summary", "generated_at"],
+    "properties": {
+      "type": { "type": "string", "enum": ["signal", "observation", "pattern"] },
+      "summary": { "type": "string" },
+      "action": { "type": "string", "enum": ["buy", "sell", "hold"] },
+      "strength": { "type": "number", "minimum": 0, "maximum": 1 },
+      "generated_at": { "type": "string", "format": "date-time" }
+    }
+  }
+}
+```
+
+### Agent Reasoning About Freshness
+
+The agent uses temporal properties to reason about data relevance:
+
+```
+Agent sees: Insight(type: "signal", action: "buy", generated_at: "2026-01-15")
+Current date: 2026-02-04
+
+Agent reasoning: "This buy signal is 20 days old. Market conditions may have
+changed. I should verify if it's still valid before briefing the user."
+```
+
+This is more flexible than system-level expiration because:
+- Different domains have different freshness requirements
+- The LLM can apply judgment based on context
+- No need for background jobs to expire data
+
+### What NOT to Store in the Graph
+
+Time-series data does not belong in the graph:
+
+| Data Type | Where It Belongs |
+|-----------|------------------|
+| Stock prices | External API (Alpha Vantage, Yahoo Finance) |
+| Historical OHLCV | Time-series database or external API |
+| Economic indicator values | External API or dedicated table |
+| Portfolio value history | Dedicated `portfolio_snapshots` table |
+
+The graph stores **relationships and insights**, not raw numerical data. When the agent needs prices, it calls a tool that fetches from an external API.
+
+### Schema (System Fields Only)
+
+```
+graph_nodes
+├── id, entity_id, type, name
+├── properties          -- temporal fields live here per type schema
+├── source_conversation_id
+└── created_at          -- when we added this to the graph
+
+graph_edges
+├── id, entity_id, type, source_id, target_id
+├── properties
+├── source_conversation_id
+└── created_at
+```
