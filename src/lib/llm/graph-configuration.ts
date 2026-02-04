@@ -11,7 +11,61 @@ import {
   createNodeType,
   createEdgeType,
   getNodeTypeByName,
+  nodeTypeExists,
 } from "@/lib/db/queries/graph-types";
+
+// ============================================================================
+// Hardcoded Seed Types
+// ============================================================================
+
+/**
+ * The standardized Insight node type that all entities share.
+ * This type is used for derived analysis including signals, observations, and patterns.
+ * Creating an Insight node always notifies the user via inbox item.
+ */
+export const INSIGHT_NODE_TYPE = {
+  name: "Insight",
+  description: "Derived analysis including signals, observations, and patterns",
+  propertiesSchema: {
+    type: "object" as const,
+    required: ["type", "summary", "generated_at"],
+    properties: {
+      type: {
+        type: "string",
+        enum: ["signal", "observation", "pattern"],
+        description: "signal=actionable, observation=notable trend, pattern=recurring behavior",
+      },
+      summary: {
+        type: "string",
+        description: "The explanation/reasoning for this insight",
+      },
+      action: {
+        type: "string",
+        enum: ["buy", "sell", "hold"],
+        description: "Recommended action (only for signals, null otherwise)",
+      },
+      strength: {
+        type: "number",
+        minimum: 0,
+        maximum: 1,
+        description: "Confidence level (0=low, 1=high)",
+      },
+      generated_at: {
+        type: "string",
+        format: "date-time",
+        description: "When this insight was derived",
+      },
+    },
+  },
+  exampleProperties: {
+    type: "signal",
+    summary: "AAPL oversold with RSI at 28, positive earnings surprise of 12%, and sector tailwinds from Fed holding rates",
+    action: "buy",
+    strength: 0.8,
+    generated_at: "2026-02-04T10:30:00Z",
+  },
+  notifyUser: true,
+} as const;
 
 // ============================================================================
 // Schemas for LLM-generated type definitions
@@ -99,6 +153,38 @@ Valid JSON Schema object with:
 - required: optional array of required property names`;
 
 // ============================================================================
+// Seed Type Initialization
+// ============================================================================
+
+/**
+ * Create the standardized seed node types that all entities share.
+ * Currently includes:
+ * - Insight: Derived analysis including signals, observations, and patterns
+ *
+ * This function is idempotent - it checks if types exist before creating them.
+ */
+export async function createSeedNodeTypes(entityId: string): Promise<void> {
+  // Check if Insight type already exists for this entity
+  const insightExists = await nodeTypeExists(entityId, INSIGHT_NODE_TYPE.name);
+
+  if (!insightExists) {
+    await createNodeType({
+      entityId,
+      name: INSIGHT_NODE_TYPE.name,
+      description: INSIGHT_NODE_TYPE.description,
+      propertiesSchema: INSIGHT_NODE_TYPE.propertiesSchema,
+      exampleProperties: INSIGHT_NODE_TYPE.exampleProperties,
+      notifyUser: INSIGHT_NODE_TYPE.notifyUser,
+      createdBy: "system",
+    });
+
+    console.log(
+      `[GraphTypeInitializer] Created seed Insight node type for entity ${entityId}`,
+    );
+  }
+}
+
+// ============================================================================
 // Type Initialization Functions
 // ============================================================================
 
@@ -144,14 +230,25 @@ Create node types and edge types that capture the external knowledge this agent 
 
 /**
  * Persist initialized types to the database.
- * Creates node types first, then edge types with their constraints.
+ * Creates seed types first, then LLM-generated node types, then edge types with their constraints.
  */
 export async function persistInitializedTypes(
   entityId: string,
   types: TypeInitializationResult,
 ): Promise<void> {
-  // First, create all node types
+  // First, create seed node types (e.g., Insight)
+  await createSeedNodeTypes(entityId);
+
+  // Then, create all LLM-generated node types
   for (const nodeType of types.nodeTypes) {
+    // Skip if this is the Insight type (already created as seed type)
+    if (nodeType.name === INSIGHT_NODE_TYPE.name) {
+      console.log(
+        `[GraphTypeInitializer] Skipping LLM-generated Insight type (using seed type instead)`,
+      );
+      continue;
+    }
+
     await createNodeType({
       entityId,
       name: nodeType.name,

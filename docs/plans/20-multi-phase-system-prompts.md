@@ -492,6 +492,66 @@ phase: text('phase'), // 'classification' | 'insight_synthesis' | 'graph_constru
 | `src/app/api/messages/route.ts` | 6 | Use conversation prompt |
 | `src/lib/db/queries/llm-interactions.ts` | 7 | Phase tracking |
 | `src/app/api/entities/route.ts` | 8 | Create with 4 prompts |
+| Browser testing | 9 | Verify full flow end-to-end |
+
+---
+
+### Phase 9: Browser Verification & End-to-End Testing
+
+**Goal**: Verify the entire system works end-to-end in the browser, including entity creation triggering the first background iteration.
+
+**Prerequisites**: All previous phases complete, `docker compose up` running.
+
+**Test Checklist**:
+
+1. **Entity Creation**
+   - [ ] Navigate to entity creation UI
+   - [ ] Create new entity with a purpose (e.g., "Investment advisor tracking tech stocks")
+   - [ ] Verify all four system prompts are generated and saved
+   - [ ] Verify entity status is 'active'
+
+2. **First Background Iteration (Classification)**
+   - [ ] Wait for worker to pick up the entity (or trigger manually)
+   - [ ] Verify classification LLM call happens
+   - [ ] Check `llm_interactions` table shows `phase: 'classification'`
+   - [ ] Verify classification output contains action + granular reasoning
+
+3. **Graph Construction Flow** (if classification chose "populate")
+   - [ ] Verify second LLM call with `phase: 'graph_construction'`
+   - [ ] Verify Tavily tools are available and called
+   - [ ] Check new nodes/edges created in knowledge graph
+   - [ ] Verify graph visualization shows new data
+
+4. **Insight Synthesis Flow** (if classification chose "synthesize")
+   - [ ] Verify second LLM call with `phase: 'insight_synthesis'`
+   - [ ] Verify `addInsightNode` tool creates:
+     - Insight node in graph
+     - Inbox item for user
+     - Message in entity's conversation
+   - [ ] Check inbox shows the new insight notification
+
+5. **User Conversation**
+   - [ ] Open chat with the entity
+   - [ ] Send a message
+   - [ ] Verify response uses `conversationSystemPrompt`
+   - [ ] Verify entity can query its knowledge graph in conversation
+   - [ ] If insight was created, verify it appears in conversation history
+
+6. **Insight Discussion**
+   - [ ] Click inbox notification to navigate to conversation
+   - [ ] Ask follow-up question about the insight
+   - [ ] Verify entity responds coherently about its own insight
+
+**Browser Tools**:
+- Use browser MCP tools to automate verification
+- Check console for errors
+- Inspect network requests to verify API calls
+
+**Success Criteria**:
+- New entity creation → classification → action flow completes without errors
+- All four phases use their respective system prompts
+- Insights surface to user via inbox and conversation
+- User can chat with entity about its discoveries
 
 ---
 
