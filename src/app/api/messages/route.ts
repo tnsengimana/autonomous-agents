@@ -110,8 +110,8 @@ ${graphContext}`;
         // Save the turn atomically after streaming completes
         await createTurnMessages(
           conversation.id,
-          { role: 'user', content },
-          { role: 'assistant', content: fullResponse }
+          { role: 'user', content: { text: content } },
+          { role: 'llm', content: { text: fullResponse } }
         );
 
         await writer.close();

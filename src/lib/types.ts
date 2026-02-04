@@ -48,7 +48,38 @@ export type GraphEdge = InferSelectModel<typeof graphEdges>;
 
 export type EntityStatus = 'active' | 'paused' | 'archived';
 export type MemoryType = 'preference' | 'insight' | 'fact';
-export type MessageRole = 'user' | 'assistant' | 'tool' | 'summary';
+export type MessageRole = 'user' | 'llm' | 'summary';
+
+// ============================================================================
+// Message Content Types (JSON structure for messages.content)
+// ============================================================================
+
+/** Content for role === 'user' */
+export interface UserMessageContent {
+  text: string;
+}
+
+/** Content for role === 'llm' */
+export interface LLMMessageContent {
+  text: string;
+  thinking?: string;
+  toolCalls?: Array<{
+    toolName: string;
+    args: Record<string, unknown>;
+  }>;
+  toolResults?: Array<{
+    toolName: string;
+    result: unknown;
+  }>;
+}
+
+/** Content for role === 'summary' */
+export interface SummaryMessageContent {
+  text: string;
+}
+
+/** Union type for all message content types */
+export type MessageContent = UserMessageContent | LLMMessageContent | SummaryMessageContent;
 
 // ============================================================================
 // Extended Types
@@ -62,10 +93,7 @@ export interface ExtractedMemory {
 export interface NewMessage {
   conversationId: string;
   role: MessageRole;
-  content: string;
-  thinking?: string | null;
-  toolCalls?: unknown;
-  toolCallId?: string;
+  content: MessageContent;
   previousMessageId?: string;
 }
 

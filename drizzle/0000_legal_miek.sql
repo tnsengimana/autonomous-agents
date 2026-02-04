@@ -134,10 +134,7 @@ CREATE TABLE "messages" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"conversation_id" uuid NOT NULL,
 	"role" text NOT NULL,
-	"content" text NOT NULL,
-	"thinking" text,
-	"tool_calls" jsonb,
-	"tool_call_id" text,
+	"content" jsonb NOT NULL,
 	"previous_message_id" uuid,
 	"created_at" timestamp DEFAULT now() NOT NULL
 );

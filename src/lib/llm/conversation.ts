@@ -6,12 +6,13 @@ import {
 } from "@/lib/db/queries/conversations";
 import {
   getMessagesByConversationId,
-  appendMessage,
+  appendLLMMessage,
   getRecentMessages,
   getLastMessage,
   getConversationContext,
+  getMessageText,
 } from "@/lib/db/queries/messages";
-import type { Conversation, Message, LLMMessage } from "@/lib/types";
+import type { Conversation, Message, LLMMessage, LLMMessageContent } from "@/lib/types";
 
 // ============================================================================
 // Conversation Management
@@ -81,23 +82,25 @@ export async function loadRecentHistory(
 }
 
 /**
- * Add an assistant message to a conversation. This should be called for
+ * Add an LLM message to a conversation. This should be called for
  * special cases as we save the turn atomically.
  */
-export async function addAssistantMessage(
+export async function addLLMMessage(
   conversationId: string,
-  content: string,
-  thinking?: string | null,
+  text: string,
+  options?: { thinking?: string },
 ): Promise<Message> {
-  const message = await appendMessage(
-    conversationId,
-    "assistant",
-    content,
-    thinking ? { thinking } : undefined,
-  );
+  const content: LLMMessageContent = {
+    text,
+    thinking: options?.thinking,
+  };
+  const message = await appendLLMMessage(conversationId, content);
   await touchConversation(conversationId);
   return message;
 }
+
+// Legacy alias for compatibility
+export const addAssistantMessage = addLLMMessage;
 
 /**
  * Get the last message in a conversation
@@ -114,29 +117,27 @@ export async function getConversationLastMessage(
 
 /**
  * Convert database messages to LLM message format
- * Handles new roles: tool and summary are mapped to appropriate LLM roles
+ * Handles roles: user, llm, summary are mapped to appropriate LLM API roles
  */
 export function messagesToLLMFormat(messages: Message[]): LLMMessage[] {
   return messages.map((m) => ({
     role: mapRoleToLLMRole(m.role),
-    content: m.content,
+    content: getMessageText(m),
   }));
 }
 
 /**
- * Map database message roles to LLM roles
+ * Map database message roles to LLM API roles
  * - user -> user
- * - assistant -> assistant
+ * - llm -> assistant
  * - summary -> assistant (summaries are context from the assistant's perspective)
- * - tool -> assistant (tool results are assistant-side context)
  */
 function mapRoleToLLMRole(role: string): "user" | "assistant" {
   switch (role) {
     case "user":
       return "user";
-    case "assistant":
+    case "llm":
     case "summary":
-    case "tool":
       return "assistant";
     default:
       return "assistant";

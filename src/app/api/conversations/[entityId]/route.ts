@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth/config";
 import { getEntityById } from "@/lib/db/queries/entities";
 import { getLatestConversation } from "@/lib/db/queries/conversations";
-import { getMessagesByConversationId } from "@/lib/db/queries/messages";
+import { getMessagesByConversationId, getMessageText } from "@/lib/db/queries/messages";
 
 /**
  * GET /api/conversations/[entityId]
@@ -40,13 +40,14 @@ export async function GET(
 
     const messages = await getMessagesByConversationId(conversation.id);
 
-    // 4. Filter out system messages and format response
+    // 4. Filter out summary messages and format response
+    // Map 'llm' role to 'assistant' for UI compatibility
     const filteredMessages = messages
-      .filter((m) => m.role !== "system")
+      .filter((m) => m.role !== "summary")
       .map((m) => ({
         id: m.id,
-        role: m.role,
-        content: m.content,
+        role: m.role === "llm" ? "assistant" : m.role,
+        content: getMessageText(m),
         createdAt: m.createdAt,
       }));
 

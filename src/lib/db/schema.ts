@@ -115,11 +115,8 @@ export const messages = pgTable('messages', {
   conversationId: uuid('conversation_id')
     .notNull()
     .references(() => conversations.id, { onDelete: 'cascade' }),
-  role: text('role').notNull(), // 'user' | 'assistant' | 'tool' | 'summary'
-  content: text('content').notNull(),
-  thinking: text('thinking'), // for extended thinking/reasoning
-  toolCalls: jsonb('tool_calls'), // For assistant messages with tool calls
-  toolCallId: text('tool_call_id'), // For tool role - links result to call
+  role: text('role').notNull(), // 'user' | 'llm' | 'summary'
+  content: jsonb('content').notNull(), // JSON structure depends on role (see MessageContent types)
   previousMessageId: uuid('previous_message_id').references((): AnyPgColumn => messages.id), // Linked list for compaction
   createdAt: timestamp('created_at', { mode: 'date' }).defaultNow().notNull(),
 });

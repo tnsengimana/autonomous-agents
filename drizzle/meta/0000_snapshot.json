@@ -1387,27 +1387,9 @@
         },
         "content": {
           "name": "content",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "thinking": {
-          "name": "thinking",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "tool_calls": {
-          "name": "tool_calls",
           "type": "jsonb",
           "primaryKey": false,
-          "notNull": false
-        },
-        "tool_call_id": {
-          "name": "tool_call_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
+          "notNull": true
         },
         "previous_message_id": {
           "name": "previous_message_id",

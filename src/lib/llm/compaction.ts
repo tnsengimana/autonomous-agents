@@ -11,6 +11,7 @@ import {
   getConversationContext,
   addSummaryMessage,
   getLastMessage,
+  getMessageText,
 } from '@/lib/db/queries/messages';
 import { generateLLMResponse } from './providers';
 import type { Message, LLMMessage } from '@/lib/types';
@@ -70,7 +71,7 @@ export async function generateConversationSummary(
   // Convert messages to LLM format
   const llmMessages: LLMMessage[] = messages.map((m) => ({
     role: mapRoleToLLMRole(m.role),
-    content: m.content,
+    content: getMessageText(m),
   }));
 
   const systemPrompt = `You are a conversation summarizer. Your task is to create a concise but comprehensive summary of the conversation that preserves:
@@ -100,16 +101,15 @@ Create a summary that would allow someone to continue this conversation without 
 }
 
 /**
- * Map database message roles to LLM roles
- * Summary and tool roles are treated as assistant context
+ * Map database message roles to LLM API roles
+ * Summary role is treated as assistant context
  */
-function mapRoleToLLMRole(role: string): 'user' | 'assistant' | 'system' {
+function mapRoleToLLMRole(role: string): 'user' | 'assistant' {
   switch (role) {
     case 'user':
       return 'user';
-    case 'assistant':
+    case 'llm':
     case 'summary':
-    case 'tool':
       return 'assistant';
     default:
       return 'assistant';
