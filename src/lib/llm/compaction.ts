@@ -12,9 +12,9 @@ import {
   addSummaryMessage,
   getLastMessage,
 } from '@/lib/db/queries/messages';
-import { generateLLMResponse } from './llm';
+import { generateLLMResponse } from './providers';
 import type { Message, LLMMessage } from '@/lib/types';
-import type { StreamOptions } from './llm';
+import type { StreamOptions } from './providers';
 
 // ============================================================================
 // Constants

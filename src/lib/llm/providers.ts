@@ -21,7 +21,7 @@ import {
   type ToolContext,
   type ToolParameter,
   executeTool,
-} from "@/lib/agents/tools";
+} from "@/lib/llm/tools";
 
 // ============================================================================
 // Configuration
@@ -397,8 +397,8 @@ export async function streamLLMResponseWithTools(
   systemPrompt: string | undefined,
   options: StreamWithToolsOptions,
 ): Promise<StreamWithToolsResult> {
-  // Default to 100 steps to allow for extensive tool calling in background work
-  const { tools, toolContext, maxSteps = 100 } = options;
+  // Default to 10 steps to allow for extensive tool calling in background work
+  const { tools, toolContext, maxSteps = 10 } = options;
 
   // Mock mode for development - just return text without tool calls
   if (isMockEnabled()) {
@@ -692,7 +692,10 @@ export async function generateLLMObject<T>(
                 description: { type: "string" },
               },
             },
-            exampleProperties: { name: "Example", description: "An example concept" },
+            exampleProperties: {
+              name: "Example",
+              description: "An example concept",
+            },
           },
         ],
         edgeTypes: [

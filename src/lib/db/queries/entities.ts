@@ -8,7 +8,7 @@ import { eq, desc } from 'drizzle-orm';
 import { db } from '../client';
 import { entities } from '../schema';
 import type { Entity, EntityStatus } from '@/lib/types';
-import { initializeAndPersistTypesForEntity } from '@/lib/agents/graph-type-initializer';
+import { initializeAndPersistTypesForEntity } from '@/lib/llm/graph-type-initializer';
 
 // ============================================================================
 // CRUD Operations

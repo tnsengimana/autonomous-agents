@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { generateLLMObject, type StreamOptions } from './llm';
+import { generateLLMObject, type StreamOptions } from './providers';
 import { createMemories } from '@/lib/db/queries/memories';
 import type { ExtractedMemory, Memory, LLMMessage } from '@/lib/types';
 

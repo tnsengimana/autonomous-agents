@@ -3,11 +3,11 @@ import { auth } from '@/lib/auth/config';
 import { getEntityById } from '@/lib/db/queries/entities';
 import { getOrCreateConversation } from '@/lib/db/queries/conversations';
 import { createTurnMessages } from '@/lib/db/queries/messages';
-import { streamLLMResponse, type StreamOptions } from '@/lib/agents/llm';
-import { buildMessageContext } from '@/lib/agents/conversation';
-import { buildGraphContextBlock } from '@/lib/agents/knowledge-graph';
+import { streamLLMResponse, type StreamOptions } from '@/lib/llm/providers';
+import { buildMessageContext } from '@/lib/llm/conversation';
+import { buildGraphContextBlock } from '@/lib/llm/knowledge-graph';
 import { getMemoriesByEntityId } from '@/lib/db/queries/memories';
-import { buildMemoryContextBlock } from '@/lib/agents/memory';
+import { buildMemoryContextBlock } from '@/lib/llm/memory';
 
 /**
  * POST /api/messages

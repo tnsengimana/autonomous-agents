@@ -10,15 +10,18 @@
  * 4. Save response to llm_interaction
  */
 
-import { streamLLMResponseWithTools } from '@/lib/agents/llm';
-import { buildGraphContextBlock, ensureGraphTypesInitialized } from '@/lib/agents/knowledge-graph';
-import { getBackgroundTools, type ToolContext } from '@/lib/agents/tools';
-import { getActiveEntities } from '@/lib/db/queries/entities';
+import { streamLLMResponseWithTools } from "@/lib/llm/providers";
+import {
+  buildGraphContextBlock,
+  ensureGraphTypesInitialized,
+} from "@/lib/llm/knowledge-graph";
+import { getBackgroundTools, type ToolContext } from "@/lib/llm/tools";
+import { getActiveEntities } from "@/lib/db/queries/entities";
 import {
   createLLMInteraction,
   updateLLMInteraction,
-} from '@/lib/db/queries/llm-interactions';
-import type { Entity } from '@/lib/types';
+} from "@/lib/db/queries/llm-interactions";
+import type { Entity } from "@/lib/types";
 
 // ============================================================================
 // Configuration
@@ -66,11 +69,15 @@ async function processEntityIteration(entity: Entity): Promise<void> {
 
   try {
     // Ensure graph types are initialized for this entity
-    await ensureGraphTypesInitialized(entity.id, {
-      name: entity.name,
-      type: 'entity', // Legacy field, can be anything
-      purpose: entity.purpose,
-    }, { userId: entity.userId });
+    await ensureGraphTypesInitialized(
+      entity.id,
+      {
+        name: entity.name,
+        type: "entity", // Legacy field, can be anything
+        purpose: entity.purpose,
+      },
+      { userId: entity.userId },
+    );
 
     // 1. Build context with graph information
     const graphContext = await buildGraphContextBlock(entity.id);
@@ -79,7 +86,7 @@ async function processEntityIteration(entity: Entity): Promise<void> {
     // 2. Create the request message
     const requestMessages = [
       {
-        role: 'user' as const,
+        role: "user" as const,
         content: `Continue your work. Review your knowledge graph state above and decide what to do next to further your mission. You can:
 - Use queryGraph to search for existing knowledge
 - Use tavilySearch, tavilyExtract, or tavilyResearch to gather new information from the web
@@ -105,7 +112,7 @@ Think about what would be most valuable to research or learn about right now, th
     log(`Calling LLM for entity ${entity.name} with ${tools.length} tools`);
 
     // 5. Call LLM using existing abstraction
-    // No maxSteps limit specified - uses default of 100 for extensive tool calling
+    // No maxSteps limit specified - uses default
     const { fullResponse } = await streamLLMResponseWithTools(
       requestMessages,
       systemPrompt,
@@ -113,7 +120,7 @@ Think about what would be most valuable to research or learn about right now, th
         tools,
         toolContext,
         entityId: entity.id,
-      }
+      },
     );
 
     // 6. Wait for completion and record response
@@ -130,7 +137,7 @@ Think about what would be most valuable to research or learn about right now, th
 
     log(
       `Completed iteration for entity ${entity.name}. ` +
-      `Tool calls: ${result.toolCalls.length}, Response length: ${result.text.length}`
+        `Tool calls: ${result.toolCalls.length}, Response length: ${result.text.length}`,
     );
   } catch (error) {
     logError(`Error in iteration for entity ${entity.name}:`, error);
@@ -148,19 +155,16 @@ Think about what would be most valuable to research or learn about right now, th
  * Sleeps for 5 minutes between iterations.
  */
 export async function startRunner(): Promise<void> {
-  log('Worker runner started (entity-based iteration, 5-minute interval)');
+  log("Worker runner started (entity-based iteration, 5-minute interval)");
 
   // Register all tools before starting
-  const { registerTavilyTools } = await import(
-    '@/lib/agents/tools/tavily-tools'
-  );
-  const { registerGraphTools } = await import(
-    '@/lib/agents/tools/graph-tools'
-  );
+  const { registerTavilyTools } =
+    await import("@/lib/llm/tools/tavily-tools");
+  const { registerGraphTools } = await import("@/lib/llm/tools/graph-tools");
 
   registerTavilyTools();
   registerGraphTools();
-  log('Tools registered: Tavily and Graph tools');
+  log("Tools registered: Tavily and Graph tools");
 
   while (!isShuttingDown) {
     try {
@@ -176,10 +180,10 @@ export async function startRunner(): Promise<void> {
           await processEntityIteration(entity);
         }
       } else {
-        log('No active entities found');
+        log("No active entities found");
       }
     } catch (error) {
-      logError('Runner error:', error);
+      logError("Runner error:", error);
     }
 
     // Wait before next iteration (unless shutting down)
@@ -189,22 +193,19 @@ export async function startRunner(): Promise<void> {
     }
   }
 
-  log('Runner loop stopped');
+  log("Runner loop stopped");
 }
 
 /**
  * Run a single cycle (useful for testing)
  */
 export async function runSingleCycle(): Promise<void> {
-  log('Running single cycle');
+  log("Running single cycle");
 
   // Register tools if not already registered
-  const { registerTavilyTools } = await import(
-    '@/lib/agents/tools/tavily-tools'
-  );
-  const { registerGraphTools } = await import(
-    '@/lib/agents/tools/graph-tools'
-  );
+  const { registerTavilyTools } =
+    await import("@/lib/llm/tools/tavily-tools");
+  const { registerGraphTools } = await import("@/lib/llm/tools/graph-tools");
 
   registerTavilyTools();
   registerGraphTools();
@@ -216,8 +217,8 @@ export async function runSingleCycle(): Promise<void> {
       await processEntityIteration(entity);
     }
 
-    log('Single cycle complete');
+    log("Single cycle complete");
   } catch (error) {
-    logError('Single cycle error:', error);
+    logError("Single cycle error:", error);
   }
 }

@@ -1,5 +1,5 @@
 /**
- * Agent Core Runtime - re-export all agent modules
+ * LLM Runtime - re-export all LLM modules
  */
 
 // LLM provider abstraction
@@ -11,7 +11,7 @@ export {
   getDefaultProvider,
   type StreamOptions,
   type GenerateOptions,
-} from "./llm";
+} from "./providers";
 
 // Memory management
 export {

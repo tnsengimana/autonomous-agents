@@ -120,7 +120,7 @@ Captures each background LLM interaction as a single row. The `response` field c
 ### Files to KEEP (with modifications)
 
 **LLM & Conversation:**
-- `src/lib/agents/llm.ts` - LLM provider abstraction (KEEP, remove maxSteps limit - omit stopWhen or set very high default)
+- `src/lib/agents/llm.ts` - LLM provider abstraction (KEEP, set maxSteps limit to 10)
 - `src/lib/agents/conversation.ts` - Conversation management (KEEP, update for entityId)
 - `src/lib/agents/compaction.ts` - Conversation compaction (KEEP)
 - `src/lib/agents/memory.ts` - Memory extraction (KEEP, update for entityId)

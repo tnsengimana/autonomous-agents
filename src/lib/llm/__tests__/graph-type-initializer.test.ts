@@ -11,7 +11,7 @@ import { describe, test, expect, beforeAll, afterAll, vi } from 'vitest';
 import { db } from '@/lib/db/client';
 import { users, entities } from '@/lib/db/schema';
 import { eq } from 'drizzle-orm';
-import * as llm from '@/lib/agents/llm';
+import * as llm from '@/lib/llm/providers';
 import {
   initializeTypesForEntity,
   persistInitializedTypes,

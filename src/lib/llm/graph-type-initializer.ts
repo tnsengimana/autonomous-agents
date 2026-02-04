@@ -6,7 +6,7 @@
  */
 
 import { z } from 'zod';
-import { generateLLMObject, type StreamOptions } from './llm';
+import { generateLLMObject, type StreamOptions } from './providers';
 import {
   createNodeType,
   createEdgeType,

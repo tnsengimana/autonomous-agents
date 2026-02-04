@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { generateLLMObject } from '@/lib/agents/llm';
+import { generateLLMObject } from '@/lib/llm/providers';
 
 /**
  * Schema for the generated entity configuration
