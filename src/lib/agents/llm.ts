@@ -397,7 +397,8 @@ export async function streamLLMResponseWithTools(
   systemPrompt: string | undefined,
   options: StreamWithToolsOptions,
 ): Promise<StreamWithToolsResult> {
-  const { tools, toolContext, maxSteps = 5 } = options;
+  // Default to 100 steps to allow for extensive tool calling in background work
+  const { tools, toolContext, maxSteps = 100 } = options;
 
   // Mock mode for development - just return text without tool calls
   if (isMockEnabled()) {

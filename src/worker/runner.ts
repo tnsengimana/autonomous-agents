@@ -1,35 +1,33 @@
 /**
  * Worker Runner
  *
- * Event-driven + timer-based execution for agent work sessions.
+ * Entity-based iteration with 5-minute intervals.
  *
- * Execution triggers:
- * 1. Event-driven: When tasks are queued to any agent
- * 2. Timer-based: Lead agents (team leads AND aide leads) run once per day (scheduled via leadNextRunAt)
- *
- * Subordinates are purely reactive - they only run when they have queued tasks.
- * Lead agents get scheduled for 1 day after each work session completion.
+ * For each active entity:
+ * 1. Create an llm_interaction record
+ * 2. Build system prompt with graph context
+ * 3. Call LLM with tools (no maxSteps limit - let it work until done)
+ * 4. Save response to llm_interaction
  */
 
-import { Agent } from '@/lib/agents/agent';
+import { streamLLMResponseWithTools } from '@/lib/agents/llm';
+import { buildGraphContextBlock, ensureGraphTypesInitialized } from '@/lib/agents/knowledge-graph';
+import { getBackgroundTools, type ToolContext } from '@/lib/agents/tools';
+import { getActiveEntities } from '@/lib/db/queries/entities';
 import {
-  getAgentsWithPendingTasks,
-  getLeadsDueToRun,
-  getAgentsReadyForWork,
-} from '@/lib/db/queries/agents';
+  createLLMInteraction,
+  updateLLMInteraction,
+} from '@/lib/db/queries/llm-interactions';
+import type { Entity } from '@/lib/types';
 
 // ============================================================================
 // Configuration
 // ============================================================================
 
-// Poll interval - longer since we have event-driven triggers
-const POLL_INTERVAL_MS = 30000; // 30 seconds
+const ITERATION_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
 
 // Shutdown flag
 let isShuttingDown = false;
-
-// Set of agent IDs that have been notified and need immediate processing
-const pendingNotifications = new Set<string>();
 
 export function stopRunner(): void {
   isShuttingDown = true;
@@ -54,47 +52,88 @@ function logError(message: string, error: unknown): void {
 }
 
 // ============================================================================
-// Event-Driven Task Notification
+// Entity Iteration Processing
 // ============================================================================
 
 /**
- * Notify the worker that a task has been queued for an agent.
- * This triggers immediate processing of the agent's queue.
+ * Process one entity's iteration.
  *
- * Called from taskQueue.ts after queueing tasks.
+ * This calls the LLM with the entity's system prompt, graph context, and tools.
+ * The LLM can call tools to augment the knowledge graph and gather information.
  */
-export function notifyTaskQueued(agentId: string): void {
-  log(`Task queued notification for agent: ${agentId}`);
-  pendingNotifications.add(agentId);
-}
-
-// ============================================================================
-// Agent Work Session Processing
-// ============================================================================
-
-/**
- * Process one agent's work session.
- *
- * Work sessions use the agent's background conversation (mode='background')
- * for all LLM interactions. Tasks are processed sequentially, knowledge is
- * extracted, and team leads may decide to brief the user.
- */
-async function processAgentWorkSession(agentId: string): Promise<void> {
-  log(`Processing work session for agent: ${agentId}`);
+async function processEntityIteration(entity: Entity): Promise<void> {
+  log(`Processing iteration for entity: ${entity.name} (${entity.id})`);
 
   try {
-    const agent = await Agent.fromId(agentId);
-    if (!agent) {
-      logError(`Agent not found: ${agentId}`, null);
-      return;
-    }
+    // Ensure graph types are initialized for this entity
+    await ensureGraphTypesInitialized(entity.id, {
+      name: entity.name,
+      type: 'entity', // Legacy field, can be anything
+      purpose: entity.purpose,
+    }, { userId: entity.userId });
 
-    // Run work session (processes queue, extracts knowledge, maybe briefing)
-    await agent.runWorkSession();
+    // 1. Build context with graph information
+    const graphContext = await buildGraphContextBlock(entity.id);
+    const systemPrompt = `${entity.systemPrompt}\n\n${graphContext}`;
 
-    log(`Completed work session for agent: ${agent.name}`);
+    // 2. Create the request message
+    const requestMessages = [
+      {
+        role: 'user' as const,
+        content: `Continue your work. Review your knowledge graph state above and decide what to do next to further your mission. You can:
+- Use queryGraph to search for existing knowledge
+- Use tavilySearch, tavilyExtract, or tavilyResearch to gather new information from the web
+- Use addGraphNode to add new knowledge to your graph
+- Use addGraphEdge to create relationships between nodes
+- Use createNodeType or createEdgeType if you need new types
+
+Think about what would be most valuable to research or learn about right now, then take action.`,
+      },
+    ];
+
+    // 3. Create llm_interaction record
+    const interaction = await createLLMInteraction({
+      entityId: entity.id,
+      systemPrompt: systemPrompt,
+      request: { messages: requestMessages },
+    });
+
+    // 4. Get tools with context
+    const toolContext: ToolContext = { entityId: entity.id };
+    const tools = getBackgroundTools();
+
+    log(`Calling LLM for entity ${entity.name} with ${tools.length} tools`);
+
+    // 5. Call LLM using existing abstraction
+    // No maxSteps limit specified - uses default of 100 for extensive tool calling
+    const { fullResponse } = await streamLLMResponseWithTools(
+      requestMessages,
+      systemPrompt,
+      {
+        tools,
+        toolContext,
+        entityId: entity.id,
+      }
+    );
+
+    // 6. Wait for completion and record response
+    const result = await fullResponse;
+
+    await updateLLMInteraction(interaction.id, {
+      response: {
+        text: result.text,
+        toolCalls: result.toolCalls,
+        toolResults: result.toolResults,
+      },
+      completedAt: new Date(),
+    });
+
+    log(
+      `Completed iteration for entity ${entity.name}. ` +
+      `Tool calls: ${result.toolCalls.length}, Response length: ${result.text.length}`
+    );
   } catch (error) {
-    logError(`Error in work session for agent ${agentId}:`, error);
+    logError(`Error in iteration for entity ${entity.name}:`, error);
   }
 }
 
@@ -103,52 +142,15 @@ async function processAgentWorkSession(agentId: string): Promise<void> {
 // ============================================================================
 
 /**
- * Get all agents that need to run work sessions
- * Combines: agents with pending tasks + all leads (team AND aide) due for scheduled run
- */
-async function getAgentsNeedingWork(): Promise<string[]> {
-  // 1. Get agents with pending tasks (from notifications or database)
-  const agentsWithTasks = await getAgentsWithPendingTasks();
-
-  // 2. Get all leads (team AND aide) due for scheduled proactive run
-  const leadsDue = await getLeadsDueToRun();
-
-  // 3. Add any agents from pending notifications
-  const notifiedAgents = Array.from(pendingNotifications);
-  pendingNotifications.clear();
-
-  // 4. Combine and dedupe
-  const allAgentIds = new Set([
-    ...agentsWithTasks,
-    ...leadsDue,
-    ...notifiedAgents,
-  ]);
-
-  return getAgentsReadyForWork(Array.from(allAgentIds));
-}
-
-/**
  * The main runner loop
  *
- * Polling strategy:
- * - Check for agents with pending work (hasQueuedWork)
- * - Check for lead agents where leadNextRunAt <= now
- * - Process each agent's work session
- * - Sleep with longer interval since we have event-driven triggers
- *
- * NOTE: This runner assumes a single worker process per agent queue.
- * Introducing multiple workers would require coordination/locking changes.
+ * Iterates through all active entities and processes each one.
+ * Sleeps for 5 minutes between iterations.
  */
 export async function startRunner(): Promise<void> {
-  log('Worker runner started (event-driven + timer-based)');
+  log('Worker runner started (entity-based iteration, 5-minute interval)');
 
   // Register all tools before starting
-  const { registerLeadTools } = await import(
-    '@/lib/agents/tools/lead-tools'
-  );
-  const { registerSubordinateTools } = await import(
-    '@/lib/agents/tools/subordinate-tools'
-  );
   const { registerTavilyTools } = await import(
     '@/lib/agents/tools/tavily-tools'
   );
@@ -156,33 +158,34 @@ export async function startRunner(): Promise<void> {
     '@/lib/agents/tools/graph-tools'
   );
 
-  registerLeadTools();
-  registerSubordinateTools();
   registerTavilyTools();
   registerGraphTools();
-  log('Tools registered');
+  log('Tools registered: Tavily and Graph tools');
 
   while (!isShuttingDown) {
     try {
-      // Get all agents that need work
-      const agentIds = await getAgentsNeedingWork();
+      // Get all active entities
+      const entities = await getActiveEntities();
 
-      if (agentIds.length > 0) {
-        log(`Found ${agentIds.length} agent(s) needing work`);
+      if (entities.length > 0) {
+        log(`Found ${entities.length} active entity(ies) to process`);
 
-        // Process each agent's work session
-        for (const agentId of agentIds) {
+        // Process each entity's iteration
+        for (const entity of entities) {
           if (isShuttingDown) break;
-          await processAgentWorkSession(agentId);
+          await processEntityIteration(entity);
         }
+      } else {
+        log('No active entities found');
       }
     } catch (error) {
       logError('Runner error:', error);
     }
 
-    // Wait before next poll (unless shutting down)
+    // Wait before next iteration (unless shutting down)
     if (!isShuttingDown) {
-      await sleep(POLL_INTERVAL_MS);
+      log(`Sleeping for ${ITERATION_INTERVAL_MS / 1000} seconds...`);
+      await sleep(ITERATION_INTERVAL_MS);
     }
   }
 
@@ -195,26 +198,26 @@ export async function startRunner(): Promise<void> {
 export async function runSingleCycle(): Promise<void> {
   log('Running single cycle');
 
-  try {
-    const agentIds = await getAgentsNeedingWork();
+  // Register tools if not already registered
+  const { registerTavilyTools } = await import(
+    '@/lib/agents/tools/tavily-tools'
+  );
+  const { registerGraphTools } = await import(
+    '@/lib/agents/tools/graph-tools'
+  );
 
-    for (const agentId of agentIds) {
-      await processAgentWorkSession(agentId);
+  registerTavilyTools();
+  registerGraphTools();
+
+  try {
+    const entities = await getActiveEntities();
+
+    for (const entity of entities) {
+      await processEntityIteration(entity);
     }
 
     log('Single cycle complete');
   } catch (error) {
     logError('Single cycle error:', error);
   }
-}
-
-/**
- * Process pending tasks for a specific subordinate agent
- * This is called when a team lead has delegated work
- *
- * @deprecated Use notifyTaskQueued instead - work sessions handle task processing
- */
-export async function processSubordinateTasks(subordinateId: string): Promise<void> {
-  log(`Processing tasks for subordinate: ${subordinateId} (via notifyTaskQueued)`);
-  notifyTaskQueued(subordinateId);
 }

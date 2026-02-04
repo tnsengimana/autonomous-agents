@@ -102,6 +102,18 @@ export async function getActiveEntitiesByUserId(
 }
 
 /**
+ * Get all active entities (across all users)
+ * Used by the background worker to process all entities
+ */
+export async function getActiveEntities(): Promise<Entity[]> {
+  return db
+    .select()
+    .from(entities)
+    .where(eq(entities.status, 'active'))
+    .orderBy(desc(entities.createdAt));
+}
+
+/**
  * Update entity details
  */
 export async function updateEntity(
