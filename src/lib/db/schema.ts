@@ -245,6 +245,89 @@ export const knowledgeItems = pgTable('knowledge_items', {
 ]);
 
 // ============================================================================
+// Knowledge Graph Type System
+// ============================================================================
+
+export const graphNodeTypes = pgTable('graph_node_types', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  entityId: uuid('entity_id').references(() => entities.id, { onDelete: 'cascade' }),  // NULL = global type
+  name: text('name').notNull(),  // PascalCase, e.g., "Company", "Asset"
+  description: text('description').notNull(),
+  propertiesSchema: jsonb('properties_schema').notNull(),  // JSON Schema for validation
+  exampleProperties: jsonb('example_properties'),  // For LLM few-shot learning
+  createdBy: text('created_by').notNull().default('system'),  // 'system' | 'agent' | 'user'
+  createdAt: timestamp('created_at', { mode: 'date' }).defaultNow().notNull(),
+}, (table) => [
+  index('graph_node_types_entity_id_idx').on(table.entityId),
+]);
+
+export const graphEdgeTypes = pgTable('graph_edge_types', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  entityId: uuid('entity_id').references(() => entities.id, { onDelete: 'cascade' }),  // NULL = global type
+  name: text('name').notNull(),  // snake_case, e.g., "issued_by", "affects"
+  description: text('description').notNull(),
+  propertiesSchema: jsonb('properties_schema'),  // JSON Schema for edge properties
+  exampleProperties: jsonb('example_properties'),  // For LLM few-shot learning
+  createdBy: text('created_by').notNull().default('system'),  // 'system' | 'agent' | 'user'
+  createdAt: timestamp('created_at', { mode: 'date' }).defaultNow().notNull(),
+}, (table) => [
+  index('graph_edge_types_entity_id_idx').on(table.entityId),
+]);
+
+// Junction tables for edge type -> node type constraints (many-to-many)
+export const graphEdgeTypeSourceTypes = pgTable('graph_edge_type_source_types', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  edgeTypeId: uuid('edge_type_id').notNull().references(() => graphEdgeTypes.id, { onDelete: 'cascade' }),
+  nodeTypeId: uuid('node_type_id').notNull().references(() => graphNodeTypes.id, { onDelete: 'cascade' }),
+}, (table) => [
+  index('graph_edge_type_source_types_edge_idx').on(table.edgeTypeId),
+  index('graph_edge_type_source_types_node_idx').on(table.nodeTypeId),
+]);
+
+export const graphEdgeTypeTargetTypes = pgTable('graph_edge_type_target_types', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  edgeTypeId: uuid('edge_type_id').notNull().references(() => graphEdgeTypes.id, { onDelete: 'cascade' }),
+  nodeTypeId: uuid('node_type_id').notNull().references(() => graphNodeTypes.id, { onDelete: 'cascade' }),
+}, (table) => [
+  index('graph_edge_type_target_types_edge_idx').on(table.edgeTypeId),
+  index('graph_edge_type_target_types_node_idx').on(table.nodeTypeId),
+]);
+
+// ============================================================================
+// Knowledge Graph Data
+// ============================================================================
+
+export const graphNodes = pgTable('graph_nodes', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  entityId: uuid('entity_id').notNull().references(() => entities.id, { onDelete: 'cascade' }),
+  type: text('type').notNull(),  // References graphNodeTypes.name
+  name: text('name').notNull(),  // Human-readable identifier
+  properties: jsonb('properties').notNull().default({}),  // Validated against type schema; temporal fields live here
+  sourceConversationId: uuid('source_conversation_id').references(() => conversations.id, { onDelete: 'set null' }),
+  createdAt: timestamp('created_at', { mode: 'date' }).defaultNow().notNull(),
+}, (table) => [
+  index('graph_nodes_entity_id_idx').on(table.entityId),
+  index('graph_nodes_type_idx').on(table.type),
+  index('graph_nodes_entity_type_idx').on(table.entityId, table.type),
+]);
+
+export const graphEdges = pgTable('graph_edges', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  entityId: uuid('entity_id').notNull().references(() => entities.id, { onDelete: 'cascade' }),
+  type: text('type').notNull(),  // References graphEdgeTypes.name
+  sourceId: uuid('source_id').notNull().references(() => graphNodes.id, { onDelete: 'cascade' }),
+  targetId: uuid('target_id').notNull().references(() => graphNodes.id, { onDelete: 'cascade' }),
+  properties: jsonb('properties').notNull().default({}),  // Validated against type schema
+  sourceConversationId: uuid('source_conversation_id').references(() => conversations.id, { onDelete: 'set null' }),
+  createdAt: timestamp('created_at', { mode: 'date' }).defaultNow().notNull(),
+}, (table) => [
+  index('graph_edges_entity_id_idx').on(table.entityId),
+  index('graph_edges_type_idx').on(table.type),
+  index('graph_edges_source_id_idx').on(table.sourceId),
+  index('graph_edges_target_id_idx').on(table.targetId),
+]);
+
+// ============================================================================
 // Relations
 // ============================================================================
 
@@ -286,6 +369,10 @@ export const entitiesRelations = relations(entities, ({ one, many }) => ({
   agents: many(agents),
   briefings: many(briefings),
   agentTasks: many(agentTasks),
+  graphNodeTypes: many(graphNodeTypes),
+  graphEdgeTypes: many(graphEdgeTypes),
+  graphNodes: many(graphNodes),
+  graphEdges: many(graphEdges),
 }));
 
 export const agentsRelations = relations(agents, ({ one, many }) => ({
@@ -321,6 +408,8 @@ export const conversationsRelations = relations(conversations, ({ one, many }) =
   }),
   messages: many(messages),
   knowledgeItems: many(knowledgeItems),
+  graphNodes: many(graphNodes),
+  graphEdges: many(graphEdges),
 }));
 
 export const messagesRelations = relations(messages, ({ one, many }) => ({
@@ -404,6 +493,82 @@ export const knowledgeItemsRelations = relations(knowledgeItems, ({ one }) => ({
   }),
   sourceConversation: one(conversations, {
     fields: [knowledgeItems.sourceConversationId],
+    references: [conversations.id],
+  }),
+}));
+
+// ============================================================================
+// Knowledge Graph Relations
+// ============================================================================
+
+export const graphNodeTypesRelations = relations(graphNodeTypes, ({ one }) => ({
+  entity: one(entities, {
+    fields: [graphNodeTypes.entityId],
+    references: [entities.id],
+  }),
+}));
+
+export const graphEdgeTypesRelations = relations(graphEdgeTypes, ({ one, many }) => ({
+  entity: one(entities, {
+    fields: [graphEdgeTypes.entityId],
+    references: [entities.id],
+  }),
+  sourceTypes: many(graphEdgeTypeSourceTypes),
+  targetTypes: many(graphEdgeTypeTargetTypes),
+}));
+
+export const graphEdgeTypeSourceTypesRelations = relations(graphEdgeTypeSourceTypes, ({ one }) => ({
+  edgeType: one(graphEdgeTypes, {
+    fields: [graphEdgeTypeSourceTypes.edgeTypeId],
+    references: [graphEdgeTypes.id],
+  }),
+  nodeType: one(graphNodeTypes, {
+    fields: [graphEdgeTypeSourceTypes.nodeTypeId],
+    references: [graphNodeTypes.id],
+  }),
+}));
+
+export const graphEdgeTypeTargetTypesRelations = relations(graphEdgeTypeTargetTypes, ({ one }) => ({
+  edgeType: one(graphEdgeTypes, {
+    fields: [graphEdgeTypeTargetTypes.edgeTypeId],
+    references: [graphEdgeTypes.id],
+  }),
+  nodeType: one(graphNodeTypes, {
+    fields: [graphEdgeTypeTargetTypes.nodeTypeId],
+    references: [graphNodeTypes.id],
+  }),
+}));
+
+export const graphNodesRelations = relations(graphNodes, ({ one, many }) => ({
+  entity: one(entities, {
+    fields: [graphNodes.entityId],
+    references: [entities.id],
+  }),
+  sourceConversation: one(conversations, {
+    fields: [graphNodes.sourceConversationId],
+    references: [conversations.id],
+  }),
+  outgoingEdges: many(graphEdges, { relationName: 'sourceNode' }),
+  incomingEdges: many(graphEdges, { relationName: 'targetNode' }),
+}));
+
+export const graphEdgesRelations = relations(graphEdges, ({ one }) => ({
+  entity: one(entities, {
+    fields: [graphEdges.entityId],
+    references: [entities.id],
+  }),
+  sourceNode: one(graphNodes, {
+    fields: [graphEdges.sourceId],
+    references: [graphNodes.id],
+    relationName: 'sourceNode',
+  }),
+  targetNode: one(graphNodes, {
+    fields: [graphEdges.targetId],
+    references: [graphNodes.id],
+    relationName: 'targetNode',
+  }),
+  sourceConversation: one(conversations, {
+    fields: [graphEdges.sourceConversationId],
     references: [conversations.id],
   }),
 }));
