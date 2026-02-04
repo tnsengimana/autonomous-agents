@@ -1,19 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth/config';
-import { getEntityById, getEntityLead } from '@/lib/db/queries/entities';
-import { getAgentById } from '@/lib/db/queries/agents';
-import { Agent } from '@/lib/agents/agent';
+import { getEntityById } from '@/lib/db/queries/entities';
+import { getOrCreateConversation } from '@/lib/db/queries/conversations';
+import { createTurnMessages } from '@/lib/db/queries/messages';
+import { streamLLMResponse, type StreamOptions } from '@/lib/agents/llm';
+import { buildMessageContext } from '@/lib/agents/conversation';
+import { buildGraphContextBlock } from '@/lib/agents/knowledge-graph';
+import { getMemoriesByEntityId } from '@/lib/db/queries/memories';
+import { buildMemoryContextBlock } from '@/lib/agents/memory';
 
 /**
  * POST /api/messages
  *
- * Handles user messages to agents using the new foreground/background architecture:
+ * Handles user messages to entities:
  * 1. User sends message
- * 2. Agent generates quick contextual acknowledgment (foreground)
- * 3. Task is queued for background processing
- * 4. Returns acknowledgment stream immediately
- *
- * The actual work happens in background via worker runner.
+ * 2. Get or create conversation for entity
+ * 3. Build context (memories, graph, conversation history)
+ * 4. Stream LLM response
+ * 5. Save turn atomically
  */
 export async function POST(request: NextRequest) {
   try {
@@ -25,7 +29,7 @@ export async function POST(request: NextRequest) {
 
     // 2. Parse request body
     const body = await request.json();
-    const { entityId, agentId, content } = body;
+    const { entityId, content } = body;
 
     if (!entityId || typeof entityId !== 'string') {
       return NextResponse.json(
@@ -51,48 +55,75 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    // 4. Get the agent (entity lead or specific agent)
-    let agentData;
-    if (agentId) {
-      agentData = await getAgentById(agentId);
-      if (!agentData || agentData.entityId !== entityId) {
-        return NextResponse.json({ error: 'Agent not found' }, { status: 404 });
-      }
-    } else {
-      agentData = await getEntityLead(entityId);
-      if (!agentData) {
-        return NextResponse.json(
-          { error: 'No lead agent found' },
-          { status: 404 }
+    // 4. Get or create conversation
+    const conversation = await getOrCreateConversation(entityId);
+
+    // 5. Build context
+    const [memories, graphContext, conversationHistory] = await Promise.all([
+      getMemoriesByEntityId(entityId),
+      buildGraphContextBlock(entityId),
+      buildMessageContext(conversation.id),
+    ]);
+
+    const memoryContext = buildMemoryContextBlock(memories);
+
+    // Build system prompt with entity context
+    const systemPrompt = `${entity.systemPrompt}
+
+${memoryContext}
+
+${graphContext}`;
+
+    // Add user message to conversation history for LLM
+    const messagesForLLM = [
+      ...conversationHistory,
+      { role: 'user' as const, content },
+    ];
+
+    // 6. Stream LLM response
+    const streamOptions: StreamOptions = {
+      userId: session.user.id,
+      entityId,
+    };
+
+    // Collect the full response while streaming
+    let fullResponse = '';
+
+    // Create a TransformStream to collect the response while streaming
+    const { readable, writable } = new TransformStream<string, string>();
+    const writer = writable.getWriter();
+
+    // Start streaming in the background
+    (async () => {
+      try {
+        const responseStream = await streamLLMResponse(
+          messagesForLLM,
+          systemPrompt,
+          streamOptions
         );
-      }
-    }
 
-    // 5. Create agent instance and handle user message (foreground)
-    // This uses the new handleUserMessage which:
-    // - Generates a quick acknowledgment
-    // - Queues the task for background processing
-    // - Returns the acknowledgment stream
-    const agent = new Agent(agentData);
-    const responseStream = await agent.handleUserMessage(content);
-
-    // 6. Create a ReadableStream from the async iterable
-    const stream = new ReadableStream({
-      async start(controller) {
-        const encoder = new TextEncoder();
-        try {
-          for await (const chunk of responseStream) {
-            controller.enqueue(encoder.encode(chunk));
-          }
-          controller.close();
-        } catch (error) {
-          console.error('Stream error:', error);
-          controller.error(error);
+        for await (const chunk of responseStream) {
+          fullResponse += chunk;
+          await writer.write(chunk);
         }
-      },
-    });
+
+        // Save the turn atomically after streaming completes
+        await createTurnMessages(
+          conversation.id,
+          { role: 'user', content },
+          { role: 'assistant', content: fullResponse }
+        );
+
+        await writer.close();
+      } catch (error) {
+        console.error('Stream error:', error);
+        await writer.abort(error);
+      }
+    })();
 
     // 7. Return streaming response
+    const stream = readable.pipeThrough(new TextEncoderStream());
+
     return new Response(stream, {
       headers: {
         'Content-Type': 'text/plain; charset=utf-8',

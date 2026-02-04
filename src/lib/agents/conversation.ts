@@ -18,31 +18,31 @@ import type { Conversation, Message, LLMMessage } from "@/lib/types";
 // ============================================================================
 
 /**
- * Get or create the active conversation for an agent
+ * Get or create the active conversation for an entity
  */
 export async function getActiveConversation(
-  agentId: string,
+  entityId: string,
 ): Promise<Conversation> {
-  return getOrCreateConversation(agentId);
+  return getOrCreateConversation(entityId);
 }
 
 /**
- * Create a new conversation for an agent
+ * Create a new conversation for an entity
  * Use this to start a fresh conversation
  */
 export async function startNewConversation(
-  agentId: string,
+  entityId: string,
 ): Promise<Conversation> {
-  return dbCreateConversation(agentId);
+  return dbCreateConversation(entityId);
 }
 
 /**
- * Get the current conversation for an agent (may return null)
+ * Get the current conversation for an entity (may return null)
  */
 export async function getCurrentConversation(
-  agentId: string,
+  entityId: string,
 ): Promise<Conversation | null> {
-  return getLatestConversation(agentId);
+  return getLatestConversation(entityId);
 }
 
 // ============================================================================

@@ -1,19 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth/config";
-import { getAgentById } from "@/lib/db/queries/agents";
 import { getEntityById } from "@/lib/db/queries/entities";
 import { getLatestConversation } from "@/lib/db/queries/conversations";
 import { getMessagesByConversationId } from "@/lib/db/queries/messages";
 
 /**
- * GET /api/conversations/[agentId]
+ * GET /api/conversations/[entityId]
  *
- * Returns the conversation for an agent.
- * Supports ?mode=background to fetch internal work session logs.
+ * Returns the conversation for an entity.
  */
 export async function GET(
   _request: NextRequest,
-  { params }: { params: Promise<{ agentId: string }> },
+  { params }: { params: Promise<{ entityId: string }> },
 ) {
   try {
     // 1. Verify user is authenticated
@@ -22,40 +20,27 @@ export async function GET(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { agentId } = await params;
+    const { entityId } = await params;
 
-    // 2. Get the agent
-    const agent = await getAgentById(agentId);
-    if (!agent) {
-      return NextResponse.json({ error: "Agent not found" }, { status: 404 });
+    // 2. Verify user owns the entity
+    const entity = await getEntityById(entityId);
+    if (!entity) {
+      return NextResponse.json({ error: "Entity not found" }, { status: 404 });
     }
 
-    // 3. Verify user owns the entity
-    if (!agent.entityId) {
-      return NextResponse.json(
-        { error: "Agent has no entity" },
-        { status: 500 },
-      );
-    }
-
-    const entity = await getEntityById(agent.entityId);
-    if (!entity || entity.userId !== session.user.id) {
+    if (entity.userId !== session.user.id) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    // 4. Get the conversation and messages
-    const url = new URL(_request.url);
-    const modeParam = url.searchParams.get("mode");
-    const mode = modeParam === "background" ? "background" : "foreground";
-
-    const conversation = await getLatestConversation(agentId, mode);
+    // 3. Get the conversation and messages
+    const conversation = await getLatestConversation(entityId);
     if (!conversation) {
       return NextResponse.json({ messages: [] });
     }
 
     const messages = await getMessagesByConversationId(conversation.id);
 
-    // 5. Filter out system messages and format response
+    // 4. Filter out system messages and format response
     const filteredMessages = messages
       .filter((m) => m.role !== "system")
       .map((m) => ({
