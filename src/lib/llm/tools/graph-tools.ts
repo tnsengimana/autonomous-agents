@@ -741,7 +741,6 @@ const addInsightNodeTool: Tool = {
       const inboxItem = await createInboxItem({
         userId: entity.userId,
         entityId: ctx.entityId,
-        type: 'insight',
         title: `${insightTypeLabel}: ${name}`,
         content: properties.summary,
       });

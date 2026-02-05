@@ -27,12 +27,10 @@ export async function GET() {
     const items = itemsWithSources.map(
       ({ item, entityId, entityName }) => ({
         id: item.id,
-        type: item.type,
         title: item.title,
         content: item.content,
         entityId,
         entityName,
-        briefingId: item.briefingId,
         read: item.readAt !== null,
         readAt: item.readAt,
         createdAt: item.createdAt,

@@ -153,37 +153,11 @@ export const inboxItems = pgTable("inbox_items", {
   entityId: uuid("entity_id")
     .notNull()
     .references(() => entities.id, { onDelete: "cascade" }),
-  briefingId: uuid("briefing_id").references(() => briefings.id, {
-    onDelete: "set null",
-  }),
-  type: text("type").notNull(), // 'briefing' | 'feedback' | 'insight'
   title: text("title").notNull(),
   content: text("content").notNull(),
   readAt: timestamp("read_at", { mode: "date" }),
   createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
 });
-
-export const briefings = pgTable(
-  "briefings",
-  {
-    id: uuid("id").primaryKey().defaultRandom(),
-    userId: uuid("user_id")
-      .notNull()
-      .references(() => users.id, { onDelete: "cascade" }),
-    entityId: uuid("entity_id")
-      .notNull()
-      .references(() => entities.id, { onDelete: "cascade" }),
-    title: text("title").notNull(),
-    summary: text("summary").notNull(),
-    content: text("content").notNull(),
-    createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
-    updatedAt: timestamp("updated_at", { mode: "date" }).defaultNow().notNull(),
-  },
-  (table) => [
-    index("briefings_user_id_idx").on(table.userId),
-    index("briefings_entity_id_idx").on(table.entityId),
-  ],
-);
 
 // ============================================================================
 // Worker Iterations (Background Processing Cycles)
@@ -370,7 +344,6 @@ export const usersRelations = relations(users, ({ many }) => ({
   apiKeys: many(userApiKeys),
   entities: many(entities),
   inboxItems: many(inboxItems),
-  briefings: many(briefings),
 }));
 
 export const accountsRelations = relations(accounts, ({ one }) => ({
@@ -402,7 +375,6 @@ export const entitiesRelations = relations(entities, ({ one, many }) => ({
   conversations: many(conversations),
   memories: many(memories),
   inboxItems: many(inboxItems),
-  briefings: many(briefings),
   workerIterations: many(workerIterations),
   llmInteractions: many(llmInteractions),
   graphNodeTypes: many(graphNodeTypes),
@@ -456,21 +428,6 @@ export const inboxItemsRelations = relations(inboxItems, ({ one }) => ({
   }),
   entity: one(entities, {
     fields: [inboxItems.entityId],
-    references: [entities.id],
-  }),
-  briefing: one(briefings, {
-    fields: [inboxItems.briefingId],
-    references: [briefings.id],
-  }),
-}));
-
-export const briefingsRelations = relations(briefings, ({ one }) => ({
-  user: one(users, {
-    fields: [briefings.userId],
-    references: [users.id],
-  }),
-  entity: one(entities, {
-    fields: [briefings.entityId],
     references: [entities.id],
   }),
 }));

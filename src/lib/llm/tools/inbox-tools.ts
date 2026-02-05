@@ -97,7 +97,6 @@ const requestUserInputTool: Tool = {
     const inboxItem = await createInboxItem({
       userId: entity.userId,
       entityId: context.entityId,
-      type: "feedback",
       title,
       content: summary,
     });

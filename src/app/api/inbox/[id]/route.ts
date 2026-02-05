@@ -53,7 +53,6 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     // 5. Return item
     return NextResponse.json({
       id: item.id,
-      type: item.type,
       title: item.title,
       content: item.content,
       entityId,
@@ -61,7 +60,6 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       read: true,
       readAt: item.readAt || new Date(),
       createdAt: item.createdAt,
-      briefingId: item.briefingId,
     });
   } catch (error) {
     console.error('Get inbox item error:', error);

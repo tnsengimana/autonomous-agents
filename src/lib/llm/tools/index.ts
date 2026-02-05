@@ -7,8 +7,6 @@
  * - Tool execution engine
  */
 
-import { z } from "zod";
-
 // ============================================================================
 // Tool Schema Types
 // ============================================================================
@@ -77,7 +75,7 @@ export function getAllTools(): Tool[] {
 
 /**
  * Get tools available during user conversations (foreground)
- * These include graph tools, tavily tools, briefings tools for answering questions
+ * These include graph tools and tavily tools for answering questions
  */
 export function getForegroundTools(): Tool[] {
   return getAllTools().filter((tool) =>
@@ -93,9 +91,6 @@ export function getForegroundTools(): Tool[] {
       "tavilySearch",
       "tavilyExtract",
       "tavilyResearch",
-      // Briefings tools for answering user questions
-      "listBriefings",
-      "getBriefing",
     ].includes(tool.schema.name),
   );
 }
@@ -243,31 +238,6 @@ export async function executeTool(
     };
   }
 }
-
-// ============================================================================
-// Zod Schemas for Tool Parameters
-// ============================================================================
-
-export const ListBriefingsParamsSchema = z.object({
-  query: z
-    .string()
-    .min(1)
-    .optional()
-    .describe("Optional search query for briefing title or summary"),
-  limit: z
-    .number()
-    .min(1)
-    .max(50)
-    .optional()
-    .describe("Maximum number of briefings to return (default: 20)"),
-});
-
-export const GetBriefingParamsSchema = z.object({
-  briefingId: z.string().uuid().describe("The briefing ID to retrieve"),
-});
-
-export type ListBriefingsParams = z.infer<typeof ListBriefingsParamsSchema>;
-export type GetBriefingParams = z.infer<typeof GetBriefingParamsSchema>;
 
 // ============================================================================
 // Tool Format Conversion

@@ -7,7 +7,6 @@
 
 import type { InferSelectModel } from 'drizzle-orm';
 import type {
-  briefings,
   conversations,
   entities,
   graphEdges,
@@ -26,7 +25,6 @@ import type {
 // Database Model Types (inferred from Drizzle schema)
 // ============================================================================
 
-export type Briefing = InferSelectModel<typeof briefings>;
 export type Conversation = InferSelectModel<typeof conversations>;
 export type Entity = InferSelectModel<typeof entities>;
 export type Memory = InferSelectModel<typeof memories>;
@@ -131,14 +129,10 @@ export interface LLMResponse {
 // Inbox Types
 // ============================================================================
 
-export type InboxItemType = 'briefing' | 'feedback' | 'insight';
-
 export interface InboxItem {
   id: string;
   userId: string;
   entityId: string;
-  briefingId: string | null;
-  type: InboxItemType;
   title: string;
   content: string;
   readAt: Date | null;

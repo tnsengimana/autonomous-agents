@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Badge } from "@/components/ui/badge";
 import {
   Card,
   CardContent,
@@ -16,12 +15,10 @@ import { Separator } from "@/components/ui/separator";
 
 interface InboxItem {
   id: string;
-  type: string;
   title: string;
   content: string;
   entityId: string | null;
   entityName: string | null;
-  briefingId: string | null;
   read: boolean;
   readAt: string | null;
   createdAt: string;
@@ -33,10 +30,6 @@ function getSourceName(item: InboxItem): string {
 }
 
 function getItemLink(item: InboxItem): string {
-  if (item.type === "briefing" && item.briefingId && item.entityId) {
-    return `/entities/${item.entityId}/briefings/${item.briefingId}`;
-  }
-
   if (item.entityId) {
     return `/entities/${item.entityId}/chat`;
   }
@@ -47,23 +40,6 @@ interface InboxResponse {
   items: InboxItem[];
   unreadCount: number;
   total: number;
-}
-
-function InboxItemBadge({ type }: { type: string }) {
-  const variants: Record<
-    string,
-    "default" | "secondary" | "destructive" | "outline"
-  > = {
-    briefing: "default",
-    feedback: "secondary",
-  };
-  const labels: Record<string, string> = {
-    briefing: "Briefing",
-    feedback: "Feedback",
-  };
-  return (
-    <Badge variant={variants[type] || "outline"}>{labels[type] || type}</Badge>
-  );
 }
 
 function formatTimeAgo(dateString: string): string {
@@ -250,7 +226,7 @@ export default function InboxPage() {
             <div className="text-center text-muted-foreground">
               <p className="text-lg font-medium">Your inbox is empty</p>
               <p className="text-sm mt-2">
-                Your agents will send briefings and feedback here.
+                Your entities will send messages here.
               </p>
             </div>
           </CardContent>
@@ -262,7 +238,7 @@ export default function InboxPage() {
             <CardHeader>
               <CardTitle>Messages</CardTitle>
               <CardDescription>
-                Briefings and feedback from your teams
+                Messages from your entities
               </CardDescription>
             </CardHeader>
             <CardContent className="p-0">
@@ -279,14 +255,13 @@ export default function InboxPage() {
                       <div className="flex items-start justify-between gap-2">
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2">
-                            <InboxItemBadge type={item.type} />
+                            <h3 className="font-medium truncate">
+                              {item.title}
+                            </h3>
                             {!item.read && (
                               <div className="h-2 w-2 rounded-full bg-primary" />
                             )}
                           </div>
-                          <h3 className="mt-1 font-medium truncate">
-                            {item.title}
-                          </h3>
                           <p className="mt-1 text-xs text-muted-foreground">
                             {getSourceName(item)} -{" "}
                             {formatTimeAgo(item.createdAt)}
@@ -307,12 +282,9 @@ export default function InboxPage() {
                 <CardHeader>
                   <div className="flex items-start justify-between">
                     <div>
-                      <div className="flex items-center gap-2">
-                        <InboxItemBadge type={selectedItem.type} />
-                        <span className="text-sm text-muted-foreground">
-                          {formatTimeAgo(selectedItem.createdAt)}
-                        </span>
-                      </div>
+                      <span className="text-sm text-muted-foreground">
+                        {formatTimeAgo(selectedItem.createdAt)}
+                      </span>
                       <CardTitle className="mt-2">
                         {selectedItem.title}
                       </CardTitle>
@@ -353,10 +325,6 @@ export default function InboxPage() {
                       {getSourceName(selectedItem)}
                     </p>
                     <p>
-                      <span className="font-medium">Type:</span>{" "}
-                      {selectedItem.type}
-                    </p>
-                    <p>
                       <span className="font-medium">Received:</span>{" "}
                       {new Date(selectedItem.createdAt).toLocaleString()}
                     </p>
@@ -365,9 +333,7 @@ export default function InboxPage() {
                   <div className="flex justify-center">
                     <Button asChild>
                       <Link href={getItemLink(selectedItem)}>
-                        {selectedItem.type === "briefing"
-                          ? "View Briefing"
-                          : "View Conversation"}
+                        View Conversation
                       </Link>
                     </Button>
                   </div>

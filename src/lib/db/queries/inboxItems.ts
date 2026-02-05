@@ -1,7 +1,7 @@
 /**
  * Inbox Items Database Queries
  *
- * CRUD operations for inbox items (briefings and feedback).
+ * CRUD operations for inbox items.
  */
 
 import { eq, desc, and, isNull, count } from 'drizzle-orm';
@@ -100,18 +100,14 @@ export async function getInboxItemWithSource(itemId: string): Promise<{
 export async function createInboxItem(data: {
   userId: string;
   entityId: string;
-  type: string;
   title: string;
   content: string;
-  briefingId?: string | null;
 }): Promise<InboxItem> {
   const result = await db
     .insert(inboxItems)
     .values({
       userId: data.userId,
       entityId: data.entityId,
-      briefingId: data.briefingId ?? null,
-      type: data.type,
       title: data.title,
       content: data.content,
     })

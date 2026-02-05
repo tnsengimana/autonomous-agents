@@ -67,9 +67,6 @@ export default async function EntityDetailPage({
         <Link href={`/entities/${entity.id}/worker-iterations`}>
           <Button variant="outline">Worker Iterations</Button>
         </Link>
-        <Link href={`/entities/${entity.id}/briefings`}>
-          <Button variant="outline">Briefings</Button>
-        </Link>
         <Link href={`/entities/${entity.id}/knowledge-graph`}>
           <Button variant="outline">Knowledge Graph</Button>
         </Link>

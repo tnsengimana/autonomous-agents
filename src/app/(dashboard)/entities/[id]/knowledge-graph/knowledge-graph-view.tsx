@@ -56,6 +56,7 @@ export function KnowledgeGraphView({ entityId }: KnowledgeGraphViewProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<SelectedItem>(null);
+  const [selections, setSelections] = useState<string[]>([]);
 
   useEffect(() => {
     async function fetchGraph() {
@@ -78,14 +79,17 @@ export function KnowledgeGraphView({ entityId }: KnowledgeGraphViewProps) {
 
   const handleNodeClick = useCallback((node: GraphNode) => {
     setSelected({ type: "node", data: node });
+    setSelections([node.id]);
   }, []);
 
   const handleEdgeClick = useCallback((edge: GraphEdge) => {
     setSelected({ type: "edge", data: edge });
+    setSelections([edge.id]);
   }, []);
 
   const handleClose = useCallback(() => {
     setSelected(null);
+    setSelections([]);
   }, []);
 
   if (loading) {
@@ -123,8 +127,14 @@ export function KnowledgeGraphView({ entityId }: KnowledgeGraphViewProps) {
       <div className="flex-1 border rounded-lg overflow-hidden bg-background relative">
         <div className="absolute inset-0">
           <GraphCanvas
+            layoutType="forceDirected3d"
+            cameraMode="rotate"
+            minDistance={100}
+            maxDistance={5000}
             nodes={graphData.nodes}
             edges={graphData.edges}
+            selections={selections}
+            pathSelectionType="all"
             onNodeClick={(node) => handleNodeClick(node as GraphNode)}
             onEdgeClick={(edge) => handleEdgeClick(edge as GraphEdge)}
             labelType="all"
