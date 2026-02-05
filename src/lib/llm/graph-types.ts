@@ -28,7 +28,7 @@ export const INSIGHT_NODE_TYPE = {
   description: "Derived analysis including signals, observations, and patterns",
   propertiesSchema: {
     type: "object" as const,
-    required: ["type", "summary", "generated_at"],
+    required: ["type", "summary", "content", "generated_at"],
     properties: {
       type: {
         type: "string",
@@ -38,14 +38,15 @@ export const INSIGHT_NODE_TYPE = {
       },
       summary: {
         type: "string",
-        description: "The explanation/reasoning for this insight",
+        description:
+          "Executive summary of the insight (1-2 sentences). Used for inbox notifications. For signals, briefly mention the recommended action.",
       },
-      action: {
+      content: {
         type: "string",
-        enum: ["buy", "sell", "hold"],
-        description: "Recommended action (only for signals, null otherwise)",
+        description:
+          "Detailed insight with supporting evidence and citations to graph nodes/edges. Include [NodeId] or [EdgeId] annotations for traceability. For signals, include detailed action rationale.",
       },
-      strength: {
+      confidence: {
         type: "number",
         minimum: 0,
         maximum: 1,
@@ -61,9 +62,30 @@ export const INSIGHT_NODE_TYPE = {
   exampleProperties: {
     type: "signal",
     summary:
-      "AAPL oversold with RSI at 28, positive earnings surprise of 12%, and sector tailwinds from Fed holding rates",
-    action: "buy",
-    strength: 0.8,
+      "Strong buy signal for AAPL: oversold technicals combined with positive earnings momentum suggest 22% upside potential.",
+    content: `## Analysis
+
+AAPL presents a compelling buying opportunity based on multiple converging factors.
+
+### Technical Analysis
+The stock is currently oversold with an RSI of 28 [node:abc123], significantly below the typical oversold threshold of 30. Historical analysis of Apple [node:def456] shows that RSI levels below 30 have preceded 15%+ rallies in 7 of the last 10 occurrences.
+
+### Fundamental Catalyst
+The Q4 2025 earnings report [node:ghi789] delivered a positive surprise of 12%, with:
+- Revenue: $124.3B vs. $121.1B expected
+- EPS: $2.18 vs. $1.95 expected
+- Services revenue grew 24% YoY [node:jkl012]
+
+### Macro Tailwinds
+The Federal Reserve's decision to hold rates [node:mno345] provides sector-wide support for growth stocks. The Technology sector [node:pqr678] has historically outperformed during rate pause periods by an average of 8% over 6 months.
+
+### Risk Factors
+- China revenue uncertainty (18% of total revenue)
+- Supply chain constraints in Vietnam facility [node:stu901]
+
+### Recommendation
+**Action: BUY** with 12-month price target of $245, representing 22% upside from current levels. This recommendation is based on the convergence of technical oversold conditions, strong fundamental catalysts, and supportive macro environment.`,
+    confidence: 0.8,
     generated_at: "2026-02-04T10:30:00Z",
   },
   notifyUser: true,
