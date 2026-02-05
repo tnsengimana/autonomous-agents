@@ -187,6 +187,19 @@ export interface StreamWithToolsResult {
       toolName: string;
       result: unknown;
     }>;
+    // Complete step-by-step trace of the LLM call loop
+    steps: Array<{
+      stepNumber: number;
+      text: string;
+      toolCalls: Array<{
+        toolName: string;
+        args: Record<string, unknown>;
+      }>;
+      toolResults: Array<{
+        toolName: string;
+        result: unknown;
+      }>;
+    }>;
   }>;
 }
 
@@ -416,6 +429,14 @@ export async function streamLLMResponseWithTools(
         text: mockText,
         toolCalls: [],
         toolResults: [],
+        steps: [
+          {
+            stepNumber: 1,
+            text: mockText,
+            toolCalls: [],
+            toolResults: [],
+          },
+        ],
       }),
     };
   }
@@ -481,6 +502,12 @@ export async function streamLLMResponseWithTools(
     }> = [];
     const collectedToolResults: Array<{ toolName: string; result: unknown }> =
       [];
+    const collectedSteps: Array<{
+      stepNumber: number;
+      text: string;
+      toolCalls: Array<{ toolName: string; args: Record<string, unknown> }>;
+      toolResults: Array<{ toolName: string; result: unknown }>;
+    }> = [];
 
     // Create a wrapped stream that collects data as it's consumed
     const wrappedStream = (async function* () {
@@ -489,27 +516,50 @@ export async function streamLLMResponseWithTools(
         yield chunk;
       }
 
-      // After stream completes, collect tool data
+      // After stream completes, collect tool data from ALL steps
+      // response.toolCalls/toolResults only has the last step's data
+      // response.steps contains ALL steps with their tool calls and results
       const response = await result;
-      const toolCallsRaw = await response.toolCalls;
-      const toolResultsRaw = await response.toolResults;
+      const steps = await response.steps;
 
-      for (const tc of toolCallsRaw || []) {
-        collectedToolCalls.push({
-          toolName: tc.toolName,
-          args: tc.input as Record<string, unknown>,
-        });
-      }
-      for (const tr of toolResultsRaw || []) {
-        collectedToolResults.push({
-          toolName: tr.toolName,
-          result: tr.output,
+      let stepNumber = 0;
+      for (const step of steps || []) {
+        stepNumber++;
+        const stepToolCalls: Array<{
+          toolName: string;
+          args: Record<string, unknown>;
+        }> = [];
+        const stepToolResults: Array<{ toolName: string; result: unknown }> =
+          [];
+
+        for (const tc of step.toolCalls || []) {
+          const toolCall = {
+            toolName: tc.toolName,
+            args: tc.args as Record<string, unknown>,
+          };
+          collectedToolCalls.push(toolCall);
+          stepToolCalls.push(toolCall);
+        }
+        for (const tr of step.toolResults || []) {
+          const toolResult = {
+            toolName: tr.toolName,
+            result: tr.result,
+          };
+          collectedToolResults.push(toolResult);
+          stepToolResults.push(toolResult);
+        }
+
+        collectedSteps.push({
+          stepNumber,
+          text: step.text || "",
+          toolCalls: stepToolCalls,
+          toolResults: stepToolResults,
         });
       }
 
       // Debug: Log tool call summary
       console.log(
-        `[LLM] Stream complete. Tool calls: ${collectedToolCalls.length}, Tool results: ${collectedToolResults.length}`,
+        `[LLM] Stream complete. Steps: ${steps?.length || 0}, Tool calls: ${collectedToolCalls.length}, Tool results: ${collectedToolResults.length}`,
       );
       if (collectedToolCalls.length > 0) {
         console.log(
@@ -530,6 +580,7 @@ export async function streamLLMResponseWithTools(
         text: fullText,
         toolCalls: collectedToolCalls,
         toolResults: collectedToolResults,
+        steps: collectedSteps,
       };
     })();
 

@@ -55,7 +55,7 @@ function getPhaseLabel(phase: string | null): string {
 }
 
 function getPhaseVariant(
-  phase: string | null
+  phase: string | null,
 ): "default" | "secondary" | "outline" {
   switch (phase) {
     case "classification":
@@ -77,12 +77,10 @@ function InteractionDetail({ interaction }: { interaction: LLMInteraction }) {
       ? interaction.systemPrompt.slice(0, 100) + "..."
       : interaction.systemPrompt;
 
-  const responseText =
-    interaction.response && typeof interaction.response === "object"
-      ? (interaction.response as { text?: string }).text || ""
-      : "";
-  const responsePreview = responseText
-    ? responseText.slice(0, 200) + (responseText.length > 200 ? "..." : "")
+  const response = interaction.response;
+  const responseStr = response ? JSON.stringify(response) : "";
+  const responsePreview = responseStr
+    ? responseStr.slice(0, 200) + (responseStr.length > 200 ? "..." : "")
     : "Pending...";
 
   const isComplete = interaction.completedAt !== null;
@@ -136,14 +134,14 @@ function InteractionDetail({ interaction }: { interaction: LLMInteraction }) {
               {JSON.stringify(interaction.request, null, 2)}
             </pre>
           </div>
+
           <div>
             <h4 className="mb-2 text-sm font-medium">Response</h4>
             <pre className="max-h-96 overflow-auto whitespace-pre-wrap rounded-md bg-muted p-3 text-xs">
-              {interaction.response
-                ? JSON.stringify(interaction.response, null, 2)
-                : "Pending..."}
+              {response ? JSON.stringify(response, null, 2) : "Pending..."}
             </pre>
           </div>
+
           {interaction.completedAt && (
             <div className="text-xs text-muted-foreground">
               Completed at: {new Date(interaction.completedAt).toLocaleString()}
@@ -220,20 +218,6 @@ function IterationItem({ iteration }: { iteration: WorkerIteration }) {
                 {iteration.errorMessage}
               </div>
             )}
-
-            {iteration.classificationReasoning && (
-              <div className="rounded-md bg-muted p-3">
-                <h4 className="mb-1 text-xs font-medium text-muted-foreground">
-                  Classification Reasoning
-                </h4>
-                <p className="text-sm">
-                  {iteration.classificationReasoning.length > 500
-                    ? iteration.classificationReasoning.slice(0, 500) + "..."
-                    : iteration.classificationReasoning}
-                </p>
-              </div>
-            )}
-
             <div className="space-y-3">
               {iteration.llmInteractions.map((interaction) => (
                 <InteractionDetail
@@ -267,7 +251,7 @@ export default function InteractionsPage() {
         setIterations(data);
       } catch (err) {
         setError(
-          err instanceof Error ? err.message : "Failed to load iterations"
+          err instanceof Error ? err.message : "Failed to load iterations",
         );
       } finally {
         setIsLoading(false);

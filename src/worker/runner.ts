@@ -188,6 +188,7 @@ Respond with your decision and detailed reasoning about what specific work to do
       text: result.text,
       toolCalls: result.toolCalls,
       toolResults: result.toolResults,
+      steps: result.steps,
     },
     completedAt: new Date(),
   });
@@ -276,6 +277,7 @@ Analyze the existing knowledge in your graph and create Insight nodes that captu
       text: result.text,
       toolCalls: result.toolCalls,
       toolResults: result.toolResults,
+      steps: result.steps,
     },
     completedAt: new Date(),
   });
@@ -353,6 +355,7 @@ Research and gather external information to fill knowledge gaps. Use Tavily tool
       text: result.text,
       toolCalls: result.toolCalls,
       toolResults: result.toolResults,
+      steps: result.steps,
     },
     completedAt: new Date(),
   });
@@ -362,7 +365,6 @@ Research and gather external information to fill knowledge gaps. Use Tavily tool
       `Tool calls: ${result.toolCalls.length}, Response length: ${result.text.length}`,
   );
 }
-
 
 // ============================================================================
 // Entity Iteration Processing
@@ -394,25 +396,6 @@ async function processEntityIteration(entity: Entity): Promise<void> {
       },
       { userId: entity.userId },
     );
-
-    // Validate that entity has all required multi-phase prompts
-    if (
-      !entity.classificationSystemPrompt ||
-      !entity.insightSynthesisSystemPrompt ||
-      !entity.graphConstructionSystemPrompt
-    ) {
-      const errorMsg = "Missing required multi-phase prompts";
-      logError(
-        `Entity ${entity.name} missing required multi-phase prompts, skipping`,
-        new Error(errorMsg),
-      );
-      await updateWorkerIteration(workerIteration.id, {
-        status: "failed",
-        errorMessage: errorMsg,
-        completedAt: new Date(),
-      });
-      return;
-    }
 
     // Build graph context once (reused across phases)
     const graphContext = await buildGraphContextBlock(entity.id);
@@ -478,7 +461,9 @@ async function processEntityIteration(entity: Entity): Promise<void> {
  * Sleeps for 5 minutes between iterations.
  */
 export async function startRunner(): Promise<void> {
-  log("Worker runner started (two-step classification -> action flow, 5-minute interval)");
+  log(
+    "Worker runner started (two-step classification -> action flow, 5-minute interval)",
+  );
 
   // Register all tools before starting
   const { registerTavilyTools } = await import("@/lib/llm/tools/tavily-tools");
