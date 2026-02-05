@@ -242,19 +242,25 @@ Analyze the existing knowledge in your graph and create Insight nodes that captu
 
   const result = await fullResponse;
 
+  // Count tool calls from events for logging
+  const toolCallCount = result.events.filter(
+    (e): e is { toolCalls: Array<{ toolName: string; args: Record<string, unknown> }> } =>
+      "toolCalls" in e
+  ).reduce((sum, e) => sum + e.toolCalls.length, 0);
+
+  // Get total text length from llmOutput events
+  const textLength = result.events
+    .filter((e): e is { llmOutput: string } => "llmOutput" in e)
+    .reduce((sum, e) => sum + e.llmOutput.length, 0);
+
   await updateLLMInteraction(interaction.id, {
-    response: {
-      text: result.text,
-      toolCalls: result.toolCalls,
-      toolResults: result.toolResults,
-      steps: result.steps,
-    },
+    response: { events: result.events },
     completedAt: new Date(),
   });
 
   log(
     `[InsightSynthesis] Completed for agent ${agent.name}. ` +
-      `Tool calls: ${result.toolCalls.length}, Response length: ${result.text.length}`,
+      `Tool calls: ${toolCallCount}, Response length: ${textLength}`,
   );
 }
 
@@ -320,19 +326,25 @@ Research and gather external information to fill knowledge gaps. Use Tavily tool
 
   const result = await fullResponse;
 
+  // Count tool calls from events for logging
+  const toolCallCount = result.events.filter(
+    (e): e is { toolCalls: Array<{ toolName: string; args: Record<string, unknown> }> } =>
+      "toolCalls" in e
+  ).reduce((sum, e) => sum + e.toolCalls.length, 0);
+
+  // Get total text length from llmOutput events
+  const textLength = result.events
+    .filter((e): e is { llmOutput: string } => "llmOutput" in e)
+    .reduce((sum, e) => sum + e.llmOutput.length, 0);
+
   await updateLLMInteraction(interaction.id, {
-    response: {
-      text: result.text,
-      toolCalls: result.toolCalls,
-      toolResults: result.toolResults,
-      steps: result.steps,
-    },
+    response: { events: result.events },
     completedAt: new Date(),
   });
 
   log(
     `[GraphConstruction] Completed for agent ${agent.name}. ` +
-      `Tool calls: ${result.toolCalls.length}, Response length: ${result.text.length}`,
+      `Tool calls: ${toolCallCount}, Response length: ${textLength}`,
   );
 }
 

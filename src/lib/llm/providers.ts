@@ -175,31 +175,21 @@ export interface StreamWithToolsOptions extends StreamOptions {
   maxSteps?: number;
 }
 
+/**
+ * Event types for LLM response tracking.
+ * Events are stored in chronological order to capture the interleaved flow.
+ */
+export type LLMResponseEvent =
+  | { llmThought: string }  // Internal reasoning (from reasoning models like DeepSeek-R1, o1)
+  | { llmOutput: string }   // Text visible to user
+  | { toolCalls: Array<{ toolName: string; args: Record<string, unknown> }> }
+  | { toolResults: Array<{ toolName: string; result: unknown }> };
+
 export interface StreamWithToolsResult {
   textStream: AsyncIterable<string>;
   fullResponse: Promise<{
-    text: string;
-    toolCalls: Array<{
-      toolName: string;
-      args: Record<string, unknown>;
-    }>;
-    toolResults: Array<{
-      toolName: string;
-      result: unknown;
-    }>;
-    // Complete step-by-step trace of the LLM call loop
-    steps: Array<{
-      stepNumber: number;
-      text: string;
-      toolCalls: Array<{
-        toolName: string;
-        args: Record<string, unknown>;
-      }>;
-      toolResults: Array<{
-        toolName: string;
-        result: unknown;
-      }>;
-    }>;
+    /** Chronologically ordered events capturing the full LLM interaction */
+    events: LLMResponseEvent[];
   }>;
 }
 
@@ -426,17 +416,7 @@ export async function streamLLMResponseWithTools(
     return {
       textStream: mockStream,
       fullResponse: Promise.resolve({
-        text: mockText,
-        toolCalls: [],
-        toolResults: [],
-        steps: [
-          {
-            stepNumber: 1,
-            text: mockText,
-            toolCalls: [],
-            toolResults: [],
-          },
-        ],
+        events: [{ llmOutput: mockText }],
       }),
     };
   }
@@ -494,78 +474,71 @@ export async function streamLLMResponseWithTools(
       stopWhen: stepCountIs(maxSteps),
     });
 
-    // Collect all text chunks to build the full response
-    let fullText = "";
-    const collectedToolCalls: Array<{
-      toolName: string;
-      args: Record<string, unknown>;
-    }> = [];
-    const collectedToolResults: Array<{ toolName: string; result: unknown }> =
-      [];
-    const collectedSteps: Array<{
-      stepNumber: number;
-      text: string;
-      toolCalls: Array<{ toolName: string; args: Record<string, unknown> }>;
-      toolResults: Array<{ toolName: string; result: unknown }>;
-    }> = [];
+    // Event-based format: chronologically ordered events
+    const events: LLMResponseEvent[] = [];
+    let totalToolCalls = 0;
+    let totalToolResults = 0;
 
     // Create a wrapped stream that collects data as it's consumed
     const wrappedStream = (async function* () {
       for await (const chunk of result.textStream) {
-        fullText += chunk;
         yield chunk;
       }
 
-      // After stream completes, collect tool data from ALL steps
-      // response.toolCalls/toolResults only has the last step's data
+      // After stream completes, collect data from ALL steps
       // response.steps contains ALL steps with their tool calls and results
       const response = await result;
       const steps = await response.steps;
 
-      let stepNumber = 0;
       for (const step of steps || []) {
-        stepNumber++;
-        const stepToolCalls: Array<{
-          toolName: string;
-          args: Record<string, unknown>;
-        }> = [];
-        const stepToolResults: Array<{ toolName: string; result: unknown }> =
-          [];
+        const stepAny = step as Record<string, unknown>;
 
-        for (const tc of step.toolCalls || []) {
-          const toolCall = {
+        // Check for reasoning (from reasoning models like DeepSeek-R1, o1)
+        // AI SDK stores reasoning in step.reasoning as an array
+        if (stepAny.reasoning && Array.isArray(stepAny.reasoning)) {
+          for (const reasoningPart of stepAny.reasoning as Array<Record<string, unknown>>) {
+            const reasoningText = String(reasoningPart.text || reasoningPart.reasoning || "");
+            if (reasoningText.trim()) {
+              events.push({ llmThought: reasoningText });
+            }
+          }
+        }
+
+        // Text output (what the user sees)
+        if (step.text && step.text.trim()) {
+          events.push({ llmOutput: step.text });
+        }
+
+        // Tool calls (AI SDK v4 uses 'input' not 'args')
+        if (step.toolCalls && step.toolCalls.length > 0) {
+          const toolCalls = step.toolCalls.map((tc) => ({
             toolName: tc.toolName,
-            args: (tc as unknown as { args: Record<string, unknown> }).args,
-          };
-          collectedToolCalls.push(toolCall);
-          stepToolCalls.push(toolCall);
-        }
-        for (const tr of step.toolResults || []) {
-          const toolResult = {
-            toolName: tr.toolName,
-            result: (tr as unknown as { result: unknown }).result,
-          };
-          collectedToolResults.push(toolResult);
-          stepToolResults.push(toolResult);
+            args: (tc as unknown as { input: Record<string, unknown> }).input,
+          }));
+          events.push({ toolCalls });
+          totalToolCalls += toolCalls.length;
         }
 
-        collectedSteps.push({
-          stepNumber,
-          text: step.text || "",
-          toolCalls: stepToolCalls,
-          toolResults: stepToolResults,
-        });
+        // Tool results (AI SDK v4 uses 'output' not 'result')
+        if (step.toolResults && step.toolResults.length > 0) {
+          const toolResults = step.toolResults.map((tr) => ({
+            toolName: tr.toolName,
+            result: (tr as unknown as { output: unknown }).output,
+          }));
+          events.push({ toolResults });
+          totalToolResults += toolResults.length;
+        }
       }
 
-      // Debug: Log tool call summary
+      // Debug: Log summary
       console.log(
-        `[LLM] Stream complete. Steps: ${steps?.length || 0}, Tool calls: ${collectedToolCalls.length}, Tool results: ${collectedToolResults.length}`,
+        `[LLM] Stream complete. Steps: ${steps?.length || 0}, Events: ${events.length}, Tool calls: ${totalToolCalls}, Tool results: ${totalToolResults}`,
       );
-      if (collectedToolCalls.length > 0) {
-        console.log(
-          `[LLM] Tool calls made:`,
-          collectedToolCalls.map((tc) => tc.toolName),
-        );
+      if (totalToolCalls > 0) {
+        const toolNames = events
+          .filter((e): e is { toolCalls: Array<{ toolName: string; args: Record<string, unknown> }> } => "toolCalls" in e)
+          .flatMap((e) => e.toolCalls.map((tc) => tc.toolName));
+        console.log(`[LLM] Tool calls made:`, toolNames);
       }
     })();
 
@@ -576,12 +549,7 @@ export async function streamLLMResponseWithTools(
       for await (const _chunk of wrappedStream) {
         // Just consume, data is collected in wrappedStream
       }
-      return {
-        text: fullText,
-        toolCalls: collectedToolCalls,
-        toolResults: collectedToolResults,
-        steps: collectedSteps,
-      };
+      return { events };
     })();
 
     return {
