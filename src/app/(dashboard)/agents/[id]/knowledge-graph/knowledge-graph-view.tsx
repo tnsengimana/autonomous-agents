@@ -43,7 +43,7 @@ interface GraphData {
 }
 
 interface KnowledgeGraphViewProps {
-  entityId: string;
+  agentId: string;
 }
 
 type SelectedItem =
@@ -51,7 +51,7 @@ type SelectedItem =
   | { type: "edge"; data: GraphEdge }
   | null;
 
-export function KnowledgeGraphView({ entityId }: KnowledgeGraphViewProps) {
+export function KnowledgeGraphView({ agentId }: KnowledgeGraphViewProps) {
   const [graphData, setGraphData] = useState<GraphData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -61,7 +61,7 @@ export function KnowledgeGraphView({ entityId }: KnowledgeGraphViewProps) {
   useEffect(() => {
     async function fetchGraph() {
       try {
-        const response = await fetch(`/api/entities/${entityId}/knowledge-graph`);
+        const response = await fetch(`/api/agents/${agentId}/knowledge-graph`);
         if (!response.ok) {
           throw new Error("Failed to fetch graph data");
         }
@@ -75,7 +75,7 @@ export function KnowledgeGraphView({ entityId }: KnowledgeGraphViewProps) {
     }
 
     fetchGraph();
-  }, [entityId]);
+  }, [agentId]);
 
   const handleNodeClick = useCallback((node: GraphNode) => {
     setSelected({ type: "node", data: node });
@@ -114,7 +114,7 @@ export function KnowledgeGraphView({ entityId }: KnowledgeGraphViewProps) {
         <div className="text-center">
           <p className="text-muted-foreground">No knowledge graph data yet.</p>
           <p className="text-sm text-muted-foreground mt-1">
-            The entity will build its knowledge graph as it works.
+            The agent will build its knowledge graph as it works.
           </p>
         </div>
       </div>
@@ -134,9 +134,8 @@ export function KnowledgeGraphView({ entityId }: KnowledgeGraphViewProps) {
             nodes={graphData.nodes}
             edges={graphData.edges}
             selections={selections}
-            pathSelectionType="all"
-            onNodeClick={(node) => handleNodeClick(node as GraphNode)}
-            onEdgeClick={(edge) => handleEdgeClick(edge as GraphEdge)}
+            onNodeClick={(node) => handleNodeClick(node as unknown as GraphNode)}
+            onEdgeClick={(edge) => handleEdgeClick(edge as unknown as GraphEdge)}
             labelType="all"
             draggable
           />

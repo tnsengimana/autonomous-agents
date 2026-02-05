@@ -2,7 +2,7 @@
  * Graph Type Initializer
  *
  * Uses LLM to generate appropriate base node and edge types
- * when a new entity is created, based on the entity's purpose.
+ * when a new agent is created, based on the agent's purpose.
  */
 
 import { z } from "zod";
@@ -33,7 +33,8 @@ export const INSIGHT_NODE_TYPE = {
       type: {
         type: "string",
         enum: ["signal", "observation", "pattern"],
-        description: "signal=actionable, observation=notable trend, pattern=recurring behavior",
+        description:
+          "signal=actionable, observation=notable trend, pattern=recurring behavior",
       },
       summary: {
         type: "string",
@@ -59,7 +60,8 @@ export const INSIGHT_NODE_TYPE = {
   },
   exampleProperties: {
     type: "signal",
-    summary: "AAPL oversold with RSI at 28, positive earnings surprise of 12%, and sector tailwinds from Fed holding rates",
+    summary:
+      "AAPL oversold with RSI at 28, positive earnings surprise of 12%, and sector tailwinds from Fed holding rates",
     action: "buy",
     strength: 0.8,
     generated_at: "2026-02-04T10:30:00Z",
@@ -157,19 +159,19 @@ Valid JSON Schema object with:
 // ============================================================================
 
 /**
- * Create the standardized seed node types that all entities share.
+ * Create the standardized seed node types that all agents share.
  * Currently includes:
  * - Insight: Derived analysis including signals, observations, and patterns
  *
  * This function is idempotent - it checks if types exist before creating them.
  */
-export async function createSeedNodeTypes(entityId: string): Promise<void> {
-  // Check if Insight type already exists for this entity
-  const insightExists = await nodeTypeExists(entityId, INSIGHT_NODE_TYPE.name);
+export async function createSeedNodeTypes(agentId: string): Promise<void> {
+  // Check if Insight type already exists for this agent
+  const insightExists = await nodeTypeExists(agentId, INSIGHT_NODE_TYPE.name);
 
   if (!insightExists) {
     await createNodeType({
-      entityId,
+      agentId: agentId,
       name: INSIGHT_NODE_TYPE.name,
       description: INSIGHT_NODE_TYPE.description,
       propertiesSchema: INSIGHT_NODE_TYPE.propertiesSchema,
@@ -179,7 +181,7 @@ export async function createSeedNodeTypes(entityId: string): Promise<void> {
     });
 
     console.log(
-      `[GraphTypeInitializer] Created seed Insight node type for entity ${entityId}`,
+      `[GraphTypeInitializer] Created seed Insight node type for agent ${agentId}`,
     );
   }
 }
@@ -189,21 +191,21 @@ export async function createSeedNodeTypes(entityId: string): Promise<void> {
 // ============================================================================
 
 /**
- * Initialize types for an entity using LLM to generate appropriate node and edge types.
- * This analyzes the entity's purpose and generates domain-specific types.
+ * Initialize types for an agent using LLM to generate appropriate node and edge types.
+ * This analyzes the agent's purpose and generates domain-specific types.
  */
-export async function initializeTypesForEntity(
-  entity: { name: string; purpose: string | null },
+export async function initializeTypesForAgent(
+  agent: { name: string; purpose: string | null },
   options?: { userId?: string },
 ): Promise<TypeInitializationResult> {
-  const purposeDescription = entity.purpose || "General purpose assistant";
+  const purposeDescription = agent.purpose || "General purpose assistant";
 
   const messages = [
     {
       role: "user" as const,
       content: `Design a knowledge graph schema for the following agent:
 
-Agent Name: ${entity.name}
+Agent Name: ${agent.name}
 Agent Purpose: ${purposeDescription}
 
 Create node types and edge types that capture the external knowledge this agent will discover while fulfilling its mission.`,
@@ -233,11 +235,11 @@ Create node types and edge types that capture the external knowledge this agent 
  * Creates seed types first, then LLM-generated node types, then edge types with their constraints.
  */
 export async function persistInitializedTypes(
-  entityId: string,
+  agentId: string,
   types: TypeInitializationResult,
 ): Promise<void> {
   // First, create seed node types (e.g., Insight)
-  await createSeedNodeTypes(entityId);
+  await createSeedNodeTypes(agentId);
 
   // Then, create all LLM-generated node types
   for (const nodeType of types.nodeTypes) {
@@ -250,7 +252,7 @@ export async function persistInitializedTypes(
     }
 
     await createNodeType({
-      entityId,
+      agentId: agentId,
       name: nodeType.name,
       description: nodeType.description,
       propertiesSchema: nodeType.propertiesSchema,
@@ -264,7 +266,7 @@ export async function persistInitializedTypes(
     // Validate that all referenced node types exist
     const validSourceNames: string[] = [];
     for (const sourceName of edgeType.sourceNodeTypeNames) {
-      const nodeType = await getNodeTypeByName(entityId, sourceName);
+      const nodeType = await getNodeTypeByName(agentId, sourceName);
       if (nodeType) {
         validSourceNames.push(sourceName);
       } else {
@@ -276,7 +278,7 @@ export async function persistInitializedTypes(
 
     const validTargetNames: string[] = [];
     for (const targetName of edgeType.targetNodeTypeNames) {
-      const nodeType = await getNodeTypeByName(entityId, targetName);
+      const nodeType = await getNodeTypeByName(agentId, targetName);
       if (nodeType) {
         validTargetNames.push(targetName);
       } else {
@@ -287,7 +289,7 @@ export async function persistInitializedTypes(
     }
 
     await createEdgeType({
-      entityId,
+      agentId: agentId,
       name: edgeType.name,
       description: edgeType.description,
       sourceNodeTypeNames: validSourceNames,
@@ -299,19 +301,19 @@ export async function persistInitializedTypes(
   }
 
   console.log(
-    `[GraphTypeInitializer] Initialized ${types.nodeTypes.length} node types and ${types.edgeTypes.length} edge types for entity ${entityId}`,
+    `[GraphTypeInitializer] Initialized ${types.nodeTypes.length} node types and ${types.edgeTypes.length} edge types for agent ${agentId}`,
   );
 }
 
 /**
- * Initialize and persist types for an entity in one call.
- * This is the main entry point for entity creation.
+ * Initialize and persist types for an agent in one call.
+ * This is the main entry point for agent creation.
  */
-export async function initializeAndPersistTypesForEntity(
-  entityId: string,
-  entity: { name: string; purpose: string | null },
+export async function initializeAndPersistTypesForAgent(
+  agentId: string,
+  agent: { name: string; purpose: string | null },
   options?: { userId?: string },
 ): Promise<void> {
-  const types = await initializeTypesForEntity(entity, options);
-  await persistInitializedTypes(entityId, types);
+  const types = await initializeTypesForAgent(agent, options);
+  await persistInitializedTypes(agentId, types);
 }

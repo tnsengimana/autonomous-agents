@@ -222,9 +222,19 @@ Rename the "entity" concept to "agent" throughout the entire codebase. This incl
 - `src/components/nav.tsx`
 - `CLAUDE.md`
 
+### Phase 12: E2E Browser Testing
+1. Start the application with `docker compose up`
+2. Navigate to `/agents` and verify the page loads
+3. Create a new agent via `/agents/new`
+4. Verify agent appears in the list
+5. Navigate to agent detail page
+6. Test chat, worker-iterations, and knowledge-graph sub-pages
+7. Test agent actions (pause/activate, edit, delete)
+
 ## Post-Implementation
 
 1. Run `npm run lint` to catch any missed references
 2. Run `npm run build` to verify TypeScript compilation
 3. Generate new migration: `npx drizzle-kit generate`
 4. Start fresh with `docker compose down -v && docker compose up`
+5. Complete Phase 12 E2E browser testing

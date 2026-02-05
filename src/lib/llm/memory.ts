@@ -86,20 +86,20 @@ Extract memories that will help the agent perform its role better in future inte
 }
 
 /**
- * Extract and persist memories for an entity
+ * Extract and persist memories for an agent
  */
 export async function extractAndPersistMemories(
-  entityId: string,
+  agentId: string,
   userMessage: string,
   assistantResponse: string,
-  entityRole: string,
+  agentRole: string,
   sourceMessageId?: string,
   options: StreamOptions = {}
 ): Promise<Memory[]> {
   const extractedMemories = await extractMemories(
     userMessage,
     assistantResponse,
-    entityRole,
+    agentRole,
     options
   );
 
@@ -107,7 +107,7 @@ export async function extractAndPersistMemories(
     return [];
   }
 
-  return createMemories(entityId, extractedMemories, sourceMessageId);
+  return createMemories(agentId, extractedMemories, sourceMessageId);
 }
 
 /**

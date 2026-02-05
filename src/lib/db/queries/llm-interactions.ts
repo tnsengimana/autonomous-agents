@@ -14,7 +14,7 @@ import { llmInteractions } from '../schema';
 
 export interface LLMInteraction {
   id: string;
-  entityId: string;
+  agentId: string;
   workerIterationId: string | null;
   phase: string | null;
   systemPrompt: string;
@@ -25,7 +25,7 @@ export interface LLMInteraction {
 }
 
 export interface CreateLLMInteractionInput {
-  entityId: string;
+  agentId: string;
   workerIterationId?: string;
   systemPrompt: string;
   request: Record<string, unknown>;
@@ -50,7 +50,7 @@ export async function createLLMInteraction(
   const result = await db
     .insert(llmInteractions)
     .values({
-      entityId: data.entityId,
+      agentId: data.agentId,
       workerIterationId: data.workerIterationId,
       systemPrompt: data.systemPrompt,
       request: data.request,
@@ -61,7 +61,7 @@ export async function createLLMInteraction(
   const interaction = result[0];
   return {
     id: interaction.id,
-    entityId: interaction.entityId,
+    agentId: interaction.agentId,
     workerIterationId: interaction.workerIterationId,
     phase: interaction.phase,
     systemPrompt: interaction.systemPrompt,
@@ -89,22 +89,22 @@ export async function updateLLMInteraction(
 }
 
 /**
- * Get LLM interactions for an entity, ordered by createdAt desc
+ * Get LLM interactions for an agent, ordered by createdAt desc
  */
-export async function getLLMInteractionsByEntity(
-  entityId: string,
+export async function getLLMInteractionsByAgent(
+  agentId: string,
   limit: number = 50
 ): Promise<LLMInteraction[]> {
   const results = await db
     .select()
     .from(llmInteractions)
-    .where(eq(llmInteractions.entityId, entityId))
+    .where(eq(llmInteractions.agentId, agentId))
     .orderBy(desc(llmInteractions.createdAt))
     .limit(limit);
 
   return results.map((row) => ({
     id: row.id,
-    entityId: row.entityId,
+    agentId: row.agentId,
     workerIterationId: row.workerIterationId,
     phase: row.phase,
     systemPrompt: row.systemPrompt,
@@ -134,7 +134,7 @@ export async function getLLMInteractionById(
   const row = results[0];
   return {
     id: row.id,
-    entityId: row.entityId,
+    agentId: row.agentId,
     workerIterationId: row.workerIterationId,
     phase: row.phase,
     systemPrompt: row.systemPrompt,

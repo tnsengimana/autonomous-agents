@@ -2,7 +2,7 @@ import { describe, test, expect, beforeAll, afterAll } from 'vitest';
 import { db } from '@/lib/db/client';
 import {
   users,
-  entities,
+  agents,
   conversations,
   graphNodeTypes,
   graphEdgeTypes,
@@ -15,7 +15,7 @@ import { eq, and } from 'drizzle-orm';
 
 // Test utilities
 let testUserId: string;
-let testEntityId: string;
+let testAgentId: string;
 let testConversationId: string;
 
 beforeAll(async () => {
@@ -26,27 +26,28 @@ beforeAll(async () => {
   }).returning();
   testUserId = user.id;
 
-  // Create test entity
-  const [entity] = await db.insert(entities).values({
+  // Create test agent
+  const [agent] = await db.insert(agents).values({
     userId: testUserId,
     name: 'Graph Test Team',
     purpose: 'Testing knowledge graph',
-    conversationSystemPrompt: 'You are a test entity for knowledge graph testing.',
+    conversationSystemPrompt: 'You are a test agent for knowledge graph testing.',
     classificationSystemPrompt: 'You classify information for testing.',
     insightSynthesisSystemPrompt: 'You synthesize insights for testing.',
     graphConstructionSystemPrompt: 'You construct graphs for testing.',
+    iterationIntervalMs: 300000,
   }).returning();
-  testEntityId = entity.id;
+  testAgentId = agent.id;
 
   // Create test conversation
   const [conversation] = await db.insert(conversations).values({
-    entityId: testEntityId,
+    agentId: testAgentId,
   }).returning();
   testConversationId = conversation.id;
 });
 
 afterAll(async () => {
-  // Cleanup: delete test user (cascades to entities, agents, etc.)
+  // Cleanup: delete test user (cascades to agents, etc.)
   await db.delete(users).where(eq(users.id, testUserId));
 });
 
@@ -63,7 +64,7 @@ describe('graphNodeTypes schema', () => {
     const exampleProperties = { symbol: 'AAPL', name: 'Apple Inc.' };
 
     const [nodeType] = await db.insert(graphNodeTypes).values({
-      entityId: testEntityId,
+      agentId: testAgentId,
       name: 'Asset',
       description: 'A financial asset such as a stock or bond',
       propertiesSchema,
@@ -72,7 +73,7 @@ describe('graphNodeTypes schema', () => {
     }).returning();
 
     expect(nodeType.id).toBeDefined();
-    expect(nodeType.entityId).toBe(testEntityId);
+    expect(nodeType.agentId).toBe(testAgentId);
     expect(nodeType.name).toBe('Asset');
     expect(nodeType.description).toBe('A financial asset such as a stock or bond');
     expect(nodeType.propertiesSchema).toEqual(propertiesSchema);
@@ -84,16 +85,16 @@ describe('graphNodeTypes schema', () => {
     await db.delete(graphNodeTypes).where(eq(graphNodeTypes.id, nodeType.id));
   });
 
-  test('creates global node type with null entityId', async () => {
+  test('creates global node type with null agentId', async () => {
     const [nodeType] = await db.insert(graphNodeTypes).values({
-      entityId: null,  // Global type
+      agentId: null,  // Global type
       name: 'GlobalConcept',
-      description: 'A global concept shared across entities',
+      description: 'A global concept shared across agents',
       propertiesSchema: { type: 'object', properties: {} },
       createdBy: 'system',
     }).returning();
 
-    expect(nodeType.entityId).toBeNull();
+    expect(nodeType.agentId).toBeNull();
     expect(nodeType.name).toBe('GlobalConcept');
 
     // Cleanup
@@ -102,7 +103,7 @@ describe('graphNodeTypes schema', () => {
 
   test('createdBy defaults to system', async () => {
     const [nodeType] = await db.insert(graphNodeTypes).values({
-      entityId: testEntityId,
+      agentId: testAgentId,
       name: 'DefaultCreatedBy',
       description: 'Testing default createdBy value',
       propertiesSchema: { type: 'object', properties: {} },
@@ -116,7 +117,7 @@ describe('graphNodeTypes schema', () => {
 
   test('supports agent-created types', async () => {
     const [nodeType] = await db.insert(graphNodeTypes).values({
-      entityId: testEntityId,
+      agentId: testAgentId,
       name: 'AgentCreatedType',
       description: 'A type created by the agent',
       propertiesSchema: { type: 'object', properties: {} },
@@ -129,26 +130,27 @@ describe('graphNodeTypes schema', () => {
     await db.delete(graphNodeTypes).where(eq(graphNodeTypes.id, nodeType.id));
   });
 
-  test('cascades delete when entity deleted', async () => {
-    // Create a separate entity for this test
-    const [tempEntity] = await db.insert(entities).values({
+  test('cascades delete when agent deleted', async () => {
+    // Create a separate agent for this test
+    const [tempAgent] = await db.insert(agents).values({
       userId: testUserId,
-      name: 'Temp Entity for Cascade Test',
+      name: 'Temp Agent for Cascade Test',
       conversationSystemPrompt: 'Test prompt',
       classificationSystemPrompt: 'Test prompt',
       insightSynthesisSystemPrompt: 'Test prompt',
       graphConstructionSystemPrompt: 'Test prompt',
+      iterationIntervalMs: 300000,
     }).returning();
 
     const [nodeType] = await db.insert(graphNodeTypes).values({
-      entityId: tempEntity.id,
+      agentId: tempAgent.id,
       name: 'CascadeTestType',
-      description: 'Type that should be deleted with entity',
+      description: 'Type that should be deleted with agent',
       propertiesSchema: { type: 'object', properties: {} },
     }).returning();
 
-    // Delete the entity
-    await db.delete(entities).where(eq(entities.id, tempEntity.id));
+    // Delete the agent
+    await db.delete(agents).where(eq(agents.id, tempAgent.id));
 
     // Node type should be gone
     const remaining = await db.select().from(graphNodeTypes).where(eq(graphNodeTypes.id, nodeType.id));
@@ -168,7 +170,7 @@ describe('graphEdgeTypes schema', () => {
     const exampleProperties = { strength: 0.8, since: '2024-01-01' };
 
     const [edgeType] = await db.insert(graphEdgeTypes).values({
-      entityId: testEntityId,
+      agentId: testAgentId,
       name: 'issued_by',
       description: 'Links an asset to its issuing company',
       propertiesSchema,
@@ -177,7 +179,7 @@ describe('graphEdgeTypes schema', () => {
     }).returning();
 
     expect(edgeType.id).toBeDefined();
-    expect(edgeType.entityId).toBe(testEntityId);
+    expect(edgeType.agentId).toBe(testAgentId);
     expect(edgeType.name).toBe('issued_by');
     expect(edgeType.description).toBe('Links an asset to its issuing company');
     expect(edgeType.propertiesSchema).toEqual(propertiesSchema);
@@ -191,7 +193,7 @@ describe('graphEdgeTypes schema', () => {
 
   test('creates edge type with null propertiesSchema', async () => {
     const [edgeType] = await db.insert(graphEdgeTypes).values({
-      entityId: testEntityId,
+      agentId: testAgentId,
       name: 'simple_relation',
       description: 'A simple relationship without properties',
       propertiesSchema: null,
@@ -203,25 +205,26 @@ describe('graphEdgeTypes schema', () => {
     await db.delete(graphEdgeTypes).where(eq(graphEdgeTypes.id, edgeType.id));
   });
 
-  test('cascades delete when entity deleted', async () => {
-    // Create a separate entity for this test
-    const [tempEntity] = await db.insert(entities).values({
+  test('cascades delete when agent deleted', async () => {
+    // Create a separate agent for this test
+    const [tempAgent] = await db.insert(agents).values({
       userId: testUserId,
-      name: 'Temp Entity for Edge Cascade Test',
+      name: 'Temp Agent for Edge Cascade Test',
       conversationSystemPrompt: 'Test prompt',
       classificationSystemPrompt: 'Test prompt',
       insightSynthesisSystemPrompt: 'Test prompt',
       graphConstructionSystemPrompt: 'Test prompt',
+      iterationIntervalMs: 300000,
     }).returning();
 
     const [edgeType] = await db.insert(graphEdgeTypes).values({
-      entityId: tempEntity.id,
+      agentId: tempAgent.id,
       name: 'cascade_test_edge',
-      description: 'Edge type that should be deleted with entity',
+      description: 'Edge type that should be deleted with agent',
     }).returning();
 
-    // Delete the entity
-    await db.delete(entities).where(eq(entities.id, tempEntity.id));
+    // Delete the agent
+    await db.delete(agents).where(eq(agents.id, tempAgent.id));
 
     // Edge type should be gone
     const remaining = await db.select().from(graphEdgeTypes).where(eq(graphEdgeTypes.id, edgeType.id));
@@ -233,7 +236,7 @@ describe('graphEdgeTypeSourceTypes junction table', () => {
   test('creates junction between edge type and source node type', async () => {
     // Create node type
     const [nodeType] = await db.insert(graphNodeTypes).values({
-      entityId: testEntityId,
+      agentId: testAgentId,
       name: 'SourceNodeType',
       description: 'A source node type',
       propertiesSchema: { type: 'object', properties: {} },
@@ -241,7 +244,7 @@ describe('graphEdgeTypeSourceTypes junction table', () => {
 
     // Create edge type
     const [edgeType] = await db.insert(graphEdgeTypes).values({
-      entityId: testEntityId,
+      agentId: testAgentId,
       name: 'junction_test_edge',
       description: 'Testing junction table',
     }).returning();
@@ -264,7 +267,7 @@ describe('graphEdgeTypeSourceTypes junction table', () => {
   test('cascades delete when edge type deleted', async () => {
     // Create node type
     const [nodeType] = await db.insert(graphNodeTypes).values({
-      entityId: testEntityId,
+      agentId: testAgentId,
       name: 'SourceForCascade',
       description: 'Testing cascade delete',
       propertiesSchema: { type: 'object', properties: {} },
@@ -272,7 +275,7 @@ describe('graphEdgeTypeSourceTypes junction table', () => {
 
     // Create edge type
     const [edgeType] = await db.insert(graphEdgeTypes).values({
-      entityId: testEntityId,
+      agentId: testAgentId,
       name: 'cascade_edge_type',
       description: 'Will be deleted',
     }).returning();
@@ -297,7 +300,7 @@ describe('graphEdgeTypeSourceTypes junction table', () => {
   test('cascades delete when node type deleted', async () => {
     // Create node type
     const [nodeType] = await db.insert(graphNodeTypes).values({
-      entityId: testEntityId,
+      agentId: testAgentId,
       name: 'NodeToDelete',
       description: 'Will be deleted',
       propertiesSchema: { type: 'object', properties: {} },
@@ -305,7 +308,7 @@ describe('graphEdgeTypeSourceTypes junction table', () => {
 
     // Create edge type
     const [edgeType] = await db.insert(graphEdgeTypes).values({
-      entityId: testEntityId,
+      agentId: testAgentId,
       name: 'edge_for_node_cascade',
       description: 'Stays after node deleted',
     }).returning();
@@ -336,7 +339,7 @@ describe('graphEdgeTypeTargetTypes junction table', () => {
   test('creates junction between edge type and target node type', async () => {
     // Create node type
     const [nodeType] = await db.insert(graphNodeTypes).values({
-      entityId: testEntityId,
+      agentId: testAgentId,
       name: 'TargetNodeType',
       description: 'A target node type',
       propertiesSchema: { type: 'object', properties: {} },
@@ -344,7 +347,7 @@ describe('graphEdgeTypeTargetTypes junction table', () => {
 
     // Create edge type
     const [edgeType] = await db.insert(graphEdgeTypes).values({
-      entityId: testEntityId,
+      agentId: testAgentId,
       name: 'target_junction_test',
       description: 'Testing target junction table',
     }).returning();
@@ -367,14 +370,14 @@ describe('graphEdgeTypeTargetTypes junction table', () => {
   test('supports multiple target types for one edge type', async () => {
     // Create two node types
     const [nodeType1] = await db.insert(graphNodeTypes).values({
-      entityId: testEntityId,
+      agentId: testAgentId,
       name: 'Target1',
       description: 'First target type',
       propertiesSchema: { type: 'object', properties: {} },
     }).returning();
 
     const [nodeType2] = await db.insert(graphNodeTypes).values({
-      entityId: testEntityId,
+      agentId: testAgentId,
       name: 'Target2',
       description: 'Second target type',
       propertiesSchema: { type: 'object', properties: {} },
@@ -382,7 +385,7 @@ describe('graphEdgeTypeTargetTypes junction table', () => {
 
     // Create edge type
     const [edgeType] = await db.insert(graphEdgeTypes).values({
-      entityId: testEntityId,
+      agentId: testAgentId,
       name: 'multi_target_edge',
       description: 'Edge with multiple target types',
     }).returning();
@@ -413,14 +416,14 @@ describe('graphNodes schema', () => {
     };
 
     const [node] = await db.insert(graphNodes).values({
-      entityId: testEntityId,
+      agentId: testAgentId,
       type: 'Asset',
       name: 'AAPL',
       properties,
     }).returning();
 
     expect(node.id).toBeDefined();
-    expect(node.entityId).toBe(testEntityId);
+    expect(node.agentId).toBe(testAgentId);
     expect(node.type).toBe('Asset');
     expect(node.name).toBe('AAPL');
     expect(node.properties).toEqual(properties);
@@ -432,7 +435,7 @@ describe('graphNodes schema', () => {
 
   test('properties defaults to empty object', async () => {
     const [node] = await db.insert(graphNodes).values({
-      entityId: testEntityId,
+      agentId: testAgentId,
       type: 'EmptyPropsNode',
       name: 'No Properties',
     }).returning();
@@ -443,25 +446,26 @@ describe('graphNodes schema', () => {
     await db.delete(graphNodes).where(eq(graphNodes.id, node.id));
   });
 
-  test('cascades delete when entity deleted', async () => {
-    // Create a separate entity
-    const [tempEntity] = await db.insert(entities).values({
+  test('cascades delete when agent deleted', async () => {
+    // Create a separate agent
+    const [tempAgent] = await db.insert(agents).values({
       userId: testUserId,
-      name: 'Temp Entity for Node Cascade',
+      name: 'Temp Agent for Node Cascade',
       conversationSystemPrompt: 'Test prompt',
       classificationSystemPrompt: 'Test prompt',
       insightSynthesisSystemPrompt: 'Test prompt',
       graphConstructionSystemPrompt: 'Test prompt',
+      iterationIntervalMs: 300000,
     }).returning();
 
     const [node] = await db.insert(graphNodes).values({
-      entityId: tempEntity.id,
+      agentId: tempAgent.id,
       type: 'CascadeNode',
       name: 'Will Be Deleted',
     }).returning();
 
-    // Delete entity
-    await db.delete(entities).where(eq(entities.id, tempEntity.id));
+    // Delete agent
+    await db.delete(agents).where(eq(agents.id, tempAgent.id));
 
     // Node should be gone
     const remaining = await db.select().from(graphNodes).where(eq(graphNodes.id, node.id));
@@ -473,13 +477,13 @@ describe('graphEdges schema', () => {
   test('creates edge between nodes', async () => {
     // Create two nodes
     const [sourceNode] = await db.insert(graphNodes).values({
-      entityId: testEntityId,
+      agentId: testAgentId,
       type: 'Asset',
       name: 'AAPL',
     }).returning();
 
     const [targetNode] = await db.insert(graphNodes).values({
-      entityId: testEntityId,
+      agentId: testAgentId,
       type: 'Company',
       name: 'Apple Inc.',
     }).returning();
@@ -487,7 +491,7 @@ describe('graphEdges schema', () => {
     const properties = { since: '1976', isPrimary: true };
 
     const [edge] = await db.insert(graphEdges).values({
-      entityId: testEntityId,
+      agentId: testAgentId,
       type: 'issued_by',
       sourceId: sourceNode.id,
       targetId: targetNode.id,
@@ -495,7 +499,7 @@ describe('graphEdges schema', () => {
     }).returning();
 
     expect(edge.id).toBeDefined();
-    expect(edge.entityId).toBe(testEntityId);
+    expect(edge.agentId).toBe(testAgentId);
     expect(edge.type).toBe('issued_by');
     expect(edge.sourceId).toBe(sourceNode.id);
     expect(edge.targetId).toBe(targetNode.id);
@@ -510,19 +514,19 @@ describe('graphEdges schema', () => {
   test('properties defaults to empty object', async () => {
     // Create two nodes
     const [sourceNode] = await db.insert(graphNodes).values({
-      entityId: testEntityId,
+      agentId: testAgentId,
       type: 'Node1',
       name: 'Source',
     }).returning();
 
     const [targetNode] = await db.insert(graphNodes).values({
-      entityId: testEntityId,
+      agentId: testAgentId,
       type: 'Node2',
       name: 'Target',
     }).returning();
 
     const [edge] = await db.insert(graphEdges).values({
-      entityId: testEntityId,
+      agentId: testAgentId,
       type: 'simple_edge',
       sourceId: sourceNode.id,
       targetId: targetNode.id,
@@ -538,19 +542,19 @@ describe('graphEdges schema', () => {
   test('cascades delete when source node deleted', async () => {
     // Create two nodes
     const [sourceNode] = await db.insert(graphNodes).values({
-      entityId: testEntityId,
+      agentId: testAgentId,
       type: 'SourceToDelete',
       name: 'Source',
     }).returning();
 
     const [targetNode] = await db.insert(graphNodes).values({
-      entityId: testEntityId,
+      agentId: testAgentId,
       type: 'TargetToKeep',
       name: 'Target',
     }).returning();
 
     const [edge] = await db.insert(graphEdges).values({
-      entityId: testEntityId,
+      agentId: testAgentId,
       type: 'cascade_test',
       sourceId: sourceNode.id,
       targetId: targetNode.id,
@@ -574,19 +578,19 @@ describe('graphEdges schema', () => {
   test('cascades delete when target node deleted', async () => {
     // Create two nodes
     const [sourceNode] = await db.insert(graphNodes).values({
-      entityId: testEntityId,
+      agentId: testAgentId,
       type: 'SourceToKeep',
       name: 'Source',
     }).returning();
 
     const [targetNode] = await db.insert(graphNodes).values({
-      entityId: testEntityId,
+      agentId: testAgentId,
       type: 'TargetToDelete',
       name: 'Target',
     }).returning();
 
     const [edge] = await db.insert(graphEdges).values({
-      entityId: testEntityId,
+      agentId: testAgentId,
       type: 'target_cascade_test',
       sourceId: sourceNode.id,
       targetId: targetNode.id,
@@ -607,39 +611,40 @@ describe('graphEdges schema', () => {
     await db.delete(graphNodes).where(eq(graphNodes.id, sourceNode.id));
   });
 
-  test('cascades delete when entity deleted', async () => {
-    // Create a separate entity
-    const [tempEntity] = await db.insert(entities).values({
+  test('cascades delete when agent deleted', async () => {
+    // Create a separate agent
+    const [tempAgent] = await db.insert(agents).values({
       userId: testUserId,
-      name: 'Temp Entity for Edge Cascade',
+      name: 'Temp Agent for Edge Cascade',
       conversationSystemPrompt: 'Test prompt',
       classificationSystemPrompt: 'Test prompt',
       insightSynthesisSystemPrompt: 'Test prompt',
       graphConstructionSystemPrompt: 'Test prompt',
+      iterationIntervalMs: 300000,
     }).returning();
 
-    // Create nodes in the temp entity
+    // Create nodes in the temp agent
     const [sourceNode] = await db.insert(graphNodes).values({
-      entityId: tempEntity.id,
+      agentId: tempAgent.id,
       type: 'Source',
       name: 'Source',
     }).returning();
 
     const [targetNode] = await db.insert(graphNodes).values({
-      entityId: tempEntity.id,
+      agentId: tempAgent.id,
       type: 'Target',
       name: 'Target',
     }).returning();
 
     const [edge] = await db.insert(graphEdges).values({
-      entityId: tempEntity.id,
-      type: 'entity_cascade_edge',
+      agentId: tempAgent.id,
+      type: 'agent_cascade_edge',
       sourceId: sourceNode.id,
       targetId: targetNode.id,
     }).returning();
 
-    // Delete entity
-    await db.delete(entities).where(eq(entities.id, tempEntity.id));
+    // Delete agent
+    await db.delete(agents).where(eq(agents.id, tempAgent.id));
 
     // All should be gone
     const remainingEdge = await db.select().from(graphEdges).where(eq(graphEdges.id, edge.id));
@@ -655,8 +660,8 @@ describe('graphEdges schema', () => {
 });
 
 describe('graph schema indexes', () => {
-  test('can query graphNodes by entityId efficiently', async () => {
-    const nodes = await db.select().from(graphNodes).where(eq(graphNodes.entityId, testEntityId));
+  test('can query graphNodes by agentId efficiently', async () => {
+    const nodes = await db.select().from(graphNodes).where(eq(graphNodes.agentId, testAgentId));
     // Just verify the query works - index existence is verified by migration
     expect(Array.isArray(nodes)).toBe(true);
   });
@@ -666,9 +671,9 @@ describe('graph schema indexes', () => {
     expect(Array.isArray(nodes)).toBe(true);
   });
 
-  test('can query graphNodes by entityId and type efficiently', async () => {
+  test('can query graphNodes by agentId and type efficiently', async () => {
     const nodes = await db.select().from(graphNodes).where(
-      and(eq(graphNodes.entityId, testEntityId), eq(graphNodes.type, 'SomeType'))
+      and(eq(graphNodes.agentId, testAgentId), eq(graphNodes.type, 'SomeType'))
     );
     expect(Array.isArray(nodes)).toBe(true);
   });
@@ -676,7 +681,7 @@ describe('graph schema indexes', () => {
   test('can query graphEdges by sourceId efficiently', async () => {
     // Create a node to query for
     const [node] = await db.insert(graphNodes).values({
-      entityId: testEntityId,
+      agentId: testAgentId,
       type: 'IndexTestNode',
       name: 'Index Test',
     }).returning();
@@ -691,7 +696,7 @@ describe('graph schema indexes', () => {
   test('can query graphEdges by targetId efficiently', async () => {
     // Create a node to query for
     const [node] = await db.insert(graphNodes).values({
-      entityId: testEntityId,
+      agentId: testAgentId,
       type: 'IndexTestNode2',
       name: 'Index Test 2',
     }).returning();
@@ -708,7 +713,7 @@ describe('complete graph workflow', () => {
   test('creates full graph with types, nodes, and edges', async () => {
     // Step 1: Create node types
     const [assetType] = await db.insert(graphNodeTypes).values({
-      entityId: testEntityId,
+      agentId: testAgentId,
       name: 'Stock',
       description: 'A publicly traded stock',
       propertiesSchema: {
@@ -723,9 +728,9 @@ describe('complete graph workflow', () => {
     }).returning();
 
     const [companyType] = await db.insert(graphNodeTypes).values({
-      entityId: testEntityId,
+      agentId: testAgentId,
       name: 'Corporation',
-      description: 'A corporate entity',
+      description: 'A corporate agent',
       propertiesSchema: {
         type: 'object',
         required: ['name'],
@@ -739,7 +744,7 @@ describe('complete graph workflow', () => {
 
     // Step 2: Create edge type with constraints
     const [edgeType] = await db.insert(graphEdgeTypes).values({
-      entityId: testEntityId,
+      agentId: testAgentId,
       name: 'issued_by_corp',
       description: 'Stock issued by corporation',
       propertiesSchema: {
@@ -763,14 +768,14 @@ describe('complete graph workflow', () => {
 
     // Step 4: Create actual graph nodes
     const [stockNode] = await db.insert(graphNodes).values({
-      entityId: testEntityId,
+      agentId: testAgentId,
       type: 'Stock',
       name: 'AAPL',
       properties: { ticker: 'AAPL', exchange: 'NASDAQ' },
     }).returning();
 
     const [companyNode] = await db.insert(graphNodes).values({
-      entityId: testEntityId,
+      agentId: testAgentId,
       type: 'Corporation',
       name: 'Apple Inc.',
       properties: { name: 'Apple Inc.', country: 'USA' },
@@ -778,7 +783,7 @@ describe('complete graph workflow', () => {
 
     // Step 5: Create edge between nodes
     const [edge] = await db.insert(graphEdges).values({
-      entityId: testEntityId,
+      agentId: testAgentId,
       type: 'issued_by_corp',
       sourceId: stockNode.id,
       targetId: companyNode.id,

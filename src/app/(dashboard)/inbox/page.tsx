@@ -17,8 +17,8 @@ interface InboxItem {
   id: string;
   title: string;
   content: string;
-  entityId: string | null;
-  entityName: string | null;
+  agentId: string | null;
+  agentName: string | null;
   read: boolean;
   readAt: string | null;
   createdAt: string;
@@ -26,12 +26,12 @@ interface InboxItem {
 
 // Helper functions for displaying source info
 function getSourceName(item: InboxItem): string {
-  return item.entityName ?? "Unknown";
+  return item.agentName ?? "Unknown";
 }
 
 function getItemLink(item: InboxItem): string {
-  if (item.entityId) {
-    return `/entities/${item.entityId}/chat`;
+  if (item.agentId) {
+    return `/agents/${item.agentId}/chat`;
   }
   return "#";
 }
@@ -226,7 +226,7 @@ export default function InboxPage() {
             <div className="text-center text-muted-foreground">
               <p className="text-lg font-medium">Your inbox is empty</p>
               <p className="text-sm mt-2">
-                Your entities will send messages here.
+                Your agents will send messages here.
               </p>
             </div>
           </CardContent>
@@ -238,7 +238,7 @@ export default function InboxPage() {
             <CardHeader>
               <CardTitle>Messages</CardTitle>
               <CardDescription>
-                Messages from your entities
+                Messages from your agents
               </CardDescription>
             </CardHeader>
             <CardContent className="p-0">
@@ -321,7 +321,7 @@ export default function InboxPage() {
                   <Separator className="my-6" />
                   <div className="text-sm text-muted-foreground">
                     <p>
-                      <span className="font-medium">Entity:</span>{" "}
+                      <span className="font-medium">Agent:</span>{" "}
                       {getSourceName(selectedItem)}
                     </p>
                     <p>

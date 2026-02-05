@@ -14,7 +14,7 @@ import {
   getUserApiKeyForProvider,
   decryptApiKey,
 } from "@/lib/db/queries/userApiKeys";
-import { getEntityUserId } from "@/lib/db/queries/entities";
+import { getAgentUserId } from "@/lib/db/queries/agents";
 import type { LLMProvider, LLMMessage } from "@/lib/types";
 import {
   type Tool,
@@ -162,7 +162,7 @@ export interface StreamOptions {
   temperature?: number;
   maxOutputTokens?: number;
   userId?: string;
-  entityId?: string;
+  agentId?: string;
 }
 
 export interface GenerateOptions extends StreamOptions {
@@ -329,10 +329,10 @@ export async function streamLLMResponse(
     }
   }
 
-  // Get userId from entityId if not directly provided
+  // Get userId from agentId if not directly provided
   let userId = options.userId;
-  if (!userId && options.entityId) {
-    userId = (await getEntityUserId(options.entityId)) ?? undefined;
+  if (!userId && options.agentId) {
+    userId = (await getAgentUserId(options.agentId)) ?? undefined;
   }
 
   const model = options.model ?? DEFAULT_MODEL[provider];
@@ -452,10 +452,10 @@ export async function streamLLMResponseWithTools(
     }
   }
 
-  // Get userId from entityId if not directly provided
+  // Get userId from agentId if not directly provided
   let userId = options.userId;
-  if (!userId && options.entityId) {
-    userId = (await getEntityUserId(options.entityId)) ?? undefined;
+  if (!userId && options.agentId) {
+    userId = (await getAgentUserId(options.agentId)) ?? undefined;
   }
 
   const model = options.model ?? DEFAULT_MODEL[provider];
@@ -535,7 +535,7 @@ export async function streamLLMResponseWithTools(
         for (const tc of step.toolCalls || []) {
           const toolCall = {
             toolName: tc.toolName,
-            args: tc.args as Record<string, unknown>,
+            args: (tc as unknown as { args: Record<string, unknown> }).args,
           };
           collectedToolCalls.push(toolCall);
           stepToolCalls.push(toolCall);
@@ -543,7 +543,7 @@ export async function streamLLMResponseWithTools(
         for (const tr of step.toolResults || []) {
           const toolResult = {
             toolName: tr.toolName,
-            result: tr.result,
+            result: (tr as unknown as { result: unknown }).result,
           };
           collectedToolResults.push(toolResult);
           stepToolResults.push(toolResult);
@@ -637,10 +637,10 @@ export async function generateLLMResponse(
     }
   }
 
-  // Get userId from entityId if not directly provided
+  // Get userId from agentId if not directly provided
   let userId = options.userId;
-  if (!userId && options.entityId) {
-    userId = (await getEntityUserId(options.entityId)) ?? undefined;
+  if (!userId && options.agentId) {
+    userId = (await getAgentUserId(options.agentId)) ?? undefined;
   }
 
   const model = options.model ?? DEFAULT_MODEL[provider];
@@ -792,10 +792,10 @@ export async function generateLLMObject<T>(
     }
   }
 
-  // Get userId from entityId if not directly provided
+  // Get userId from agentId if not directly provided
   let userId = options.userId;
-  if (!userId && options.entityId) {
-    userId = (await getEntityUserId(options.entityId)) ?? undefined;
+  if (!userId && options.agentId) {
+    userId = (await getAgentUserId(options.agentId)) ?? undefined;
   }
 
   const model = options.model ?? DEFAULT_MODEL[provider];

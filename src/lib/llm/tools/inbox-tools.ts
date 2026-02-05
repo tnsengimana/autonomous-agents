@@ -12,7 +12,7 @@ import {
   type ToolContext,
 } from "./index";
 import { z } from "zod";
-import { getEntityById } from "@/lib/db/queries/entities";
+import { getAgentById } from "@/lib/db/queries/agents";
 import { createInboxItem } from "@/lib/db/queries/inboxItems";
 import { getOrCreateConversation } from "@/lib/db/queries/conversations";
 import { appendLLMMessage } from "@/lib/db/queries/messages";
@@ -84,25 +84,25 @@ const requestUserInputTool: Tool = {
 
     const { title, summary, fullMessage } = parseResult.data;
 
-    // Get the entity to find the userId
-    const entity = await getEntityById(context.entityId);
-    if (!entity) {
+    // Get the agent to find the userId
+    const agent = await getAgentById(context.agentId);
+    if (!agent) {
       return {
         success: false,
-        error: `Entity not found: ${context.entityId}`,
+        error: `Agent not found: ${context.agentId}`,
       };
     }
 
     // 1. Create the inbox item with summary
     const inboxItem = await createInboxItem({
-      userId: entity.userId,
-      entityId: context.entityId,
+      userId: agent.userId,
+      agentId: context.agentId,
       title,
       content: summary,
     });
 
-    // 2. Append full message to entity's conversation
-    const conversation = await getOrCreateConversation(context.entityId);
+    // 2. Append full message to agent's conversation
+    const conversation = await getOrCreateConversation(context.agentId);
     await appendLLMMessage(conversation.id, { text: fullMessage });
 
     return {

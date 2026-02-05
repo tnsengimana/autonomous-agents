@@ -26,7 +26,7 @@ export interface ToolSchema {
 }
 
 export interface ToolContext {
-  entityId: string;
+  agentId: string;
   conversationId?: string;
 }
 

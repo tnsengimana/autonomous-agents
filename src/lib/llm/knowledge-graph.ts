@@ -17,12 +17,12 @@ import {
  * the available types and current graph state.
  */
 export async function buildGraphContextBlock(
-  entityId: string,
+  agentId: string,
 ): Promise<string> {
   const [typeContext, graphData, stats] = await Promise.all([
-    formatTypesForLLMContext(entityId),
-    serializeGraphForLLM(entityId, 50), // Include recent graph state
-    getGraphStats(entityId),
+    formatTypesForLLMContext(agentId),
+    serializeGraphForLLM(agentId, 50), // Include recent graph state
+    getGraphStats(agentId),
   ]);
 
   if (stats.nodeCount === 0) {
@@ -98,25 +98,25 @@ When working on tasks, follow this pattern:
 }
 
 /**
- * Ensure entity has graph types initialized.
+ * Ensure agent has graph types initialized.
  * Called before building graph context.
  */
 export async function ensureGraphTypesInitialized(
-  entityId: string,
-  entity: { name: string; type: string; purpose: string | null },
+  agentId: string,
+  agent: { name: string; type: string; purpose: string | null },
   options?: { userId?: string },
 ): Promise<void> {
-  const { getNodeTypesByEntity } = await import("@/lib/db/queries/graph-types");
+  const { getNodeTypesByAgent } = await import("@/lib/db/queries/graph-types");
 
-  const existingTypes = await getNodeTypesByEntity(entityId);
+  const existingTypes = await getNodeTypesByAgent(agentId);
   if (existingTypes.length > 0) {
     return; // Already initialized
   }
 
-  // Initialize types for this entity
-  const { initializeAndPersistTypesForEntity } =
+  // Initialize types for this agent
+  const { initializeAndPersistTypesForAgent } =
     await import("./graph-configuration");
 
-  console.log(`[Graph] Initializing types for entity ${entity.name}`);
-  await initializeAndPersistTypesForEntity(entityId, entity, options);
+  console.log(`[Graph] Initializing types for agent ${agent.name}`);
+  await initializeAndPersistTypesForAgent(agentId, agent, options);
 }

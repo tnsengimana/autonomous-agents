@@ -2,7 +2,7 @@
  * Graph Type Queries
  *
  * CRUD operations for dynamic node and edge type definitions.
- * Types can be global (entityId=null) or entity-specific.
+ * Types can be global (agentId=null) or agent-specific.
  */
 
 import { eq, and, or, isNull, inArray } from "drizzle-orm";
@@ -36,7 +36,7 @@ export type {
  * Create a new node type definition
  */
 export async function createNodeType(data: {
-  entityId?: string | null;
+  agentId?: string | null;
   name: string;
   description: string;
   propertiesSchema: object;
@@ -47,7 +47,7 @@ export async function createNodeType(data: {
   const result = await db
     .insert(graphNodeTypes)
     .values({
-      entityId: data.entityId ?? null,
+      agentId: data.agentId ?? null,
       name: data.name,
       description: data.description,
       propertiesSchema: data.propertiesSchema,
@@ -61,60 +61,60 @@ export async function createNodeType(data: {
 }
 
 /**
- * Get all node types available to an entity (entity-specific + global types)
+ * Get all node types available to an agent (agent-specific + global types)
  */
-export async function getNodeTypesByEntity(
-  entityId: string,
+export async function getNodeTypesByAgent(
+  agentId: string,
 ): Promise<GraphNodeType[]> {
   return db
     .select()
     .from(graphNodeTypes)
     .where(
       or(
-        eq(graphNodeTypes.entityId, entityId),
-        isNull(graphNodeTypes.entityId),
+        eq(graphNodeTypes.agentId, agentId),
+        isNull(graphNodeTypes.agentId),
       ),
     );
 }
 
 /**
- * Get a node type by name for an entity (checks entity-specific first, then global)
+ * Get a node type by name for an agent (checks agent-specific first, then global)
  */
 export async function getNodeTypeByName(
-  entityId: string,
+  agentId: string,
   name: string,
 ): Promise<GraphNodeType | null> {
-  // First check for entity-specific type
-  const entitySpecific = await db
+  // First check for agent-specific type
+  const agentSpecific = await db
     .select()
     .from(graphNodeTypes)
     .where(
-      and(eq(graphNodeTypes.entityId, entityId), eq(graphNodeTypes.name, name)),
+      and(eq(graphNodeTypes.agentId, agentId), eq(graphNodeTypes.name, name)),
     )
     .limit(1);
 
-  if (entitySpecific.length > 0) {
-    return entitySpecific[0];
+  if (agentSpecific.length > 0) {
+    return agentSpecific[0];
   }
 
   // Fall back to global type
   const global = await db
     .select()
     .from(graphNodeTypes)
-    .where(and(isNull(graphNodeTypes.entityId), eq(graphNodeTypes.name, name)))
+    .where(and(isNull(graphNodeTypes.agentId), eq(graphNodeTypes.name, name)))
     .limit(1);
 
   return global[0] ?? null;
 }
 
 /**
- * Check if a node type exists for an entity (entity-specific or global)
+ * Check if a node type exists for an agent (agent-specific or global)
  */
 export async function nodeTypeExists(
-  entityId: string,
+  agentId: string,
   name: string,
 ): Promise<boolean> {
-  const nodeType = await getNodeTypeByName(entityId, name);
+  const nodeType = await getNodeTypeByName(agentId, name);
   return nodeType !== null;
 }
 
@@ -126,7 +126,7 @@ export async function nodeTypeExists(
  * Create a new edge type definition with optional source/target node type constraints
  */
 export async function createEdgeType(data: {
-  entityId?: string | null;
+  agentId?: string | null;
   name: string;
   description: string;
   sourceNodeTypeNames?: string[];
@@ -135,13 +135,13 @@ export async function createEdgeType(data: {
   exampleProperties?: object;
   createdBy?: GraphTypeCreator;
 }): Promise<GraphEdgeType> {
-  const entityId = data.entityId ?? null;
+  const agentId = data.agentId ?? null;
 
   // Create the edge type
   const [edgeType] = await db
     .insert(graphEdgeTypes)
     .values({
-      entityId,
+      agentId,
       name: data.name,
       description: data.description,
       propertiesSchema: data.propertiesSchema ?? null,
@@ -153,8 +153,8 @@ export async function createEdgeType(data: {
   // Add source node type constraints
   if (data.sourceNodeTypeNames && data.sourceNodeTypeNames.length > 0) {
     for (const nodeTypeName of data.sourceNodeTypeNames) {
-      const nodeType = entityId
-        ? await getNodeTypeByName(entityId, nodeTypeName)
+      const nodeType = agentId
+        ? await getNodeTypeByName(agentId, nodeTypeName)
         : await getGlobalNodeTypeByName(nodeTypeName);
       if (nodeType) {
         await addSourceNodeTypeToEdgeType(edgeType.id, nodeType.id);
@@ -165,8 +165,8 @@ export async function createEdgeType(data: {
   // Add target node type constraints
   if (data.targetNodeTypeNames && data.targetNodeTypeNames.length > 0) {
     for (const nodeTypeName of data.targetNodeTypeNames) {
-      const nodeType = entityId
-        ? await getNodeTypeByName(entityId, nodeTypeName)
+      const nodeType = agentId
+        ? await getNodeTypeByName(agentId, nodeTypeName)
         : await getGlobalNodeTypeByName(nodeTypeName);
       if (nodeType) {
         await addTargetNodeTypeToEdgeType(edgeType.id, nodeType.id);
@@ -186,26 +186,26 @@ async function getGlobalNodeTypeByName(
   const result = await db
     .select()
     .from(graphNodeTypes)
-    .where(and(isNull(graphNodeTypes.entityId), eq(graphNodeTypes.name, name)))
+    .where(and(isNull(graphNodeTypes.agentId), eq(graphNodeTypes.name, name)))
     .limit(1);
 
   return result[0] ?? null;
 }
 
 /**
- * Get all edge types available to an entity with their source/target constraints populated
+ * Get all edge types available to an agent with their source/target constraints populated
  */
-export async function getEdgeTypesByEntity(
-  entityId: string,
+export async function getEdgeTypesByAgent(
+  agentId: string,
 ): Promise<GraphEdgeTypeWithConstraints[]> {
-  // Get edge types (entity-specific + global)
+  // Get edge types (agent-specific + global)
   const edgeTypes = await db
     .select()
     .from(graphEdgeTypes)
     .where(
       or(
-        eq(graphEdgeTypes.entityId, entityId),
-        isNull(graphEdgeTypes.entityId),
+        eq(graphEdgeTypes.agentId, agentId),
+        isNull(graphEdgeTypes.agentId),
       ),
     );
 
@@ -282,43 +282,43 @@ export async function addTargetNodeTypeToEdgeType(
 }
 
 /**
- * Get an edge type by name for an entity (checks entity-specific first, then global)
+ * Get an edge type by name for an agent (checks agent-specific first, then global)
  */
 export async function getEdgeTypeByName(
-  entityId: string,
+  agentId: string,
   name: string,
 ): Promise<GraphEdgeType | null> {
-  // First check for entity-specific type
-  const entitySpecific = await db
+  // First check for agent-specific type
+  const agentSpecific = await db
     .select()
     .from(graphEdgeTypes)
     .where(
-      and(eq(graphEdgeTypes.entityId, entityId), eq(graphEdgeTypes.name, name)),
+      and(eq(graphEdgeTypes.agentId, agentId), eq(graphEdgeTypes.name, name)),
     )
     .limit(1);
 
-  if (entitySpecific.length > 0) {
-    return entitySpecific[0];
+  if (agentSpecific.length > 0) {
+    return agentSpecific[0];
   }
 
   // Fall back to global type
   const global = await db
     .select()
     .from(graphEdgeTypes)
-    .where(and(isNull(graphEdgeTypes.entityId), eq(graphEdgeTypes.name, name)))
+    .where(and(isNull(graphEdgeTypes.agentId), eq(graphEdgeTypes.name, name)))
     .limit(1);
 
   return global[0] ?? null;
 }
 
 /**
- * Check if an edge type exists for an entity (entity-specific or global)
+ * Check if an edge type exists for an agent (agent-specific or global)
  */
 export async function edgeTypeExists(
-  entityId: string,
+  agentId: string,
   name: string,
 ): Promise<boolean> {
-  const edgeType = await getEdgeTypeByName(entityId, name);
+  const edgeType = await getEdgeTypeByName(agentId, name);
   return edgeType !== null;
 }
 
@@ -327,14 +327,14 @@ export async function edgeTypeExists(
 // ============================================================================
 
 /**
- * Format all types available to an entity for LLM context
+ * Format all types available to an agent for LLM context
  * Returns a human-readable format that helps the LLM understand available types
  */
 export async function formatTypesForLLMContext(
-  entityId: string,
+  agentId: string,
 ): Promise<string> {
-  const nodeTypes = await getNodeTypesByEntity(entityId);
-  const edgeTypes = await getEdgeTypesByEntity(entityId);
+  const nodeTypes = await getNodeTypesByAgent(agentId);
+  const edgeTypes = await getEdgeTypesByAgent(agentId);
 
   const lines: string[] = [];
 

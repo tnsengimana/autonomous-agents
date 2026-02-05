@@ -6,7 +6,7 @@
 
 import { eq, desc, and, isNull, count } from 'drizzle-orm';
 import { db } from '../client';
-import { inboxItems, entities } from '../schema';
+import { inboxItems, agents } from '../schema';
 import type { InboxItem } from '@/lib/types';
 
 /**
@@ -23,16 +23,16 @@ export async function getInboxItemsByUserId(userId: string): Promise<InboxItem[]
 }
 
 /**
- * Get inbox items for a specific entity
+ * Get inbox items for a specific agent
  */
-export async function getInboxItemsByEntityId(
+export async function getInboxItemsByAgentId(
   userId: string,
-  entityId: string
+  agentId: string
 ): Promise<InboxItem[]> {
   const result = await db
     .select()
     .from(inboxItems)
-    .where(and(eq(inboxItems.userId, userId), eq(inboxItems.entityId, entityId)))
+    .where(and(eq(inboxItems.userId, userId), eq(inboxItems.agentId, agentId)))
     .orderBy(desc(inboxItems.createdAt));
 
   return result as InboxItem[];
@@ -64,21 +64,21 @@ export async function getInboxItemById(itemId: string): Promise<InboxItem | null
 }
 
 /**
- * Get an inbox item with its entity info
+ * Get an inbox item with its agent info
  */
 export async function getInboxItemWithSource(itemId: string): Promise<{
   item: InboxItem;
-  entityId: string | null;
-  entityName: string | null;
+  agentId: string | null;
+  agentName: string | null;
 } | null> {
   const result = await db
     .select({
       item: inboxItems,
-      entityId: entities.id,
-      entityName: entities.name,
+      agentId: agents.id,
+      agentName: agents.name,
     })
     .from(inboxItems)
-    .leftJoin(entities, eq(inboxItems.entityId, entities.id))
+    .leftJoin(agents, eq(inboxItems.agentId, agents.id))
     .where(eq(inboxItems.id, itemId))
     .limit(1);
 
@@ -88,8 +88,8 @@ export async function getInboxItemWithSource(itemId: string): Promise<{
 
   return {
     item: result[0].item as InboxItem,
-    entityId: result[0].entityId,
-    entityName: result[0].entityName,
+    agentId: result[0].agentId,
+    agentName: result[0].agentName,
   };
 }
 
@@ -99,7 +99,7 @@ export async function getInboxItemWithSource(itemId: string): Promise<{
  */
 export async function createInboxItem(data: {
   userId: string;
-  entityId: string;
+  agentId: string;
   title: string;
   content: string;
 }): Promise<InboxItem> {
@@ -107,7 +107,7 @@ export async function createInboxItem(data: {
     .insert(inboxItems)
     .values({
       userId: data.userId,
-      entityId: data.entityId,
+      agentId: data.agentId,
       title: data.title,
       content: data.content,
     })
@@ -171,29 +171,29 @@ export async function getRecentInboxItems(
 }
 
 /**
- * Get inbox items with entity names
+ * Get inbox items with agent names
  */
 export async function getInboxItemsWithSources(userId: string): Promise<
   Array<{
     item: InboxItem;
-    entityId: string | null;
-    entityName: string | null;
+    agentId: string | null;
+    agentName: string | null;
   }>
 > {
   const result = await db
     .select({
       item: inboxItems,
-      entityId: entities.id,
-      entityName: entities.name,
+      agentId: agents.id,
+      agentName: agents.name,
     })
     .from(inboxItems)
-    .leftJoin(entities, eq(inboxItems.entityId, entities.id))
+    .leftJoin(agents, eq(inboxItems.agentId, agents.id))
     .where(eq(inboxItems.userId, userId))
     .orderBy(desc(inboxItems.createdAt));
 
   return result.map((r) => ({
     item: r.item as InboxItem,
-    entityId: r.entityId,
-    entityName: r.entityName,
+    agentId: r.agentId,
+    agentName: r.agentName,
   }));
 }

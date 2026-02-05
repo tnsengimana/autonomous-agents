@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@/lib/auth/config';
-import { getEntityById } from '@/lib/db/queries/entities';
-import { getNodesByEntity, getEdgesByEntity } from '@/lib/db/queries/graph-data';
+import { getAgentById } from '@/lib/db/queries/agents';
+import { getNodesByAgent, getEdgesByAgent } from '@/lib/db/queries/graph-data';
 
 export async function GET(
   request: Request,
@@ -12,17 +12,17 @@ export async function GET(
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const { id: entityId } = await params;
-  const entity = await getEntityById(entityId);
+  const { id: agentId } = await params;
+  const agent = await getAgentById(agentId);
 
-  if (!entity || entity.userId !== session.user.id) {
-    return NextResponse.json({ error: 'Entity not found' }, { status: 404 });
+  if (!agent || agent.userId !== session.user.id) {
+    return NextResponse.json({ error: 'Agent not found' }, { status: 404 });
   }
 
-  // Fetch all nodes and edges for this entity
+  // Fetch all nodes and edges for this agent
   const [dbNodes, dbEdges] = await Promise.all([
-    getNodesByEntity(entityId),
-    getEdgesByEntity(entityId),
+    getNodesByAgent(agentId),
+    getEdgesByAgent(agentId),
   ]);
 
   // Transform to Reagraph format

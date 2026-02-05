@@ -2,24 +2,24 @@
  * Tests for Graph Type Initializer
  *
  * Tests the LLM-based type initialization system that generates
- * appropriate node and edge types when a new entity is created.
+ * appropriate node and edge types when a new agent is created.
  *
  * Uses MOCK_LLM=true for testing without real API calls.
  */
 
 import { describe, test, expect, beforeAll, afterAll, vi } from "vitest";
 import { db } from "@/lib/db/client";
-import { users, entities } from "@/lib/db/schema";
+import { users, agents } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import * as llm from "@/lib/llm/providers";
 import {
-  initializeTypesForEntity,
+  initializeTypesForAgent,
   persistInitializedTypes,
   type TypeInitializationResult,
 } from "../graph-configuration";
 import {
-  getNodeTypesByEntity,
-  getEdgeTypesByEntity,
+  getNodeTypesByAgent,
+  getEdgeTypesByAgent,
 } from "@/lib/db/queries/graph-types";
 
 // ============================================================================
@@ -33,7 +33,7 @@ const mockTypeInitializationResult: TypeInitializationResult = {
   nodeTypes: [
     {
       name: "Company",
-      description: "A business entity or corporation",
+      description: "A business agent or corporation",
       propertiesSchema: {
         type: "object",
         required: ["ticker"],
@@ -93,7 +93,7 @@ const mockTypeInitializationResult: TypeInitializationResult = {
   edgeTypes: [
     {
       name: "affects",
-      description: "Indicates that one entity affects another",
+      description: "Indicates that one agent affects another",
       sourceNodeTypeNames: ["MarketEvent"],
       targetNodeTypeNames: ["Company"],
       propertiesSchema: {
@@ -137,23 +137,23 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  // Cleanup: delete test user (cascades to entities, types, etc.)
+  // Cleanup: delete test user (cascades to agents, types, etc.)
   await db.delete(users).where(eq(users.id, testUserId));
   delete process.env.MOCK_LLM;
 });
 
 // ============================================================================
-// initializeTypesForEntity Tests
+// initializeTypesForAgent Tests
 // ============================================================================
 
-describe("initializeTypesForEntity", () => {
+describe("initializeTypesForAgent", () => {
   test("returns valid node and edge type definitions", async () => {
     // Mock the LLM to return our test schema
     const mockGenerateLLMObject = vi
       .spyOn(llm, "generateLLMObject")
       .mockResolvedValueOnce(mockTypeInitializationResult);
 
-    const result = await initializeTypesForEntity({
+    const result = await initializeTypesForAgent({
       name: "Test Team",
       purpose: "Financial research and analysis",
     });
@@ -172,7 +172,7 @@ describe("initializeTypesForEntity", () => {
       .spyOn(llm, "generateLLMObject")
       .mockResolvedValueOnce(mockTypeInitializationResult);
 
-    const result = await initializeTypesForEntity({
+    const result = await initializeTypesForAgent({
       name: "Test Team",
       purpose: "Financial research",
     });
@@ -197,7 +197,7 @@ describe("initializeTypesForEntity", () => {
       .spyOn(llm, "generateLLMObject")
       .mockResolvedValueOnce(mockTypeInitializationResult);
 
-    const result = await initializeTypesForEntity({
+    const result = await initializeTypesForAgent({
       name: "Test Team",
       purpose: "Financial research",
     });
@@ -216,7 +216,7 @@ describe("initializeTypesForEntity", () => {
       .spyOn(llm, "generateLLMObject")
       .mockResolvedValueOnce(mockTypeInitializationResult);
 
-    const result = await initializeTypesForEntity({
+    const result = await initializeTypesForAgent({
       name: "Test Team",
       purpose: "Financial research",
     });
@@ -234,7 +234,7 @@ describe("initializeTypesForEntity", () => {
       .spyOn(llm, "generateLLMObject")
       .mockResolvedValueOnce(mockTypeInitializationResult);
 
-    const result = await initializeTypesForEntity({
+    const result = await initializeTypesForAgent({
       name: "Test Team",
       purpose: "Financial research",
     });
@@ -265,7 +265,7 @@ describe("initializeTypesForEntity", () => {
       .spyOn(llm, "generateLLMObject")
       .mockResolvedValueOnce(mockTypeInitializationResult);
 
-    const result = await initializeTypesForEntity({
+    const result = await initializeTypesForAgent({
       name: "Test Team",
       purpose: "Financial research",
     });
@@ -284,7 +284,7 @@ describe("initializeTypesForEntity", () => {
       .spyOn(llm, "generateLLMObject")
       .mockResolvedValueOnce(mockTypeInitializationResult);
 
-    await initializeTypesForEntity(
+    await initializeTypesForAgent(
       { name: "Test", purpose: "Testing" },
       { userId: testUserId },
     );
@@ -305,7 +305,7 @@ describe("initializeTypesForEntity", () => {
       .spyOn(llm, "generateLLMObject")
       .mockResolvedValueOnce(mockTypeInitializationResult);
 
-    const result = await initializeTypesForEntity({
+    const result = await initializeTypesForAgent({
       name: "Test Team",
       purpose: null,
     });
@@ -323,32 +323,33 @@ describe("initializeTypesForEntity", () => {
 
 describe("persistInitializedTypes", () => {
   test("persists all node types to database", async () => {
-    // Create a new entity for this test to avoid conflicts
-    const [testEntity] = await db
-      .insert(entities)
+    // Create a new agent for this test to avoid conflicts
+    const [testAgent] = await db
+      .insert(agents)
       .values({
         userId: testUserId,
-        name: "Persist Test Entity",
+        name: "Persist Test Agent",
         purpose: "Testing persistence",
-        conversationSystemPrompt: "You are a test entity for persistence testing.",
+        conversationSystemPrompt: "You are a test agent for persistence testing.",
         classificationSystemPrompt: "You classify information for testing.",
         insightSynthesisSystemPrompt: "You synthesize insights for testing.",
         graphConstructionSystemPrompt: "You construct graphs for testing.",
+        iterationIntervalMs: 300000,
         status: "active",
       })
       .returning();
 
     try {
       await persistInitializedTypes(
-        testEntity.id,
+        testAgent.id,
         mockTypeInitializationResult,
       );
 
-      const nodeTypes = await getNodeTypesByEntity(testEntity.id);
+      const nodeTypes = await getNodeTypesByAgent(testAgent.id);
 
-      // Should have persisted all node types
+      // Should have persisted all node types + 1 seed Insight type
       expect(nodeTypes.length).toBe(
-        mockTypeInitializationResult.nodeTypes.length,
+        mockTypeInitializationResult.nodeTypes.length + 1,
       );
 
       // Verify each node type was persisted correctly
@@ -356,38 +357,39 @@ describe("persistInitializedTypes", () => {
         const found = nodeTypes.find((nt) => nt.name === expectedType.name);
         expect(found).toBeDefined();
         expect(found!.description).toBe(expectedType.description);
-        expect(found!.entityId).toBe(testEntity.id);
+        expect(found!.agentId).toBe(testAgent.id);
         expect(found!.createdBy).toBe("system");
       }
     } finally {
       // Cleanup
-      await db.delete(entities).where(eq(entities.id, testEntity.id));
+      await db.delete(agents).where(eq(agents.id, testAgent.id));
     }
   });
 
   test("persists all edge types to database", async () => {
-    // Create a new entity for this test
-    const [testEntity] = await db
-      .insert(entities)
+    // Create a new agent for this test
+    const [testAgent] = await db
+      .insert(agents)
       .values({
         userId: testUserId,
-        name: "Edge Persist Test Entity",
+        name: "Edge Persist Test Agent",
         purpose: "Testing edge persistence",
-        conversationSystemPrompt: "You are a test entity for edge persistence testing.",
+        conversationSystemPrompt: "You are a test agent for edge persistence testing.",
         classificationSystemPrompt: "You classify information for testing.",
         insightSynthesisSystemPrompt: "You synthesize insights for testing.",
         graphConstructionSystemPrompt: "You construct graphs for testing.",
+        iterationIntervalMs: 300000,
         status: "active",
       })
       .returning();
 
     try {
       await persistInitializedTypes(
-        testEntity.id,
+        testAgent.id,
         mockTypeInitializationResult,
       );
 
-      const edgeTypes = await getEdgeTypesByEntity(testEntity.id);
+      const edgeTypes = await getEdgeTypesByAgent(testAgent.id);
 
       // Should have persisted all edge types
       expect(edgeTypes.length).toBe(
@@ -399,39 +401,40 @@ describe("persistInitializedTypes", () => {
         const found = edgeTypes.find((et) => et.name === expectedType.name);
         expect(found).toBeDefined();
         expect(found!.description).toBe(expectedType.description);
-        expect(found!.entityId).toBe(testEntity.id);
+        expect(found!.agentId).toBe(testAgent.id);
         expect(found!.createdBy).toBe("system");
       }
     } finally {
       // Cleanup
-      await db.delete(entities).where(eq(entities.id, testEntity.id));
+      await db.delete(agents).where(eq(agents.id, testAgent.id));
     }
   });
 
   test("persists edge type source/target constraints", async () => {
-    // Create a new entity for this test
-    const [testEntity] = await db
-      .insert(entities)
+    // Create a new agent for this test
+    const [testAgent] = await db
+      .insert(agents)
       .values({
         userId: testUserId,
-        name: "Constraint Persist Test Entity",
+        name: "Constraint Persist Test Agent",
         purpose: "Testing constraint persistence",
         conversationSystemPrompt:
-          "You are a test entity for constraint persistence testing.",
+          "You are a test agent for constraint persistence testing.",
         classificationSystemPrompt: "You classify information for testing.",
         insightSynthesisSystemPrompt: "You synthesize insights for testing.",
         graphConstructionSystemPrompt: "You construct graphs for testing.",
+        iterationIntervalMs: 300000,
         status: "active",
       })
       .returning();
 
     try {
       await persistInitializedTypes(
-        testEntity.id,
+        testAgent.id,
         mockTypeInitializationResult,
       );
 
-      const edgeTypes = await getEdgeTypesByEntity(testEntity.id);
+      const edgeTypes = await getEdgeTypesByAgent(testAgent.id);
 
       // Find the 'affects' edge type
       const affectsEdge = edgeTypes.find((et) => et.name === "affects");
@@ -450,55 +453,59 @@ describe("persistInitializedTypes", () => {
       expect(targetNames).toContain("Company");
     } finally {
       // Cleanup
-      await db.delete(entities).where(eq(entities.id, testEntity.id));
+      await db.delete(agents).where(eq(agents.id, testAgent.id));
     }
   });
 
   test("handles empty types gracefully", async () => {
-    // Create a new entity for this test
-    const [testEntity] = await db
-      .insert(entities)
+    // Create a new agent for this test
+    const [testAgent] = await db
+      .insert(agents)
       .values({
         userId: testUserId,
-        name: "Empty Types Test Entity",
+        name: "Empty Types Test Agent",
         purpose: "Testing empty types",
-        conversationSystemPrompt: "You are a test entity for empty types testing.",
+        conversationSystemPrompt: "You are a test agent for empty types testing.",
         classificationSystemPrompt: "You classify information for testing.",
         insightSynthesisSystemPrompt: "You synthesize insights for testing.",
         graphConstructionSystemPrompt: "You construct graphs for testing.",
+        iterationIntervalMs: 300000,
         status: "active",
       })
       .returning();
 
     try {
-      await persistInitializedTypes(testEntity.id, {
+      await persistInitializedTypes(testAgent.id, {
         nodeTypes: [],
         edgeTypes: [],
       });
 
-      const nodeTypes = await getNodeTypesByEntity(testEntity.id);
-      const edgeTypes = await getEdgeTypesByEntity(testEntity.id);
+      const nodeTypes = await getNodeTypesByAgent(testAgent.id);
+      const edgeTypes = await getEdgeTypesByAgent(testAgent.id);
 
-      expect(nodeTypes.length).toBe(0);
+      // Seed Insight node type is always created, even with empty LLM types
+      expect(nodeTypes.length).toBe(1);
+      expect(nodeTypes[0].name).toBe("Insight");
       expect(edgeTypes.length).toBe(0);
     } finally {
       // Cleanup
-      await db.delete(entities).where(eq(entities.id, testEntity.id));
+      await db.delete(agents).where(eq(agents.id, testAgent.id));
     }
   });
 
   test("logs warning for invalid node type references in edge types", async () => {
-    // Create a new entity for this test
-    const [testEntity] = await db
-      .insert(entities)
+    // Create a new agent for this test
+    const [testAgent] = await db
+      .insert(agents)
       .values({
         userId: testUserId,
-        name: "Invalid Ref Test Entity",
+        name: "Invalid Ref Test Agent",
         purpose: "Testing invalid references",
-        conversationSystemPrompt: "You are a test entity for invalid reference testing.",
+        conversationSystemPrompt: "You are a test agent for invalid reference testing.",
         classificationSystemPrompt: "You classify information for testing.",
         insightSynthesisSystemPrompt: "You synthesize insights for testing.",
         graphConstructionSystemPrompt: "You construct graphs for testing.",
+        iterationIntervalMs: 300000,
         status: "active",
       })
       .returning();
@@ -525,7 +532,7 @@ describe("persistInitializedTypes", () => {
         ],
       };
 
-      await persistInitializedTypes(testEntity.id, typesWithInvalidRefs);
+      await persistInitializedTypes(testAgent.id, typesWithInvalidRefs);
 
       // Should have logged a warning about the invalid reference
       expect(consoleSpy).toHaveBeenCalledWith(
@@ -534,7 +541,7 @@ describe("persistInitializedTypes", () => {
     } finally {
       consoleSpy.mockRestore();
       // Cleanup
-      await db.delete(entities).where(eq(entities.id, testEntity.id));
+      await db.delete(agents).where(eq(agents.id, testAgent.id));
     }
   });
 });
@@ -549,37 +556,39 @@ describe("Integration", () => {
       .spyOn(llm, "generateLLMObject")
       .mockResolvedValueOnce(mockTypeInitializationResult);
 
-    // Create a new entity for this test
-    const [testEntity] = await db
-      .insert(entities)
+    // Create a new agent for this test
+    const [testAgent] = await db
+      .insert(agents)
       .values({
         userId: testUserId,
         name: "E2E Test Aide",
         purpose: "End-to-end type initialization testing",
-        conversationSystemPrompt: "You are a test entity for E2E testing.",
+        conversationSystemPrompt: "You are a test agent for E2E testing.",
         classificationSystemPrompt: "You classify information for testing.",
         insightSynthesisSystemPrompt: "You synthesize insights for testing.",
         graphConstructionSystemPrompt: "You construct graphs for testing.",
+        iterationIntervalMs: 300000,
         status: "active",
       })
       .returning();
 
     try {
       // Initialize types
-      const types = await initializeTypesForEntity({
-        name: testEntity.name,
-        purpose: testEntity.purpose,
+      const types = await initializeTypesForAgent({
+        name: testAgent.name,
+        purpose: testAgent.purpose,
       });
 
       // Persist types
-      await persistInitializedTypes(testEntity.id, types);
+      await persistInitializedTypes(testAgent.id, types);
 
       // Verify types are in database
-      const nodeTypes = await getNodeTypesByEntity(testEntity.id);
-      const edgeTypes = await getEdgeTypesByEntity(testEntity.id);
+      const nodeTypes = await getNodeTypesByAgent(testAgent.id);
+      const edgeTypes = await getEdgeTypesByAgent(testAgent.id);
 
+      // +1 for the seed Insight node type
       expect(nodeTypes.length).toBe(
-        mockTypeInitializationResult.nodeTypes.length,
+        mockTypeInitializationResult.nodeTypes.length + 1,
       );
       expect(edgeTypes.length).toBe(
         mockTypeInitializationResult.edgeTypes.length,
@@ -599,7 +608,7 @@ describe("Integration", () => {
     } finally {
       mockGenerateLLMObject.mockRestore();
       // Cleanup
-      await db.delete(entities).where(eq(entities.id, testEntity.id));
+      await db.delete(agents).where(eq(agents.id, testAgent.id));
     }
   });
 });

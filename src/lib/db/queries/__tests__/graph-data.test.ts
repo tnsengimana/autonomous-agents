@@ -9,7 +9,7 @@ import { describe, test, expect, beforeAll, afterAll } from 'vitest';
 import { db } from '@/lib/db/client';
 import {
   users,
-  entities,
+  agents,
   conversations,
   graphNodes,
   graphEdges,
@@ -20,7 +20,7 @@ import { eq } from 'drizzle-orm';
 import {
   createNode,
   getNodeById,
-  getNodesByEntity,
+  getNodesByAgent,
   findNodeByTypeAndName,
   updateNodeProperties,
   deleteNode,
@@ -37,7 +37,7 @@ import {
 // ============================================================================
 
 let testUserId: string;
-let testEntityId: string;
+let testAgentId: string;
 let testConversationId: string;
 
 beforeAll(async () => {
@@ -48,27 +48,28 @@ beforeAll(async () => {
   }).returning();
   testUserId = user.id;
 
-  // Create test entity
-  const [entity] = await db.insert(entities).values({
+  // Create test agent
+  const [agent] = await db.insert(agents).values({
     userId: testUserId,
     name: 'Graph Data Test Team',
     purpose: 'Testing graph data management',
-    conversationSystemPrompt: 'You are a test entity for graph data testing.',
+    conversationSystemPrompt: 'You are a test agent for graph data testing.',
     classificationSystemPrompt: 'You classify information for testing.',
     insightSynthesisSystemPrompt: 'You synthesize insights for testing.',
     graphConstructionSystemPrompt: 'You construct graphs for testing.',
+    iterationIntervalMs: 300000,
   }).returning();
-  testEntityId = entity.id;
+  testAgentId = agent.id;
 
   // Create test conversation
   const [conversation] = await db.insert(conversations).values({
-    entityId: testEntityId,
+    agentId: testAgentId,
   }).returning();
   testConversationId = conversation.id;
 });
 
 afterAll(async () => {
-  // Cleanup: delete test user (cascades to entities, nodes, edges, etc.)
+  // Cleanup: delete test user (cascades to agents, nodes, edges, etc.)
   await db.delete(users).where(eq(users.id, testUserId));
 });
 
@@ -93,14 +94,14 @@ async function cleanupEdges(edgeIds: string[]) {
 describe('createNode', () => {
   test('creates a node with properties', async () => {
     const node = await createNode({
-      entityId: testEntityId,
+      agentId: testAgentId,
       type: 'Company',
       name: 'Apple Inc.',
       properties: { ticker: 'AAPL', sector: 'Technology' },
     });
 
     expect(node.id).toBeDefined();
-    expect(node.entityId).toBe(testEntityId);
+    expect(node.agentId).toBe(testAgentId);
     expect(node.type).toBe('Company');
     expect(node.name).toBe('Apple Inc.');
     expect(node.properties).toEqual({ ticker: 'AAPL', sector: 'Technology' });
@@ -111,7 +112,7 @@ describe('createNode', () => {
 
   test('creates a node with empty properties by default', async () => {
     const node = await createNode({
-      entityId: testEntityId,
+      agentId: testAgentId,
       type: 'Person',
       name: 'John Doe',
     });
@@ -130,12 +131,12 @@ describe('createNode', () => {
 describe('findNodeByTypeAndName', () => {
   test('finds existing node', async () => {
     const created = await createNode({
-      entityId: testEntityId,
+      agentId: testAgentId,
       type: 'FindTest',
       name: 'Findable Node',
     });
 
-    const found = await findNodeByTypeAndName(testEntityId, 'FindTest', 'Findable Node');
+    const found = await findNodeByTypeAndName(testAgentId, 'FindTest', 'Findable Node');
 
     expect(found).not.toBeNull();
     expect(found!.id).toBe(created.id);
@@ -144,25 +145,25 @@ describe('findNodeByTypeAndName', () => {
   });
 
   test('returns null for non-existent node', async () => {
-    const found = await findNodeByTypeAndName(testEntityId, 'NonExistent', 'No Such Node');
+    const found = await findNodeByTypeAndName(testAgentId, 'NonExistent', 'No Such Node');
     expect(found).toBeNull();
   });
 
   test('distinguishes between types', async () => {
     const company = await createNode({
-      entityId: testEntityId,
+      agentId: testAgentId,
       type: 'Company',
       name: 'Same Name',
     });
 
     const person = await createNode({
-      entityId: testEntityId,
+      agentId: testAgentId,
       type: 'Person',
       name: 'Same Name',
     });
 
-    const foundCompany = await findNodeByTypeAndName(testEntityId, 'Company', 'Same Name');
-    const foundPerson = await findNodeByTypeAndName(testEntityId, 'Person', 'Same Name');
+    const foundCompany = await findNodeByTypeAndName(testAgentId, 'Company', 'Same Name');
+    const foundPerson = await findNodeByTypeAndName(testAgentId, 'Person', 'Same Name');
 
     expect(foundCompany!.id).toBe(company.id);
     expect(foundPerson!.id).toBe(person.id);
@@ -179,7 +180,7 @@ describe('findNodeByTypeAndName', () => {
 describe('updateNodeProperties', () => {
   test('merges properties correctly', async () => {
     const node = await createNode({
-      entityId: testEntityId,
+      agentId: testAgentId,
       type: 'UpdateTest',
       name: 'Updatable Node',
       properties: { a: 1, b: 2 },
@@ -195,7 +196,7 @@ describe('updateNodeProperties', () => {
 
   test('adds properties to empty node', async () => {
     const node = await createNode({
-      entityId: testEntityId,
+      agentId: testAgentId,
       type: 'UpdateTest',
       name: 'Empty Props Node',
     });
@@ -222,26 +223,26 @@ describe('updateNodeProperties', () => {
 describe('createEdge', () => {
   test('creates edge between nodes', async () => {
     const source = await createNode({
-      entityId: testEntityId,
+      agentId: testAgentId,
       type: 'Asset',
       name: 'AAPL',
     });
 
     const target = await createNode({
-      entityId: testEntityId,
+      agentId: testAgentId,
       type: 'Company',
       name: 'Apple Inc.',
     });
 
     const edge = await createEdge({
-      entityId: testEntityId,
+      agentId: testAgentId,
       type: 'issued_by',
       sourceId: source.id,
       targetId: target.id,
     });
 
     expect(edge.id).toBeDefined();
-    expect(edge.entityId).toBe(testEntityId);
+    expect(edge.agentId).toBe(testAgentId);
     expect(edge.type).toBe('issued_by');
     expect(edge.sourceId).toBe(source.id);
     expect(edge.targetId).toBe(target.id);
@@ -253,19 +254,19 @@ describe('createEdge', () => {
 
   test('creates edge with properties', async () => {
     const source = await createNode({
-      entityId: testEntityId,
+      agentId: testAgentId,
       type: 'Investor',
       name: 'John',
     });
 
     const target = await createNode({
-      entityId: testEntityId,
+      agentId: testAgentId,
       type: 'Stock',
       name: 'AAPL',
     });
 
     const edge = await createEdge({
-      entityId: testEntityId,
+      agentId: testAgentId,
       type: 'invested_in',
       sourceId: source.id,
       targetId: target.id,
@@ -286,25 +287,25 @@ describe('createEdge', () => {
 describe('findEdge', () => {
   test('detects existing edge', async () => {
     const source = await createNode({
-      entityId: testEntityId,
+      agentId: testAgentId,
       type: 'A',
       name: 'Source',
     });
 
     const target = await createNode({
-      entityId: testEntityId,
+      agentId: testAgentId,
       type: 'B',
       name: 'Target',
     });
 
     const edge = await createEdge({
-      entityId: testEntityId,
+      agentId: testAgentId,
       type: 'links_to',
       sourceId: source.id,
       targetId: target.id,
     });
 
-    const found = await findEdge(testEntityId, 'links_to', source.id, target.id);
+    const found = await findEdge(testAgentId, 'links_to', source.id, target.id);
     expect(found).not.toBeNull();
     expect(found!.id).toBe(edge.id);
 
@@ -314,7 +315,7 @@ describe('findEdge', () => {
 
   test('returns null for non-existent edge', async () => {
     const found = await findEdge(
-      testEntityId,
+      testAgentId,
       'non_existent',
       '00000000-0000-0000-0000-000000000001',
       '00000000-0000-0000-0000-000000000002'
@@ -324,30 +325,30 @@ describe('findEdge', () => {
 
   test('distinguishes edge direction', async () => {
     const nodeA = await createNode({
-      entityId: testEntityId,
+      agentId: testAgentId,
       type: 'Node',
       name: 'A',
     });
 
     const nodeB = await createNode({
-      entityId: testEntityId,
+      agentId: testAgentId,
       type: 'Node',
       name: 'B',
     });
 
     const edge = await createEdge({
-      entityId: testEntityId,
+      agentId: testAgentId,
       type: 'directed',
       sourceId: nodeA.id,
       targetId: nodeB.id,
     });
 
     // Forward direction exists
-    const forward = await findEdge(testEntityId, 'directed', nodeA.id, nodeB.id);
+    const forward = await findEdge(testAgentId, 'directed', nodeA.id, nodeB.id);
     expect(forward).not.toBeNull();
 
     // Reverse direction does not exist
-    const reverse = await findEdge(testEntityId, 'directed', nodeB.id, nodeA.id);
+    const reverse = await findEdge(testAgentId, 'directed', nodeB.id, nodeA.id);
     expect(reverse).toBeNull();
 
     await cleanupEdges([edge.id]);
@@ -356,24 +357,24 @@ describe('findEdge', () => {
 });
 
 // ============================================================================
-// getNodesByEntity Tests
+// getNodesByAgent Tests
 // ============================================================================
 
-describe('getNodesByEntity', () => {
-  test('returns all nodes for entity', async () => {
+describe('getNodesByAgent', () => {
+  test('returns all nodes for agent', async () => {
     const node1 = await createNode({
-      entityId: testEntityId,
+      agentId: testAgentId,
       type: 'TypeA',
       name: 'Node 1',
     });
 
     const node2 = await createNode({
-      entityId: testEntityId,
+      agentId: testAgentId,
       type: 'TypeB',
       name: 'Node 2',
     });
 
-    const nodes = await getNodesByEntity(testEntityId);
+    const nodes = await getNodesByAgent(testAgentId);
 
     expect(nodes.some(n => n.id === node1.id)).toBe(true);
     expect(nodes.some(n => n.id === node2.id)).toBe(true);
@@ -383,18 +384,18 @@ describe('getNodesByEntity', () => {
 
   test('filters by type', async () => {
     const nodeA = await createNode({
-      entityId: testEntityId,
+      agentId: testAgentId,
       type: 'FilterType',
       name: 'Filtered Node',
     });
 
     const nodeB = await createNode({
-      entityId: testEntityId,
+      agentId: testAgentId,
       type: 'OtherType',
       name: 'Other Node',
     });
 
-    const filtered = await getNodesByEntity(testEntityId, { type: 'FilterType' });
+    const filtered = await getNodesByAgent(testAgentId, { type: 'FilterType' });
 
     expect(filtered.some(n => n.id === nodeA.id)).toBe(true);
     expect(filtered.some(n => n.id === nodeB.id)).toBe(false);
@@ -406,14 +407,14 @@ describe('getNodesByEntity', () => {
     const nodes: string[] = [];
     for (let i = 0; i < 5; i++) {
       const node = await createNode({
-        entityId: testEntityId,
+        agentId: testAgentId,
         type: 'LimitTest',
         name: `Limit Node ${i}`,
       });
       nodes.push(node.id);
     }
 
-    const limited = await getNodesByEntity(testEntityId, { type: 'LimitTest', limit: 3 });
+    const limited = await getNodesByAgent(testAgentId, { type: 'LimitTest', limit: 3 });
     expect(limited.length).toBe(3);
 
     await cleanupNodes(nodes);
@@ -427,19 +428,19 @@ describe('getNodesByEntity', () => {
 describe('getEdgesByNode', () => {
   test('returns incoming edges', async () => {
     const source = await createNode({
-      entityId: testEntityId,
+      agentId: testAgentId,
       type: 'S',
       name: 'Source',
     });
 
     const target = await createNode({
-      entityId: testEntityId,
+      agentId: testAgentId,
       type: 'T',
       name: 'Target',
     });
 
     const edge = await createEdge({
-      entityId: testEntityId,
+      agentId: testAgentId,
       type: 'points_to',
       sourceId: source.id,
       targetId: target.id,
@@ -457,19 +458,19 @@ describe('getEdgesByNode', () => {
 
   test('returns outgoing edges', async () => {
     const source = await createNode({
-      entityId: testEntityId,
+      agentId: testAgentId,
       type: 'S',
       name: 'OutSource',
     });
 
     const target = await createNode({
-      entityId: testEntityId,
+      agentId: testAgentId,
       type: 'T',
       name: 'OutTarget',
     });
 
     const edge = await createEdge({
-      entityId: testEntityId,
+      agentId: testAgentId,
       type: 'flows_to',
       sourceId: source.id,
       targetId: target.id,
@@ -487,32 +488,32 @@ describe('getEdgesByNode', () => {
 
   test('returns both directions', async () => {
     const nodeA = await createNode({
-      entityId: testEntityId,
+      agentId: testAgentId,
       type: 'N',
       name: 'NodeA',
     });
 
     const nodeB = await createNode({
-      entityId: testEntityId,
+      agentId: testAgentId,
       type: 'N',
       name: 'NodeB',
     });
 
     const nodeC = await createNode({
-      entityId: testEntityId,
+      agentId: testAgentId,
       type: 'N',
       name: 'NodeC',
     });
 
     const edgeIn = await createEdge({
-      entityId: testEntityId,
+      agentId: testAgentId,
       type: 'connects',
       sourceId: nodeA.id,
       targetId: nodeB.id,
     });
 
     const edgeOut = await createEdge({
-      entityId: testEntityId,
+      agentId: testAgentId,
       type: 'connects',
       sourceId: nodeB.id,
       targetId: nodeC.id,
@@ -534,27 +535,27 @@ describe('getEdgesByNode', () => {
 describe('serializeGraphForLLM', () => {
   test('returns properly formatted string', async () => {
     const apple = await createNode({
-      entityId: testEntityId,
+      agentId: testAgentId,
       type: 'Company',
       name: 'Apple Inc.',
       properties: { ticker: 'AAPL' },
     });
 
     const aapl = await createNode({
-      entityId: testEntityId,
+      agentId: testAgentId,
       type: 'Asset',
       name: 'AAPL',
       properties: { type: 'stock' },
     });
 
     const edge = await createEdge({
-      entityId: testEntityId,
+      agentId: testAgentId,
       type: 'issued_by',
       sourceId: aapl.id,
       targetId: apple.id,
     });
 
-    const serialized = await serializeGraphForLLM(testEntityId);
+    const serialized = await serializeGraphForLLM(testAgentId);
 
     expect(serialized).toContain('Nodes:');
     expect(serialized).toContain('[Company] Apple Inc.');
@@ -567,20 +568,21 @@ describe('serializeGraphForLLM', () => {
   });
 
   test('handles empty graph', async () => {
-    // Use a fresh entity with no nodes
-    const [freshEntity] = await db.insert(entities).values({
+    // Use a fresh agent with no nodes
+    const [freshAgent] = await db.insert(agents).values({
       userId: testUserId,
       name: 'Empty Graph Test',
       conversationSystemPrompt: 'Test prompt',
       classificationSystemPrompt: 'Test prompt',
       insightSynthesisSystemPrompt: 'Test prompt',
       graphConstructionSystemPrompt: 'Test prompt',
+      iterationIntervalMs: 300000,
     }).returning();
 
-    const serialized = await serializeGraphForLLM(freshEntity.id);
+    const serialized = await serializeGraphForLLM(freshAgent.id);
     expect(serialized).toBe('No knowledge graph data available.');
 
-    await db.delete(entities).where(eq(entities.id, freshEntity.id));
+    await db.delete(agents).where(eq(agents.id, freshAgent.id));
   });
 });
 
@@ -592,39 +594,39 @@ describe('getGraphStats', () => {
   test('returns correct counts by type', async () => {
     // Create nodes
     const company1 = await createNode({
-      entityId: testEntityId,
+      agentId: testAgentId,
       type: 'StatsCompany',
       name: 'Company 1',
     });
 
     const company2 = await createNode({
-      entityId: testEntityId,
+      agentId: testAgentId,
       type: 'StatsCompany',
       name: 'Company 2',
     });
 
     const person = await createNode({
-      entityId: testEntityId,
+      agentId: testAgentId,
       type: 'StatsPerson',
       name: 'Person 1',
     });
 
     // Create edges
     const edge1 = await createEdge({
-      entityId: testEntityId,
+      agentId: testAgentId,
       type: 'stats_works_at',
       sourceId: person.id,
       targetId: company1.id,
     });
 
     const edge2 = await createEdge({
-      entityId: testEntityId,
+      agentId: testAgentId,
       type: 'stats_works_at',
       sourceId: person.id,
       targetId: company2.id,
     });
 
-    const stats = await getGraphStats(testEntityId);
+    const stats = await getGraphStats(testAgentId);
 
     expect(stats.nodeCount).toBeGreaterThanOrEqual(3);
     expect(stats.edgeCount).toBeGreaterThanOrEqual(2);
@@ -637,24 +639,25 @@ describe('getGraphStats', () => {
   });
 
   test('returns zeros for empty graph', async () => {
-    // Use a fresh entity with no nodes
-    const [freshEntity] = await db.insert(entities).values({
+    // Use a fresh agent with no nodes
+    const [freshAgent] = await db.insert(agents).values({
       userId: testUserId,
       name: 'Empty Stats Test',
       conversationSystemPrompt: 'Test prompt',
       classificationSystemPrompt: 'Test prompt',
       insightSynthesisSystemPrompt: 'Test prompt',
       graphConstructionSystemPrompt: 'Test prompt',
+      iterationIntervalMs: 300000,
     }).returning();
 
-    const stats = await getGraphStats(freshEntity.id);
+    const stats = await getGraphStats(freshAgent.id);
 
     expect(stats.nodeCount).toBe(0);
     expect(stats.edgeCount).toBe(0);
     expect(stats.nodesByType).toEqual({});
     expect(stats.edgesByType).toEqual({});
 
-    await db.delete(entities).where(eq(entities.id, freshEntity.id));
+    await db.delete(agents).where(eq(agents.id, freshAgent.id));
   });
 });
 
@@ -665,32 +668,32 @@ describe('getGraphStats', () => {
 describe('getNodeNeighbors', () => {
   test('returns direct neighbors at depth 1', async () => {
     const center = await createNode({
-      entityId: testEntityId,
+      agentId: testAgentId,
       type: 'Center',
       name: 'Center Node',
     });
 
     const neighbor1 = await createNode({
-      entityId: testEntityId,
+      agentId: testAgentId,
       type: 'Neighbor',
       name: 'Neighbor 1',
     });
 
     const neighbor2 = await createNode({
-      entityId: testEntityId,
+      agentId: testAgentId,
       type: 'Neighbor',
       name: 'Neighbor 2',
     });
 
     const edge1 = await createEdge({
-      entityId: testEntityId,
+      agentId: testAgentId,
       type: 'connected',
       sourceId: center.id,
       targetId: neighbor1.id,
     });
 
     const edge2 = await createEdge({
-      entityId: testEntityId,
+      agentId: testAgentId,
       type: 'connected',
       sourceId: neighbor2.id,
       targetId: center.id,
@@ -710,32 +713,32 @@ describe('getNodeNeighbors', () => {
 
   test('traverses multiple levels at depth 2', async () => {
     const nodeA = await createNode({
-      entityId: testEntityId,
+      agentId: testAgentId,
       type: 'Level',
       name: 'Level 0',
     });
 
     const nodeB = await createNode({
-      entityId: testEntityId,
+      agentId: testAgentId,
       type: 'Level',
       name: 'Level 1',
     });
 
     const nodeC = await createNode({
-      entityId: testEntityId,
+      agentId: testAgentId,
       type: 'Level',
       name: 'Level 2',
     });
 
     const edge1 = await createEdge({
-      entityId: testEntityId,
+      agentId: testAgentId,
       type: 'next',
       sourceId: nodeA.id,
       targetId: nodeB.id,
     });
 
     const edge2 = await createEdge({
-      entityId: testEntityId,
+      agentId: testAgentId,
       type: 'next',
       sourceId: nodeB.id,
       targetId: nodeC.id,
@@ -771,19 +774,19 @@ describe('getNodeNeighbors', () => {
 describe('deleteNode', () => {
   test('deletes node and cascades to edges', async () => {
     const nodeA = await createNode({
-      entityId: testEntityId,
+      agentId: testAgentId,
       type: 'DeleteTest',
       name: 'To Delete',
     });
 
     const nodeB = await createNode({
-      entityId: testEntityId,
+      agentId: testAgentId,
       type: 'DeleteTest',
       name: 'Remains',
     });
 
     const edge = await createEdge({
-      entityId: testEntityId,
+      agentId: testAgentId,
       type: 'link',
       sourceId: nodeA.id,
       targetId: nodeB.id,

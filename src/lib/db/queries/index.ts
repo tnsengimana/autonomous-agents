@@ -3,7 +3,7 @@
  */
 
 export * from './conversations';
-export * from './entities';
+export * from './agents';
 export * from './inboxItems';
 export * from './messages';
 export * from './memories';

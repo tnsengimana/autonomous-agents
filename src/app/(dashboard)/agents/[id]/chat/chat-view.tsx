@@ -13,10 +13,10 @@ import {
 } from "@/components/ui/dialog";
 import { Chat } from "@/components/chat";
 
-export function EntityChatView({
-  entity,
+export function AgentChatView({
+  agent,
 }: {
-  entity: { id: string; name: string; systemPrompt: string };
+  agent: { id: string; name: string; systemPrompt: string };
 }) {
   const [isSystemPromptOpen, setIsSystemPromptOpen] = useState(false);
 
@@ -25,12 +25,12 @@ export function EntityChatView({
       <div className="flex items-center justify-between">
         <div>
           <Link
-            href={`/entities/${entity.id}`}
+            href={`/agents/${agent.id}`}
             className="text-sm text-muted-foreground hover:underline"
           >
-            Back to Entity
+            Back to Agent
           </Link>
-          <h1 className="mt-2 text-2xl font-bold">Chat with {entity.name}</h1>
+          <h1 className="mt-2 text-2xl font-bold">Chat with {agent.name}</h1>
         </div>
         <Dialog open={isSystemPromptOpen} onOpenChange={setIsSystemPromptOpen}>
           <DialogTrigger asChild>
@@ -42,12 +42,12 @@ export function EntityChatView({
             <DialogHeader>
               <DialogTitle>System Prompt</DialogTitle>
               <DialogDescription>
-                The system prompt that guides this entity&apos;s behavior.
+                The system prompt that guides this agent&apos;s behavior.
               </DialogDescription>
             </DialogHeader>
             <div className="max-h-[60vh] overflow-auto">
               <pre className="whitespace-pre-wrap rounded-md bg-muted p-4 text-sm">
-                {entity.systemPrompt}
+                {agent.systemPrompt}
               </pre>
             </div>
           </DialogContent>
@@ -55,10 +55,10 @@ export function EntityChatView({
       </div>
 
       <Chat
-        entityId={entity.id}
-        entityName={entity.name}
+        agentId={agent.id}
+        agentName={agent.name}
         title="Conversation"
-        description="Chat with your entity"
+        description="Chat with your agent"
       />
     </div>
   );

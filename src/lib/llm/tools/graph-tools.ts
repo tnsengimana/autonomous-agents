@@ -134,7 +134,7 @@ const addGraphNodeTool: Tool = {
       const { nodeTypeExists } = await import('@/lib/db/queries/graph-types');
 
       // Validate type exists
-      if (!(await nodeTypeExists(ctx.entityId, type))) {
+      if (!(await nodeTypeExists(ctx.agentId, type))) {
         return {
           success: false,
           error: `Node type "${type}" does not exist. Use createNodeType first or use an existing type.`,
@@ -142,7 +142,7 @@ const addGraphNodeTool: Tool = {
       }
 
       // Check for existing node (upsert semantics)
-      const existing = await findNodeByTypeAndName(ctx.entityId, type, name);
+      const existing = await findNodeByTypeAndName(ctx.agentId, type, name);
       if (existing) {
         await updateNodeProperties(existing.id, { ...(existing.properties as object), ...properties });
         return {
@@ -156,7 +156,7 @@ const addGraphNodeTool: Tool = {
 
       // Create new node
       const node = await createNode({
-        entityId: ctx.entityId,
+        agentId: ctx.agentId,
         type,
         name,
         properties,
@@ -242,7 +242,7 @@ const addGraphEdgeTool: Tool = {
       const { edgeTypeExists } = await import('@/lib/db/queries/graph-types');
 
       // Validate edge type exists
-      if (!(await edgeTypeExists(ctx.entityId, type))) {
+      if (!(await edgeTypeExists(ctx.agentId, type))) {
         return {
           success: false,
           error: `Edge type "${type}" does not exist.`,
@@ -250,8 +250,8 @@ const addGraphEdgeTool: Tool = {
       }
 
       // Find source and target nodes
-      const sourceNode = await findNodeByTypeAndName(ctx.entityId, sourceType, sourceName);
-      const targetNode = await findNodeByTypeAndName(ctx.entityId, targetType, targetName);
+      const sourceNode = await findNodeByTypeAndName(ctx.agentId, sourceType, sourceName);
+      const targetNode = await findNodeByTypeAndName(ctx.agentId, targetType, targetName);
 
       if (!sourceNode) {
         return {
@@ -267,7 +267,7 @@ const addGraphEdgeTool: Tool = {
       }
 
       // Check for existing edge (avoid duplicates)
-      const existing = await findEdge(ctx.entityId, type, sourceNode.id, targetNode.id);
+      const existing = await findEdge(ctx.agentId, type, sourceNode.id, targetNode.id);
       if (existing) {
         return {
           success: true,
@@ -280,7 +280,7 @@ const addGraphEdgeTool: Tool = {
 
       // Create edge
       const edge = await createEdge({
-        entityId: ctx.entityId,
+        agentId: ctx.agentId,
         type,
         sourceId: sourceNode.id,
         targetId: targetNode.id,
@@ -345,9 +345,9 @@ const queryGraphTool: Tool = {
     const ctx = context as GraphToolContext;
 
     try {
-      const { getNodesByEntity, getEdgesByNode } = await import('@/lib/db/queries/graph-data');
+      const { getNodesByAgent, getEdgesByNode } = await import('@/lib/db/queries/graph-data');
 
-      let nodes = await getNodesByEntity(ctx.entityId, { type: nodeType, limit });
+      let nodes = await getNodesByAgent(ctx.agentId, { type: nodeType, limit });
 
       // Filter by search term if provided
       if (searchTerm) {
@@ -405,7 +405,7 @@ const getGraphSummaryTool: Tool = {
 
     try {
       const { getGraphStats } = await import('@/lib/db/queries/graph-data');
-      const stats = await getGraphStats(ctx.entityId);
+      const stats = await getGraphStats(ctx.agentId);
 
       return {
         success: true,
@@ -485,7 +485,7 @@ const createNodeTypeTool: Tool = {
       const { nodeTypeExists, createNodeType } = await import('@/lib/db/queries/graph-types');
 
       // Check if type already exists
-      if (await nodeTypeExists(ctx.entityId, name)) {
+      if (await nodeTypeExists(ctx.agentId, name)) {
         return {
           success: false,
           error: `Node type "${name}" already exists.`,
@@ -494,7 +494,7 @@ const createNodeTypeTool: Tool = {
 
       // Create the node type
       const nodeType = await createNodeType({
-        entityId: ctx.entityId,
+        agentId: ctx.agentId,
         name,
         description,
         propertiesSchema,
@@ -596,7 +596,7 @@ const createEdgeTypeTool: Tool = {
       const { edgeTypeExists, createEdgeType, nodeTypeExists } = await import('@/lib/db/queries/graph-types');
 
       // Check if type already exists
-      if (await edgeTypeExists(ctx.entityId, name)) {
+      if (await edgeTypeExists(ctx.agentId, name)) {
         return {
           success: false,
           error: `Edge type "${name}" already exists.`,
@@ -605,7 +605,7 @@ const createEdgeTypeTool: Tool = {
 
       // Validate that all source node types exist
       for (const nodeTypeName of sourceNodeTypeNames) {
-        if (!(await nodeTypeExists(ctx.entityId, nodeTypeName))) {
+        if (!(await nodeTypeExists(ctx.agentId, nodeTypeName))) {
           return {
             success: false,
             error: `Source node type "${nodeTypeName}" does not exist.`,
@@ -615,7 +615,7 @@ const createEdgeTypeTool: Tool = {
 
       // Validate that all target node types exist
       for (const nodeTypeName of targetNodeTypeNames) {
-        if (!(await nodeTypeExists(ctx.entityId, nodeTypeName))) {
+        if (!(await nodeTypeExists(ctx.agentId, nodeTypeName))) {
           return {
             success: false,
             error: `Target node type "${nodeTypeName}" does not exist.`,
@@ -625,7 +625,7 @@ const createEdgeTypeTool: Tool = {
 
       // Create the edge type
       const edgeType = await createEdgeType({
-        entityId: ctx.entityId,
+        agentId: ctx.agentId,
         name,
         description,
         sourceNodeTypeNames,
@@ -703,31 +703,31 @@ const addInsightNodeTool: Tool = {
     try {
       const { createNode } = await import('@/lib/db/queries/graph-data');
       const { nodeTypeExists } = await import('@/lib/db/queries/graph-types');
-      const { getEntityById } = await import('@/lib/db/queries/entities');
+      const { getAgentById } = await import('@/lib/db/queries/agents');
       const { createInboxItem } = await import('@/lib/db/queries/inboxItems');
       const { getOrCreateConversation } = await import('@/lib/db/queries/conversations');
       const { appendLLMMessage } = await import('@/lib/db/queries/messages');
 
       // Validate Insight type exists
-      if (!(await nodeTypeExists(ctx.entityId, 'Insight'))) {
+      if (!(await nodeTypeExists(ctx.agentId, 'Insight'))) {
         return {
           success: false,
-          error: 'Insight node type does not exist. This should have been created during entity initialization.',
+          error: 'Insight node type does not exist. This should have been created during agent initialization.',
         };
       }
 
-      // Get the entity to find the userId
-      const entity = await getEntityById(ctx.entityId);
-      if (!entity) {
+      // Get the agent to find the userId
+      const agent = await getAgentById(ctx.agentId);
+      if (!agent) {
         return {
           success: false,
-          error: `Entity not found: ${ctx.entityId}`,
+          error: `Agent not found: ${ctx.agentId}`,
         };
       }
 
       // 1. Create the Insight node in the graph
       const node = await createNode({
-        entityId: ctx.entityId,
+        agentId: ctx.agentId,
         type: 'Insight',
         name,
         properties,
@@ -739,14 +739,14 @@ const addInsightNodeTool: Tool = {
         : properties.type.charAt(0).toUpperCase() + properties.type.slice(1);
 
       const inboxItem = await createInboxItem({
-        userId: entity.userId,
-        entityId: ctx.entityId,
+        userId: agent.userId,
+        agentId: ctx.agentId,
         title: `${insightTypeLabel}: ${name}`,
         content: properties.summary,
       });
 
-      // 3. Append insight as a message to the entity's conversation
-      const conversation = await getOrCreateConversation(ctx.entityId);
+      // 3. Append insight as a message to the agent's conversation
+      const conversation = await getOrCreateConversation(ctx.agentId);
 
       // Format the insight message for conversation
       const strengthText = properties.strength !== undefined

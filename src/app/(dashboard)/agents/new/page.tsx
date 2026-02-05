@@ -13,7 +13,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 
-export default function NewEntityPage() {
+export default function NewAgentPage() {
   const router = useRouter();
   const [isCreating, setIsCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -44,7 +44,7 @@ export default function NewEntityPage() {
     const iterationIntervalMs = intervalValue * multipliers[formData.intervalUnit];
 
     try {
-      const response = await fetch("/api/entities", {
+      const response = await fetch("/api/agents", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -57,13 +57,13 @@ export default function NewEntityPage() {
 
       if (!response.ok) {
         const data = await response.json();
-        throw new Error(data.error || "Failed to create entity");
+        throw new Error(data.error || "Failed to create agent");
       }
 
-      const entity = await response.json();
-      router.push(`/entities/${entity.id}`);
+      const agent = await response.json();
+      router.push(`/agents/${agent.id}`);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to create entity");
+      setError(err instanceof Error ? err.message : "Failed to create agent");
       setIsCreating(false);
     }
   };
@@ -81,14 +81,14 @@ export default function NewEntityPage() {
     <div className="mx-auto max-w-2xl space-y-6">
       <div>
         <Link
-          href="/entities"
+          href="/agents"
           className="text-sm text-muted-foreground hover:underline"
         >
-          Back to Entities
+          Back to Agents
         </Link>
-        <h1 className="mt-2 text-3xl font-bold">Create New Entity</h1>
+        <h1 className="mt-2 text-3xl font-bold">Create New Agent</h1>
         <p className="text-muted-foreground">
-          Define your entity&apos;s mission. Everything else will be generated automatically.
+          Define your agent&apos;s mission. Everything else will be generated automatically.
         </p>
       </div>
 
@@ -103,7 +103,7 @@ export default function NewEntityPage() {
           <CardHeader>
             <CardTitle>Mission</CardTitle>
             <CardDescription>
-              Describe what you want your entity to accomplish
+              Describe what you want your agent to accomplish
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -112,14 +112,14 @@ export default function NewEntityPage() {
               <textarea
                 id="purpose"
                 name="purpose"
-                placeholder="What should this entity accomplish? Be specific about goals and deliverables. The entity's name and system prompt will be generated automatically based on this mission."
+                placeholder="What should this agent accomplish? Be specific about goals and deliverables. The agent's name and system prompt will be generated automatically based on this mission."
                 value={formData.purpose}
                 onChange={handleChange}
                 className="min-h-[150px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                 required
               />
               <p className="text-xs text-muted-foreground">
-                Describe the mission clearly. The entity&apos;s name and configuration will be generated automatically.
+                Describe the mission clearly. The agent&apos;s name and configuration will be generated automatically.
               </p>
             </div>
 
@@ -149,7 +149,7 @@ export default function NewEntityPage() {
                 </select>
               </div>
               <p className="text-xs text-muted-foreground">
-                How often the entity should run its background iteration cycle.
+                How often the agent should run its background iteration cycle.
               </p>
             </div>
 
@@ -158,9 +158,9 @@ export default function NewEntityPage() {
 
         <div className="flex gap-4">
           <Button type="submit" disabled={isCreating}>
-            {isCreating ? "Generating configuration..." : "Create Entity"}
+            {isCreating ? "Generating configuration..." : "Create Agent"}
           </Button>
-          <Link href="/entities">
+          <Link href="/agents">
             <Button type="button" variant="outline">
               Cancel
             </Button>

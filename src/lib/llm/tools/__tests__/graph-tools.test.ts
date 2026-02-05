@@ -9,7 +9,7 @@ import { describe, test, expect, beforeAll, afterAll, beforeEach } from 'vitest'
 import { db } from '@/lib/db/client';
 import {
   users,
-  entities,
+  agents,
   graphNodes,
   graphNodeTypes,
   graphEdgeTypes,
@@ -32,7 +32,7 @@ import type { GraphToolContext } from '../graph-tools';
 // ============================================================================
 
 let testUserId: string;
-let testEntityId: string;
+let testAgentId: string;
 let testContext: GraphToolContext;
 
 beforeAll(async () => {
@@ -43,27 +43,28 @@ beforeAll(async () => {
   }).returning();
   testUserId = user.id;
 
-  // Create test entity
-  const [entity] = await db.insert(entities).values({
+  // Create test agent
+  const [agent] = await db.insert(agents).values({
     userId: testUserId,
     name: 'Graph Tools Test Team',
     purpose: 'Testing graph tools',
-    conversationSystemPrompt: 'You are a test entity for graph tools testing.',
+    conversationSystemPrompt: 'You are a test agent for graph tools testing.',
     classificationSystemPrompt: 'You classify information for testing.',
     insightSynthesisSystemPrompt: 'You synthesize insights for testing.',
     graphConstructionSystemPrompt: 'You construct graphs for testing.',
+    iterationIntervalMs: 300000,
   }).returning();
-  testEntityId = entity.id;
+  testAgentId = agent.id;
 
   // Create test context (conversationId is optional and not required for tests)
   testContext = {
-    entityId: testEntityId,
+    agentId: testAgentId,
   };
 
   // Create some initial node types for testing
   await db.insert(graphNodeTypes).values([
     {
-      entityId: testEntityId,
+      agentId: testAgentId,
       name: 'Company',
       description: 'A company or organization',
       propertiesSchema: {
@@ -76,7 +77,7 @@ beforeAll(async () => {
       createdBy: 'system',
     },
     {
-      entityId: testEntityId,
+      agentId: testAgentId,
       name: 'Person',
       description: 'An individual person',
       propertiesSchema: {
@@ -91,7 +92,7 @@ beforeAll(async () => {
 
   // Create an initial edge type for testing
   await db.insert(graphEdgeTypes).values({
-    entityId: testEntityId,
+    agentId: testAgentId,
     name: 'works_at',
     description: 'A person works at a company',
     createdBy: 'system',
@@ -99,7 +100,7 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  // Cleanup: delete test user (cascades to entities, nodes, edges, types, etc.)
+  // Cleanup: delete test user (cascades to agents, nodes, edges, types, etc.)
   await db.delete(users).where(eq(users.id, testUserId));
 });
 
@@ -115,7 +116,7 @@ async function cleanupNodeTypes(names: string[]) {
   for (const name of names) {
     await db.delete(graphNodeTypes).where(
       and(
-        eq(graphNodeTypes.entityId, testEntityId),
+        eq(graphNodeTypes.agentId, testAgentId),
         eq(graphNodeTypes.name, name)
       )
     );
@@ -127,7 +128,7 @@ async function cleanupEdgeTypes(names: string[]) {
   for (const name of names) {
     await db.delete(graphEdgeTypes).where(
       and(
-        eq(graphEdgeTypes.entityId, testEntityId),
+        eq(graphEdgeTypes.agentId, testAgentId),
         eq(graphEdgeTypes.name, name)
       )
     );

@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth/config";
-import { getEntityById } from "@/lib/db/queries/entities";
+import { getAgentById } from "@/lib/db/queries/agents";
 import { getWorkerIterationsWithInteractions } from "@/lib/db/queries/worker-iterations";
 
 /**
- * GET /api/entities/[id]/interactions - List worker iterations with LLM interactions for an entity
+ * GET /api/agents/[id]/worker-iterations - List worker iterations with LLM interactions for an agent
  */
 export async function GET(
   request: NextRequest,
@@ -16,16 +16,16 @@ export async function GET(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { id: entityId } = await params;
+    const { id: agentId } = await params;
 
-    // Verify entity exists and belongs to user
-    const entity = await getEntityById(entityId);
-    if (!entity || entity.userId !== session.user.id) {
-      return NextResponse.json({ error: "Entity not found" }, { status: 404 });
+    // Verify agent exists and belongs to user
+    const agent = await getAgentById(agentId);
+    if (!agent || agent.userId !== session.user.id) {
+      return NextResponse.json({ error: "Agent not found" }, { status: 404 });
     }
 
     // Get worker iterations with their interactions
-    const iterations = await getWorkerIterationsWithInteractions(entityId);
+    const iterations = await getWorkerIterationsWithInteractions(agentId);
 
     return NextResponse.json(iterations);
   } catch (error) {

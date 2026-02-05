@@ -10,10 +10,10 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { auth } from "@/lib/auth/config";
-import { getEntityById } from "@/lib/db/queries/entities";
-import { EntityActions } from "@/components/entity-actions";
+import { getAgentById } from "@/lib/db/queries/agents";
+import { AgentActions } from "@/components/agent-actions";
 
-export default async function EntityDetailPage({
+export default async function AgentDetailPage({
   params,
 }: {
   params: Promise<{ id: string }>;
@@ -24,50 +24,50 @@ export default async function EntityDetailPage({
   }
 
   const { id } = await params;
-  const entity = await getEntityById(id);
+  const agent = await getAgentById(id);
 
-  if (!entity || entity.userId !== session.user.id) {
+  if (!agent || agent.userId !== session.user.id) {
     notFound();
   }
 
   // Parse mission from purpose field
-  const mission = entity.purpose?.includes("Mission:")
-    ? entity.purpose.split("Mission:")[1]?.trim()
-    : entity.purpose || "No mission set";
+  const mission = agent.purpose?.includes("Mission:")
+    ? agent.purpose.split("Mission:")[1]?.trim()
+    : agent.purpose || "No mission set";
 
   return (
     <div className="space-y-6">
       <div>
         <Link
-          href="/entities"
+          href="/agents"
           className="text-sm text-muted-foreground hover:underline"
         >
-          Back to Entities
+          Back to Agents
         </Link>
         <div className="mt-2 flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold">{entity.name}</h1>
+            <h1 className="text-3xl font-bold">{agent.name}</h1>
           </div>
-          <EntityActions
-            entityType="team"
-            entityId={entity.id}
-            entityName={entity.name}
-            currentStatus={entity.status as "active" | "paused" | "archived"}
-            currentIntervalMs={entity.iterationIntervalMs}
-            backUrl="/entities"
+          <AgentActions
+            agentType="team"
+            agentId={agent.id}
+            agentName={agent.name}
+            currentStatus={agent.status as "active" | "paused" | "archived"}
+            currentIntervalMs={agent.iterationIntervalMs}
+            backUrl="/agents"
           />
         </div>
       </div>
 
       {/* Quick Actions */}
       <div className="flex gap-4">
-        <Link href={`/entities/${entity.id}/chat`}>
+        <Link href={`/agents/${agent.id}/chat`}>
           <Button>Chat</Button>
         </Link>
-        <Link href={`/entities/${entity.id}/worker-iterations`}>
+        <Link href={`/agents/${agent.id}/worker-iterations`}>
           <Button variant="outline">Worker Iterations</Button>
         </Link>
-        <Link href={`/entities/${entity.id}/knowledge-graph`}>
+        <Link href={`/agents/${agent.id}/knowledge-graph`}>
           <Button variant="outline">Knowledge Graph</Button>
         </Link>
       </div>
@@ -91,13 +91,13 @@ export default async function EntityDetailPage({
           <CardContent className="space-y-3">
             <div className="flex items-center justify-between">
               <span className="text-sm text-muted-foreground">Status</span>
-              <Badge variant="secondary">{entity.status}</Badge>
+              <Badge variant="secondary">{agent.status}</Badge>
             </div>
             <Separator />
             <div className="flex items-center justify-between">
               <span className="text-sm text-muted-foreground">Created</span>
               <span className="text-sm">
-                {new Date(entity.createdAt).toLocaleDateString()}
+                {new Date(agent.createdAt).toLocaleDateString()}
               </span>
             </div>
           </CardContent>

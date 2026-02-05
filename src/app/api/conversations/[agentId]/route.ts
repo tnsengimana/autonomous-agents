@@ -1,17 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth/config";
-import { getEntityById } from "@/lib/db/queries/entities";
+import { getAgentById } from "@/lib/db/queries/agents";
 import { getLatestConversation } from "@/lib/db/queries/conversations";
 import { getMessagesByConversationId, getMessageText } from "@/lib/db/queries/messages";
 
 /**
- * GET /api/conversations/[entityId]
+ * GET /api/conversations/[agentId]
  *
- * Returns the conversation for an entity.
+ * Returns the conversation for an agent.
  */
 export async function GET(
   _request: NextRequest,
-  { params }: { params: Promise<{ entityId: string }> },
+  { params }: { params: Promise<{ agentId: string }> },
 ) {
   try {
     // 1. Verify user is authenticated
@@ -20,20 +20,20 @@ export async function GET(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { entityId } = await params;
+    const { agentId } = await params;
 
-    // 2. Verify user owns the entity
-    const entity = await getEntityById(entityId);
-    if (!entity) {
-      return NextResponse.json({ error: "Entity not found" }, { status: 404 });
+    // 2. Verify user owns the agent
+    const agent = await getAgentById(agentId);
+    if (!agent) {
+      return NextResponse.json({ error: "Agent not found" }, { status: 404 });
     }
 
-    if (entity.userId !== session.user.id) {
+    if (agent.userId !== session.user.id) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
     // 3. Get the conversation and messages
-    const conversation = await getLatestConversation(entityId);
+    const conversation = await getLatestConversation(agentId);
     if (!conversation) {
       return NextResponse.json({ messages: [] });
     }

@@ -12,16 +12,16 @@ import { ChatMessages, type Message } from "./ChatMessages";
 import { ChatInput } from "./ChatInput";
 
 export interface ChatProps {
-  entityId: string;
-  entityName?: string;
+  agentId: string;
+  agentName?: string;
   title?: string;
   description?: string;
   readOnly?: boolean;
 }
 
 export function Chat({
-  entityId,
-  entityName,
+  agentId,
+  agentName,
   title = "Conversation",
   description = "Chat with your AI assistant.",
   readOnly = false,
@@ -36,7 +36,7 @@ export function Chat({
   useEffect(() => {
     const loadHistory = async () => {
       try {
-        const response = await fetch(`/api/conversations/${entityId}`);
+        const response = await fetch(`/api/conversations/${agentId}`);
         if (response.ok) {
           const data = await response.json();
           if (data.messages && Array.isArray(data.messages)) {
@@ -57,7 +57,7 @@ export function Chat({
     };
 
     loadHistory();
-  }, [entityId]);
+  }, [agentId]);
 
   const handleSendMessage = useCallback(
     async (content: string) => {
@@ -82,7 +82,7 @@ export function Chat({
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            entityId,
+            agentId,
             content,
           }),
         });
@@ -128,7 +128,7 @@ export function Chat({
         setStreamingContent("");
       }
     },
-    [entityId, isLoading],
+    [agentId, isLoading],
   );
 
   return (
@@ -143,7 +143,7 @@ export function Chat({
             messages={messages}
             isStreaming={isStreaming}
             streamingContent={streamingContent}
-            agentName={entityName}
+            agentName={agentName}
           />
         </div>
 

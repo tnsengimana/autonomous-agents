@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { auth } from "@/lib/auth/config";
-import { getEntityById } from "@/lib/db/queries/entities";
+import { getAgentById } from "@/lib/db/queries/agents";
 import { KnowledgeGraphView } from "./knowledge-graph-view";
 
 export default async function KnowledgeGraphPage({
@@ -15,9 +15,9 @@ export default async function KnowledgeGraphPage({
   }
 
   const { id } = await params;
-  const entity = await getEntityById(id);
+  const agent = await getAgentById(id);
 
-  if (!entity || entity.userId !== session.user.id) {
+  if (!agent || agent.userId !== session.user.id) {
     notFound();
   }
 
@@ -25,18 +25,18 @@ export default async function KnowledgeGraphPage({
     <div className="space-y-6">
       <div>
         <Link
-          href={`/entities/${entity.id}`}
+          href={`/agents/${agent.id}`}
           className="text-sm text-muted-foreground hover:underline"
         >
-          Back to {entity.name}
+          Back to {agent.name}
         </Link>
         <h1 className="mt-2 text-3xl font-bold">Knowledge Graph</h1>
         <p className="text-muted-foreground">
-          Interactive visualization of {entity.name}&apos;s knowledge
+          Interactive visualization of {agent.name}&apos;s knowledge
         </p>
       </div>
       <div className="h-[calc(100vh-14rem)]">
-        <KnowledgeGraphView entityId={entity.id} />
+        <KnowledgeGraphView agentId={agent.id} />
       </div>
     </div>
   );

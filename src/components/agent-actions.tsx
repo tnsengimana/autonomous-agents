@@ -14,14 +14,14 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
-interface EntityActionsProps {
-  entityId: string;
-  entityName: string;
+interface AgentActionsProps {
+  agentId: string;
+  agentName: string;
   currentStatus: "active" | "paused" | "archived";
   currentIntervalMs: number;
   backUrl: string;
   // Deprecated prop for backward compatibility
-  entityType?: "team" | "aide";
+  agentType?: "team" | "aide";
 }
 
 type IntervalUnit = "minutes" | "hours" | "days";
@@ -47,18 +47,18 @@ function intervalToMs(value: number, unit: IntervalUnit): number {
   return value * multipliers[unit];
 }
 
-export function EntityActions({
-  entityId,
-  entityName,
+export function AgentActions({
+  agentId,
+  agentName,
   currentStatus,
   currentIntervalMs,
   backUrl,
-}: EntityActionsProps) {
+}: AgentActionsProps) {
   const router = useRouter();
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [editName, setEditName] = useState(entityName);
+  const [editName, setEditName] = useState(agentName);
   const initialInterval = msToInterval(currentIntervalMs);
   const [editIntervalValue, setEditIntervalValue] = useState(initialInterval.value.toString());
   const [editIntervalUnit, setEditIntervalUnit] = useState<IntervalUnit>(initialInterval.unit);
@@ -69,7 +69,7 @@ export function EntityActions({
     setError(null);
     try {
       const newStatus = currentStatus === "active" ? "paused" : "active";
-      const response = await fetch(`/api/entities/${entityId}`, {
+      const response = await fetch(`/api/agents/${agentId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status: newStatus }),
@@ -77,12 +77,12 @@ export function EntityActions({
 
       if (!response.ok) {
         const data = await response.json();
-        throw new Error(data.error || "Failed to update entity");
+        throw new Error(data.error || "Failed to update agent");
       }
 
       router.refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to update entity");
+      setError(err instanceof Error ? err.message : "Failed to update agent");
     } finally {
       setIsLoading(false);
     }
@@ -104,7 +104,7 @@ export function EntityActions({
     setError(null);
     try {
       const iterationIntervalMs = intervalToMs(intervalValue, editIntervalUnit);
-      const response = await fetch(`/api/entities/${entityId}`, {
+      const response = await fetch(`/api/agents/${agentId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name: editName, iterationIntervalMs }),
@@ -112,13 +112,13 @@ export function EntityActions({
 
       if (!response.ok) {
         const data = await response.json();
-        throw new Error(data.error || "Failed to update entity");
+        throw new Error(data.error || "Failed to update agent");
       }
 
       setIsEditOpen(false);
       router.refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to update entity");
+      setError(err instanceof Error ? err.message : "Failed to update agent");
     } finally {
       setIsLoading(false);
     }
@@ -128,18 +128,18 @@ export function EntityActions({
     setIsLoading(true);
     setError(null);
     try {
-      const response = await fetch(`/api/entities/${entityId}`, {
+      const response = await fetch(`/api/agents/${agentId}`, {
         method: "DELETE",
       });
 
       if (!response.ok) {
         const data = await response.json();
-        throw new Error(data.error || "Failed to delete entity");
+        throw new Error(data.error || "Failed to delete agent");
       }
 
       router.push(backUrl);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to delete entity");
+      setError(err instanceof Error ? err.message : "Failed to delete agent");
       setIsLoading(false);
     }
   };
@@ -151,7 +151,7 @@ export function EntityActions({
           variant="outline"
           size="sm"
           onClick={() => {
-            setEditName(entityName);
+            setEditName(agentName);
             const interval = msToInterval(currentIntervalMs);
             setEditIntervalValue(interval.value.toString());
             setEditIntervalUnit(interval.unit);
@@ -187,9 +187,9 @@ export function EntityActions({
       <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Edit Entity</DialogTitle>
+            <DialogTitle>Edit Agent</DialogTitle>
             <DialogDescription>
-              Update the name of your entity.
+              Update the name of your agent.
             </DialogDescription>
           </DialogHeader>
           {error && (
@@ -199,12 +199,12 @@ export function EntityActions({
           )}
           <div className="space-y-4 py-4">
             <div className="space-y-2">
-              <Label htmlFor="name">Entity Name</Label>
+              <Label htmlFor="name">Agent Name</Label>
               <Input
                 id="name"
                 value={editName}
                 onChange={(e) => setEditName(e.target.value)}
-                placeholder="Enter entity name"
+                placeholder="Enter agent name"
               />
             </div>
             <div className="space-y-2">
@@ -249,10 +249,10 @@ export function EntityActions({
       <Dialog open={isDeleteOpen} onOpenChange={setIsDeleteOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Delete Entity</DialogTitle>
+            <DialogTitle>Delete Agent</DialogTitle>
             <DialogDescription>
-              Are you sure you want to delete &quot;{entityName}&quot;? This action cannot
-              be undone. All data associated with this entity will
+              Are you sure you want to delete &quot;{agentName}&quot;? This action cannot
+              be undone. All data associated with this agent will
               be permanently deleted.
             </DialogDescription>
           </DialogHeader>

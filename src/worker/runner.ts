@@ -1,9 +1,9 @@
 /**
  * Worker Runner
  *
- * Entity-based iteration with 5-minute intervals using two-step classification -> action flow.
+ * Agent-based iteration with 5-minute intervals using two-step classification -> action flow.
  *
- * For each active entity:
+ * For each active agent:
  * 1. Run classification phase to decide: "synthesize" or "populate"
  * 2. Run the appropriate action phase based on classification result
  *
@@ -26,7 +26,7 @@ import {
   type ToolContext,
 } from "@/lib/llm/tools";
 import { z } from "zod";
-import { getActiveEntities } from "@/lib/db/queries/entities";
+import { getActiveAgents } from "@/lib/db/queries/agents";
 import {
   createLLMInteraction,
   updateLLMInteraction,
@@ -36,13 +36,13 @@ import {
   updateWorkerIteration,
   getLastCompletedIteration,
 } from "@/lib/db/queries/worker-iterations";
-import type { Entity } from "@/lib/types";
+import type { Agent } from "@/lib/types";
 
 // ============================================================================
 // Configuration
 // ============================================================================
 
-// How often to check if any entity needs processing
+// How often to check if any agent needs processing
 const POLL_INTERVAL_MS = 10 * 1000; // 10 seconds
 
 // Shutdown flag
@@ -90,11 +90,15 @@ function logError(message: string, error: unknown): void {
 }
 
 /**
- * Check if an entity is due for its next iteration based on its interval.
- * Returns true if the entity has never been processed or if enough time has passed.
+ * Check if an agent is due for its next iteration based on its interval.
+ * Returns true if the agent has never been processed or if enough time has passed.
  */
-async function isEntityDueForIteration(entity: Entity): Promise<boolean> {
-  const lastIteration = await getLastCompletedIteration(entity.id);
+async function isAgentDueForIteration(agent: Agent): Promise<boolean> {
+  if (agent.status !== "active") {
+    return false;
+  }
+
+  const lastIteration = await getLastCompletedIteration(agent.id);
 
   // Never processed - due immediately
   if (!lastIteration || !lastIteration.completedAt) {
@@ -103,7 +107,7 @@ async function isEntityDueForIteration(entity: Entity): Promise<boolean> {
 
   const timeSinceLastIteration =
     Date.now() - lastIteration.completedAt.getTime();
-  return timeSinceLastIteration >= entity.iterationIntervalMs;
+  return timeSinceLastIteration >= agent.iterationIntervalMs;
 }
 
 // ============================================================================
@@ -115,15 +119,15 @@ async function isEntityDueForIteration(entity: Entity): Promise<boolean> {
  * Uses structured output (generateLLMObject) to get a JSON response.
  */
 async function runClassificationPhase(
-  entity: Entity,
+  agent: Agent,
   graphContext: string,
   workerIterationId: string,
 ): Promise<ClassificationResult> {
-  log(`[Classification] Starting for entity: ${entity.name}`);
+  log(`[Classification] Starting for agent: ${agent.name}`);
 
-  const systemPrompt = entity.classificationSystemPrompt;
+  const systemPrompt = agent.classificationSystemPrompt;
   if (!systemPrompt) {
-    throw new Error("Entity missing classificationSystemPrompt");
+    throw new Error("Agent missing classificationSystemPrompt");
   }
 
   const requestMessages = [
@@ -141,7 +145,7 @@ Based on the graph state above, decide:
 
   // Create llm_interaction record for classification
   const interaction = await createLLMInteraction({
-    entityId: entity.id,
+    agentId: agent.id,
     workerIterationId,
     systemPrompt: systemPrompt,
     request: { messages: requestMessages },
@@ -149,14 +153,14 @@ Based on the graph state above, decide:
   });
 
   log(
-    `[Classification] Calling LLM with structured output for entity ${entity.name}`,
+    `[Classification] Calling LLM with structured output for agent ${agent.name}`,
   );
 
   const classification = await generateLLMObject(
     requestMessages,
     ClassificationResultSchema,
     systemPrompt,
-    { entityId: entity.id },
+    { agentId: agent.id },
   );
 
   await updateLLMInteraction(interaction.id, {
@@ -164,9 +168,7 @@ Based on the graph state above, decide:
     completedAt: new Date(),
   });
 
-  log(
-    `[Classification] Entity ${entity.name} decided: ${classification.action}`,
-  );
+  log(`[Classification] Agent ${agent.name} decided: ${classification.action}`);
   log(
     `[Classification] Reasoning preview: ${classification.reasoning.substring(0, 200)}...`,
   );
@@ -183,16 +185,16 @@ Based on the graph state above, decide:
  * Uses existing graph knowledge to create Insight nodes.
  */
 async function runInsightSynthesisPhase(
-  entity: Entity,
+  agent: Agent,
   classificationReasoning: string,
   graphContext: string,
   workerIterationId: string,
 ): Promise<void> {
-  log(`[InsightSynthesis] Starting for entity: ${entity.name}`);
+  log(`[InsightSynthesis] Starting for agent: ${agent.name}`);
 
-  const systemPrompt = entity.insightSynthesisSystemPrompt;
+  const systemPrompt = agent.insightSynthesisSystemPrompt;
   if (!systemPrompt) {
-    throw new Error("Entity missing insightSynthesisSystemPrompt");
+    throw new Error("Agent missing insightSynthesisSystemPrompt");
   }
 
   const requestMessages = [
@@ -212,7 +214,7 @@ Analyze the existing knowledge in your graph and create Insight nodes that captu
 
   // Create llm_interaction record
   const interaction = await createLLMInteraction({
-    entityId: entity.id,
+    agentId: agent.id,
     workerIterationId,
     systemPrompt: systemPrompt,
     request: { messages: requestMessages },
@@ -220,11 +222,11 @@ Analyze the existing knowledge in your graph and create Insight nodes that captu
   });
 
   // Get insight synthesis tools
-  const toolContext: ToolContext = { entityId: entity.id };
+  const toolContext: ToolContext = { agentId: agent.id };
   const tools = getInsightSynthesisTools();
 
   log(
-    `[InsightSynthesis] Calling LLM with ${tools.length} tools for entity ${entity.name}`,
+    `[InsightSynthesis] Calling LLM with ${tools.length} tools for agent ${agent.name}`,
   );
 
   const { fullResponse } = await streamLLMResponseWithTools(
@@ -233,7 +235,7 @@ Analyze the existing knowledge in your graph and create Insight nodes that captu
     {
       tools,
       toolContext,
-      entityId: entity.id,
+      agentId: agent.id,
       maxSteps: 10,
     },
   );
@@ -251,7 +253,7 @@ Analyze the existing knowledge in your graph and create Insight nodes that captu
   });
 
   log(
-    `[InsightSynthesis] Completed for entity ${entity.name}. ` +
+    `[InsightSynthesis] Completed for agent ${agent.name}. ` +
       `Tool calls: ${result.toolCalls.length}, Response length: ${result.text.length}`,
   );
 }
@@ -261,16 +263,16 @@ Analyze the existing knowledge in your graph and create Insight nodes that captu
  * Gathers external knowledge via Tavily tools and populates the graph.
  */
 async function runGraphConstructionPhase(
-  entity: Entity,
+  agent: Agent,
   classificationReasoning: string,
   graphContext: string,
   workerIterationId: string,
 ): Promise<void> {
-  log(`[GraphConstruction] Starting for entity: ${entity.name}`);
+  log(`[GraphConstruction] Starting for agent: ${agent.name}`);
 
-  const systemPrompt = entity.graphConstructionSystemPrompt;
+  const systemPrompt = agent.graphConstructionSystemPrompt;
   if (!systemPrompt) {
-    throw new Error("Entity missing graphConstructionSystemPrompt");
+    throw new Error("Agent missing graphConstructionSystemPrompt");
   }
 
   const requestMessages = [
@@ -290,7 +292,7 @@ Research and gather external information to fill knowledge gaps. Use Tavily tool
 
   // Create llm_interaction record
   const interaction = await createLLMInteraction({
-    entityId: entity.id,
+    agentId: agent.id,
     workerIterationId,
     systemPrompt: systemPrompt,
     request: { messages: requestMessages },
@@ -298,11 +300,11 @@ Research and gather external information to fill knowledge gaps. Use Tavily tool
   });
 
   // Get graph construction tools
-  const toolContext: ToolContext = { entityId: entity.id };
+  const toolContext: ToolContext = { agentId: agent.id };
   const tools = getGraphConstructionTools();
 
   log(
-    `[GraphConstruction] Calling LLM with ${tools.length} tools for entity ${entity.name}`,
+    `[GraphConstruction] Calling LLM with ${tools.length} tools for agent ${agent.name}`,
   );
 
   const { fullResponse } = await streamLLMResponseWithTools(
@@ -311,7 +313,7 @@ Research and gather external information to fill knowledge gaps. Use Tavily tool
     {
       tools,
       toolContext,
-      entityId: entity.id,
+      agentId: agent.id,
       maxSteps: 10,
     },
   );
@@ -329,48 +331,48 @@ Research and gather external information to fill knowledge gaps. Use Tavily tool
   });
 
   log(
-    `[GraphConstruction] Completed for entity ${entity.name}. ` +
+    `[GraphConstruction] Completed for agent ${agent.name}. ` +
       `Tool calls: ${result.toolCalls.length}, Response length: ${result.text.length}`,
   );
 }
 
 // ============================================================================
-// Entity Iteration Processing
+// Agent Iteration Processing
 // ============================================================================
 
 /**
- * Process one entity's iteration using the two-step classification -> action flow.
+ * Process one agent's iteration using the two-step classification -> action flow.
  *
  * Step 1: Classification - decide "synthesize" or "populate"
  * Step 2: Execute the appropriate action phase
  */
-async function processEntityIteration(entity: Entity): Promise<void> {
-  log(`Processing iteration for entity: ${entity.name} (${entity.id})`);
+async function processAgentIteration(agent: Agent): Promise<void> {
+  log(`Processing iteration for agent: ${agent.name} (${agent.id})`);
 
   // Create worker iteration record
   const workerIteration = await createWorkerIteration({
-    entityId: entity.id,
+    agentId: agent.id,
   });
   log(`Created worker iteration: ${workerIteration.id}`);
 
   try {
-    // Ensure graph types are initialized for this entity
+    // Ensure graph types are initialized for this agent
     await ensureGraphTypesInitialized(
-      entity.id,
+      agent.id,
       {
-        name: entity.name,
-        type: "entity", // Legacy field, can be anything
-        purpose: entity.purpose,
+        name: agent.name,
+        type: "agent", // Legacy field, can be anything
+        purpose: agent.purpose,
       },
-      { userId: entity.userId },
+      { userId: agent.userId },
     );
 
     // Build graph context once (reused across phases)
-    const graphContext = await buildGraphContextBlock(entity.id);
+    const graphContext = await buildGraphContextBlock(agent.id);
 
     // Step 1: CLASSIFICATION
     const classification = await runClassificationPhase(
-      entity,
+      agent,
       graphContext,
       workerIteration.id,
     );
@@ -384,14 +386,14 @@ async function processEntityIteration(entity: Entity): Promise<void> {
     // Step 2: EXECUTE ACTION based on classification
     if (classification.action === "synthesize") {
       await runInsightSynthesisPhase(
-        entity,
+        agent,
         classification.reasoning,
         graphContext,
         workerIteration.id,
       );
     } else {
       await runGraphConstructionPhase(
-        entity,
+        agent,
         classification.reasoning,
         graphContext,
         workerIteration.id,
@@ -404,10 +406,10 @@ async function processEntityIteration(entity: Entity): Promise<void> {
       completedAt: new Date(),
     });
 
-    log(`Completed two-step iteration for entity ${entity.name}`);
+    log(`Completed two-step iteration for agent ${agent.name}`);
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : String(error);
-    logError(`Error in iteration for entity ${entity.name}:`, error);
+    logError(`Error in iteration for agent ${agent.name}:`, error);
 
     // Mark iteration as failed
     await updateWorkerIteration(workerIteration.id, {
@@ -425,12 +427,12 @@ async function processEntityIteration(entity: Entity): Promise<void> {
 /**
  * The main runner loop
  *
- * Polls for active entities and processes those that are due based on their
+ * Polls for active agents and processes those that are due based on their
  * individual iteration intervals.
  */
 export async function startRunner(): Promise<void> {
   log(
-    "Worker runner started (two-step classification -> action flow, per-entity intervals)",
+    "Worker runner started (two-step classification -> action flow, per-agent intervals)",
   );
 
   // Register all tools before starting
@@ -445,20 +447,20 @@ export async function startRunner(): Promise<void> {
 
   while (!isShuttingDown) {
     try {
-      // Get all active entities
-      const entities = await getActiveEntities();
+      // Get all active agents
+      const agents = await getActiveAgents();
 
-      if (entities.length > 0) {
-        // Check each entity to see if it's due for processing
-        for (const entity of entities) {
+      if (agents.length > 0) {
+        // Check each agent to see if it's due for processing
+        for (const agent of agents) {
           if (isShuttingDown) break;
 
-          const isDue = await isEntityDueForIteration(entity);
+          const isDue = await isAgentDueForIteration(agent);
           if (isDue) {
             log(
-              `Entity ${entity.name} is due (interval: ${entity.iterationIntervalMs / 1000}s)`,
+              `Agent ${agent.name} is due (interval: ${agent.iterationIntervalMs / 1000}s)`,
             );
-            await processEntityIteration(entity);
+            await processAgentIteration(agent);
           }
         }
       }
@@ -491,10 +493,10 @@ export async function runSingleCycle(): Promise<void> {
   registerInboxTools();
 
   try {
-    const entities = await getActiveEntities();
+    const agents = await getActiveAgents();
 
-    for (const entity of entities) {
-      await processEntityIteration(entity);
+    for (const agent of agents) {
+      await processAgentIteration(agent);
     }
 
     log("Single cycle complete");

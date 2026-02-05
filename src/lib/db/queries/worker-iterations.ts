@@ -14,7 +14,7 @@ import { workerIterations, llmInteractions } from "../schema";
 
 export interface WorkerIteration {
   id: string;
-  entityId: string;
+  agentId: string;
   status: string;
   classificationResult: string | null;
   classificationReasoning: string | null;
@@ -36,7 +36,7 @@ export interface WorkerIterationWithInteractions extends WorkerIteration {
 }
 
 export interface CreateWorkerIterationInput {
-  entityId: string;
+  agentId: string;
 }
 
 export interface UpdateWorkerIterationInput {
@@ -60,14 +60,14 @@ export async function createWorkerIteration(
   const result = await db
     .insert(workerIterations)
     .values({
-      entityId: data.entityId,
+      agentId: data.agentId,
     })
     .returning();
 
   const iteration = result[0];
   return {
     id: iteration.id,
-    entityId: iteration.entityId,
+    agentId: iteration.agentId,
     status: iteration.status,
     classificationResult: iteration.classificationResult,
     classificationReasoning: iteration.classificationReasoning,
@@ -91,17 +91,17 @@ export async function updateWorkerIteration(
 }
 
 /**
- * Get worker iterations with their LLM interactions for an entity
+ * Get worker iterations with their LLM interactions for an agent
  */
 export async function getWorkerIterationsWithInteractions(
-  entityId: string,
+  agentId: string,
   limit: number = 50
 ): Promise<WorkerIterationWithInteractions[]> {
   // Get iterations
   const iterations = await db
     .select()
     .from(workerIterations)
-    .where(eq(workerIterations.entityId, entityId))
+    .where(eq(workerIterations.agentId, agentId))
     .orderBy(desc(workerIterations.createdAt))
     .limit(limit);
 
@@ -115,7 +115,7 @@ export async function getWorkerIterationsWithInteractions(
   const interactions = await db
     .select()
     .from(llmInteractions)
-    .where(eq(llmInteractions.entityId, entityId))
+    .where(eq(llmInteractions.agentId, agentId))
     .orderBy(desc(llmInteractions.createdAt));
 
   // Group interactions by iteration
@@ -143,7 +143,7 @@ export async function getWorkerIterationsWithInteractions(
   // Build result with interactions grouped by iteration
   return iterations.map((iteration) => ({
     id: iteration.id,
-    entityId: iteration.entityId,
+    agentId: iteration.agentId,
     status: iteration.status,
     classificationResult: iteration.classificationResult,
     classificationReasoning: iteration.classificationReasoning,
@@ -185,7 +185,7 @@ export async function getWorkerIterationById(
   const row = results[0];
   return {
     id: row.id,
-    entityId: row.entityId,
+    agentId: row.agentId,
     status: row.status,
     classificationResult: row.classificationResult,
     classificationReasoning: row.classificationReasoning,
@@ -196,15 +196,15 @@ export async function getWorkerIterationById(
 }
 
 /**
- * Get the last completed worker iteration for an entity
+ * Get the last completed worker iteration for an agent
  */
 export async function getLastCompletedIteration(
-  entityId: string
+  agentId: string
 ): Promise<WorkerIteration | null> {
   const results = await db
     .select()
     .from(workerIterations)
-    .where(eq(workerIterations.entityId, entityId))
+    .where(eq(workerIterations.agentId, agentId))
     .orderBy(desc(workerIterations.completedAt))
     .limit(1);
 
@@ -215,7 +215,7 @@ export async function getLastCompletedIteration(
   const row = results[0];
   return {
     id: row.id,
-    entityId: row.entityId,
+    agentId: row.agentId,
     status: row.status,
     classificationResult: row.classificationResult,
     classificationReasoning: row.classificationReasoning,

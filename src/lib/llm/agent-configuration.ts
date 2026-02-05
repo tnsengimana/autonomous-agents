@@ -19,9 +19,9 @@ function formatInterval(ms: number): string {
 }
 
 /**
- * Schema for the generated entity configuration with four distinct system prompts
+ * Schema for the generated agent configuration with four distinct system prompts
  */
-const EntityConfigurationSchema = z.object({
+const AgentConfigurationSchema = z.object({
   name: z.string().describe('A short, memorable name for this agent (2-4 words)'),
   conversationSystemPrompt: z.string().describe('System prompt for user-facing conversations'),
   classificationSystemPrompt: z.string().describe('System prompt for deciding between synthesize or populate actions'),
@@ -29,7 +29,7 @@ const EntityConfigurationSchema = z.object({
   graphConstructionSystemPrompt: z.string().describe('System prompt for gathering and structuring external knowledge'),
 });
 
-export type EntityConfiguration = z.infer<typeof EntityConfigurationSchema>;
+export type AgentConfiguration = z.infer<typeof AgentConfigurationSchema>;
 
 // ============================================================================
 // Meta-Prompts for Each Phase
@@ -324,18 +324,18 @@ For each prompt, incorporate:
 }
 
 // ============================================================================
-// Entity Configuration Generation
+// Agent Configuration Generation
 // ============================================================================
 
 /**
- * Generate entity configuration with four distinct system prompts from the mission/purpose.
+ * Generate agent configuration with four distinct system prompts from the mission/purpose.
  * Uses LLM to create appropriate values based on the purpose.
  */
-export async function generateEntityConfiguration(
+export async function generateAgentConfiguration(
   purpose: string,
   iterationIntervalMs: number,
   options?: { userId?: string }
-): Promise<EntityConfiguration> {
+): Promise<AgentConfiguration> {
   const interval = formatInterval(iterationIntervalMs);
 
   const userPrompt = `Mission: ${purpose}
@@ -348,7 +348,7 @@ Each system prompt should be detailed and actionable, giving clear guidance for 
 
   return generateLLMObject(
     [{ role: 'user', content: userPrompt }],
-    EntityConfigurationSchema,
+    AgentConfigurationSchema,
     getUnifiedMetaPrompt(interval),
     {
       temperature: 0.7,

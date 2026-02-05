@@ -30,7 +30,7 @@ export type {
  * Create a new node in the knowledge graph
  */
 export async function createNode(data: {
-  entityId: string;
+  agentId: string;
   type: string;
   name: string;
   properties?: object;
@@ -38,7 +38,7 @@ export async function createNode(data: {
   const result = await db
     .insert(graphNodes)
     .values({
-      entityId: data.entityId,
+      agentId: data.agentId,
       type: data.type,
       name: data.name,
       properties: data.properties ?? {},
@@ -62,10 +62,10 @@ export async function getNodeById(nodeId: string): Promise<GraphNode | null> {
 }
 
 /**
- * Get all nodes for an entity with optional filtering
+ * Get all nodes for an agent with optional filtering
  */
-export async function getNodesByEntity(
-  entityId: string,
+export async function getNodesByAgent(
+  agentId: string,
   options?: { type?: string; limit?: number }
 ): Promise<GraphNode[]> {
   let query = db
@@ -74,10 +74,10 @@ export async function getNodesByEntity(
     .where(
       options?.type
         ? and(
-            eq(graphNodes.entityId, entityId),
+            eq(graphNodes.agentId, agentId),
             eq(graphNodes.type, options.type)
           )
-        : eq(graphNodes.entityId, entityId)
+        : eq(graphNodes.agentId, agentId)
     );
 
   if (options?.limit) {
@@ -88,10 +88,10 @@ export async function getNodesByEntity(
 }
 
 /**
- * Find a node by type and name within an entity
+ * Find a node by type and name within an agent
  */
 export async function findNodeByTypeAndName(
-  entityId: string,
+  agentId: string,
   type: string,
   name: string
 ): Promise<GraphNode | null> {
@@ -100,7 +100,7 @@ export async function findNodeByTypeAndName(
     .from(graphNodes)
     .where(
       and(
-        eq(graphNodes.entityId, entityId),
+        eq(graphNodes.agentId, agentId),
         eq(graphNodes.type, type),
         eq(graphNodes.name, name)
       )
@@ -148,7 +148,7 @@ export async function deleteNode(nodeId: string): Promise<void> {
  * Create a new edge between nodes
  */
 export async function createEdge(data: {
-  entityId: string;
+  agentId: string;
   type: string;
   sourceId: string;
   targetId: string;
@@ -157,7 +157,7 @@ export async function createEdge(data: {
   const result = await db
     .insert(graphEdges)
     .values({
-      entityId: data.entityId,
+      agentId: data.agentId,
       type: data.type,
       sourceId: data.sourceId,
       targetId: data.targetId,
@@ -169,13 +169,13 @@ export async function createEdge(data: {
 }
 
 /**
- * Get all edges for an entity
+ * Get all edges for an agent
  */
-export async function getEdgesByEntity(entityId: string): Promise<GraphEdge[]> {
+export async function getEdgesByAgent(agentId: string): Promise<GraphEdge[]> {
   return db
     .select()
     .from(graphEdges)
-    .where(eq(graphEdges.entityId, entityId));
+    .where(eq(graphEdges.agentId, agentId));
 }
 
 /**
@@ -212,7 +212,7 @@ export async function getEdgesByNode(
  * Find a specific edge between two nodes of a given type
  */
 export async function findEdge(
-  entityId: string,
+  agentId: string,
   type: string,
   sourceId: string,
   targetId: string
@@ -222,7 +222,7 @@ export async function findEdge(
     .from(graphEdges)
     .where(
       and(
-        eq(graphEdges.entityId, entityId),
+        eq(graphEdges.agentId, agentId),
         eq(graphEdges.type, type),
         eq(graphEdges.sourceId, sourceId),
         eq(graphEdges.targetId, targetId)
@@ -310,11 +310,11 @@ export async function getNodeNeighbors(
  * Returns a human-readable format showing nodes and relationships
  */
 export async function serializeGraphForLLM(
-  entityId: string,
+  agentId: string,
   maxNodes: number = 100
 ): Promise<string> {
   // Get nodes
-  const nodes = await getNodesByEntity(entityId, { limit: maxNodes });
+  const nodes = await getNodesByAgent(agentId, { limit: maxNodes });
 
   if (nodes.length === 0) {
     return 'No knowledge graph data available.';
@@ -368,21 +368,21 @@ export async function serializeGraphForLLM(
 // ============================================================================
 
 /**
- * Get statistics about the graph for an entity
+ * Get statistics about the graph for an agent
  */
-export async function getGraphStats(entityId: string): Promise<GraphStats> {
+export async function getGraphStats(agentId: string): Promise<GraphStats> {
   // Count nodes
   const nodeCountResult = await db
     .select({ count: count() })
     .from(graphNodes)
-    .where(eq(graphNodes.entityId, entityId));
+    .where(eq(graphNodes.agentId, agentId));
   const nodeCount = nodeCountResult[0]?.count ?? 0;
 
   // Count edges
   const edgeCountResult = await db
     .select({ count: count() })
     .from(graphEdges)
-    .where(eq(graphEdges.entityId, entityId));
+    .where(eq(graphEdges.agentId, agentId));
   const edgeCount = edgeCountResult[0]?.count ?? 0;
 
   // Count nodes by type
@@ -392,7 +392,7 @@ export async function getGraphStats(entityId: string): Promise<GraphStats> {
       count: count(),
     })
     .from(graphNodes)
-    .where(eq(graphNodes.entityId, entityId))
+    .where(eq(graphNodes.agentId, agentId))
     .groupBy(graphNodes.type);
 
   const nodesByType: Record<string, number> = {};
@@ -407,7 +407,7 @@ export async function getGraphStats(entityId: string): Promise<GraphStats> {
       count: count(),
     })
     .from(graphEdges)
-    .where(eq(graphEdges.entityId, entityId))
+    .where(eq(graphEdges.agentId, agentId))
     .groupBy(graphEdges.type);
 
   const edgesByType: Record<string, number> = {};

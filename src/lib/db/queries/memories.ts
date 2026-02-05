@@ -17,55 +17,55 @@ export async function getMemoryById(memoryId: string): Promise<Memory | null> {
 }
 
 /**
- * Get all memories for an entity
+ * Get all memories for an agent
  */
-export async function getMemoriesByEntityId(entityId: string): Promise<Memory[]> {
+export async function getMemoriesByAgentId(agentId: string): Promise<Memory[]> {
   return db
     .select()
     .from(memories)
-    .where(eq(memories.entityId, entityId))
+    .where(eq(memories.agentId, agentId))
     .orderBy(desc(memories.createdAt));
 }
 
 /**
- * Get memories for an entity filtered by type
+ * Get memories for an agent filtered by type
  */
 export async function getMemoriesByType(
-  entityId: string,
+  agentId: string,
   type: MemoryType
 ): Promise<Memory[]> {
   return db
     .select()
     .from(memories)
-    .where(and(eq(memories.entityId, entityId), eq(memories.type, type)))
+    .where(and(eq(memories.agentId, agentId), eq(memories.type, type)))
     .orderBy(desc(memories.createdAt));
 }
 
 /**
- * Get memories for an entity filtered by multiple types
+ * Get memories for an agent filtered by multiple types
  */
 export async function getMemoriesByTypes(
-  entityId: string,
+  agentId: string,
   types: MemoryType[]
 ): Promise<Memory[]> {
   return db
     .select()
     .from(memories)
-    .where(and(eq(memories.entityId, entityId), inArray(memories.type, types)))
+    .where(and(eq(memories.agentId, agentId), inArray(memories.type, types)))
     .orderBy(desc(memories.createdAt));
 }
 
 /**
- * Get the most recent N memories for an entity
+ * Get the most recent N memories for an agent
  */
 export async function getRecentMemories(
-  entityId: string,
+  agentId: string,
   limit: number
 ): Promise<Memory[]> {
   return db
     .select()
     .from(memories)
-    .where(eq(memories.entityId, entityId))
+    .where(eq(memories.agentId, agentId))
     .orderBy(desc(memories.createdAt))
     .limit(limit);
 }
@@ -74,7 +74,7 @@ export async function getRecentMemories(
  * Create a new memory
  */
 export async function createMemory(data: {
-  entityId: string;
+  agentId: string;
   type: MemoryType;
   content: string;
   sourceMessageId?: string | null;
@@ -82,7 +82,7 @@ export async function createMemory(data: {
   const result = await db
     .insert(memories)
     .values({
-      entityId: data.entityId,
+      agentId: data.agentId,
       type: data.type,
       content: data.content,
       sourceMessageId: data.sourceMessageId ?? null,
@@ -96,7 +96,7 @@ export async function createMemory(data: {
  * Create multiple memories at once
  */
 export async function createMemories(
-  entityId: string,
+  agentId: string,
   extractedMemories: ExtractedMemory[],
   sourceMessageId?: string | null
 ): Promise<Memory[]> {
@@ -108,7 +108,7 @@ export async function createMemories(
     .insert(memories)
     .values(
       extractedMemories.map((m) => ({
-        entityId,
+        agentId,
         type: m.type,
         content: m.content,
         sourceMessageId: sourceMessageId ?? null,
@@ -140,8 +140,8 @@ export async function deleteMemory(memoryId: string): Promise<void> {
 }
 
 /**
- * Delete all memories for an entity
+ * Delete all memories for an agent
  */
-export async function deleteEntityMemories(entityId: string): Promise<void> {
-  await db.delete(memories).where(eq(memories.entityId, entityId));
+export async function deleteAgentMemories(agentId: string): Promise<void> {
+  await db.delete(memories).where(eq(memories.agentId, agentId));
 }

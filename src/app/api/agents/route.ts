@@ -1,16 +1,16 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { auth } from "@/lib/auth/config";
-import { createEntity, getEntitiesByUserId } from "@/lib/db/queries/entities";
-import { generateEntityConfiguration } from "@/lib/llm/entity-configuration";
+import { createAgent, getAgentsByUserId } from "@/lib/db/queries/agents";
+import { generateAgentConfiguration } from "@/lib/llm/agent-configuration";
 import { z } from "zod";
 
-const createEntitySchema = z.object({
+const createAgentSchema = z.object({
   purpose: z.string().min(1, "Mission/purpose is required"),
   iterationIntervalMs: z.number().int().positive("Iteration interval must be a positive number"),
 });
 
 /**
- * GET /api/entities - List all entities for the current user
+ * GET /api/agents - List all agents for the current user
  */
 export async function GET() {
   try {
@@ -19,20 +19,20 @@ export async function GET() {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const entities = await getEntitiesByUserId(session.user.id);
+    const agents = await getAgentsByUserId(session.user.id);
 
-    return NextResponse.json(entities);
+    return NextResponse.json(agents);
   } catch (error) {
-    console.error("Error fetching entities:", error);
+    console.error("Error fetching agents:", error);
     return NextResponse.json(
-      { error: "Failed to fetch entities" },
+      { error: "Failed to fetch agents" },
       { status: 500 },
     );
   }
 }
 
 /**
- * POST /api/entities - Create a new entity
+ * POST /api/agents - Create a new agent
  */
 export async function POST(request: NextRequest) {
   try {
@@ -42,7 +42,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const validation = createEntitySchema.safeParse(body);
+    const validation = createAgentSchema.safeParse(body);
 
     if (!validation.success) {
       return NextResponse.json(
@@ -54,14 +54,14 @@ export async function POST(request: NextRequest) {
     const { purpose, iterationIntervalMs } = validation.data;
 
     // Generate name and all four system prompts from mission/purpose
-    const config = await generateEntityConfiguration(
+    const config = await generateAgentConfiguration(
       purpose,
       iterationIntervalMs,
       { userId: session.user.id },
     );
 
-    // Create the entity with generated name and all four system prompts
-    const entity = await createEntity({
+    // Create the agent with generated name and all four system prompts
+    const agent = await createAgent({
       userId: session.user.id,
       name: config.name,
       purpose,
@@ -73,11 +73,11 @@ export async function POST(request: NextRequest) {
       status: "active",
     });
 
-    return NextResponse.json(entity, { status: 201 });
+    return NextResponse.json(agent, { status: 201 });
   } catch (error) {
-    console.error("Error creating entity:", error);
+    console.error("Error creating agent:", error);
     return NextResponse.json(
-      { error: "Failed to create entity" },
+      { error: "Failed to create agent" },
       { status: 500 },
     );
   }

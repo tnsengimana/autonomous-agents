@@ -31,7 +31,7 @@ interface LLMInteraction {
 
 interface WorkerIteration {
   id: string;
-  entityId: string;
+  agentId: string;
   status: string;
   classificationResult: string | null;
   classificationReasoning: string | null;
@@ -235,7 +235,7 @@ function IterationItem({ iteration }: { iteration: WorkerIteration }) {
 
 export default function WorkerIterationsPage() {
   const params = useParams();
-  const entityId = params.id as string;
+  const agentId = params.id as string;
   const [iterations, setIterations] = useState<WorkerIteration[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -243,7 +243,7 @@ export default function WorkerIterationsPage() {
   useEffect(() => {
     async function loadIterations() {
       try {
-        const response = await fetch(`/api/entities/${entityId}/worker-iterations`);
+        const response = await fetch(`/api/agents/${agentId}/worker-iterations`);
         if (!response.ok) {
           throw new Error("Failed to load iterations");
         }
@@ -259,20 +259,20 @@ export default function WorkerIterationsPage() {
     }
 
     loadIterations();
-  }, [entityId]);
+  }, [agentId]);
 
   return (
     <div className="space-y-6">
       <div>
         <Link
-          href={`/entities/${entityId}`}
+          href={`/agents/${agentId}`}
           className="text-sm text-muted-foreground hover:underline"
         >
-          Back to Entity
+          Back to Agent
         </Link>
         <h1 className="mt-2 text-3xl font-bold">Worker Iterations</h1>
         <p className="text-muted-foreground">
-          Background worker iterations and LLM interactions for this entity
+          Background worker iterations and LLM interactions for this agent
         </p>
       </div>
 
@@ -289,7 +289,7 @@ export default function WorkerIterationsPage() {
           <CardContent className="flex flex-col items-center justify-center py-16">
             <h3 className="text-lg font-semibold">No iterations yet</h3>
             <p className="mt-2 text-center text-muted-foreground">
-              Background worker iterations will appear here as the entity runs.
+              Background worker iterations will appear here as the agent runs.
             </p>
           </CardContent>
         </Card>

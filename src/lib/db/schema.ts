@@ -86,8 +86,8 @@ export const userApiKeys = pgTable("user_api_keys", {
   updatedAt: timestamp("updated_at", { mode: "date" }).defaultNow().notNull(),
 });
 
-export const entities = pgTable(
-  "entities",
+export const agents = pgTable(
+  "agents",
   {
     id: uuid("id").primaryKey().defaultRandom(),
     userId: uuid("user_id")
@@ -106,14 +106,14 @@ export const entities = pgTable(
     createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { mode: "date" }).defaultNow().notNull(),
   },
-  (table) => [index("entities_user_id_idx").on(table.userId)],
+  (table) => [index("agents_user_id_idx").on(table.userId)],
 );
 
 export const conversations = pgTable("conversations", {
   id: uuid("id").primaryKey().defaultRandom(),
-  entityId: uuid("entity_id")
+  agentId: uuid("agent_id")
     .notNull()
-    .references(() => entities.id, { onDelete: "cascade" }),
+    .references(() => agents.id, { onDelete: "cascade" }),
   createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { mode: "date" }).defaultNow().notNull(),
 });
@@ -133,9 +133,9 @@ export const messages = pgTable("messages", {
 
 export const memories = pgTable("memories", {
   id: uuid("id").primaryKey().defaultRandom(),
-  entityId: uuid("entity_id")
+  agentId: uuid("agent_id")
     .notNull()
-    .references(() => entities.id, { onDelete: "cascade" }),
+    .references(() => agents.id, { onDelete: "cascade" }),
   type: text("type").notNull(), // 'preference' | 'insight' | 'fact'
   content: text("content").notNull(),
   sourceMessageId: uuid("source_message_id").references(() => messages.id, {
@@ -150,9 +150,9 @@ export const inboxItems = pgTable("inbox_items", {
   userId: uuid("user_id")
     .notNull()
     .references(() => users.id, { onDelete: "cascade" }),
-  entityId: uuid("entity_id")
+  agentId: uuid("agent_id")
     .notNull()
-    .references(() => entities.id, { onDelete: "cascade" }),
+    .references(() => agents.id, { onDelete: "cascade" }),
   title: text("title").notNull(),
   content: text("content").notNull(),
   readAt: timestamp("read_at", { mode: "date" }),
@@ -167,9 +167,9 @@ export const workerIterations = pgTable(
   "worker_iterations",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    entityId: uuid("entity_id")
+    agentId: uuid("agent_id")
       .notNull()
-      .references(() => entities.id, { onDelete: "cascade" }),
+      .references(() => agents.id, { onDelete: "cascade" }),
     status: text("status").notNull().default("running"), // 'running' | 'completed' | 'failed'
     classificationResult: text("classification_result"), // 'synthesize' | 'populate'
     classificationReasoning: text("classification_reasoning"),
@@ -178,7 +178,7 @@ export const workerIterations = pgTable(
     completedAt: timestamp("completed_at", { mode: "date" }),
   },
   (table) => [
-    index("worker_iterations_entity_id_idx").on(table.entityId),
+    index("worker_iterations_agent_id_idx").on(table.agentId),
     index("worker_iterations_created_at_idx").on(table.createdAt),
   ],
 );
@@ -191,9 +191,9 @@ export const llmInteractions = pgTable(
   "llm_interactions",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    entityId: uuid("entity_id")
+    agentId: uuid("agent_id")
       .notNull()
-      .references(() => entities.id, { onDelete: "cascade" }),
+      .references(() => agents.id, { onDelete: "cascade" }),
     workerIterationId: uuid("worker_iteration_id").references(
       () => workerIterations.id,
       { onDelete: "cascade" },
@@ -206,7 +206,7 @@ export const llmInteractions = pgTable(
     completedAt: timestamp("completed_at", { mode: "date" }),
   },
   (table) => [
-    index("llm_interactions_entity_id_idx").on(table.entityId),
+    index("llm_interactions_agent_id_idx").on(table.agentId),
     index("llm_interactions_worker_iteration_id_idx").on(table.workerIterationId),
     index("llm_interactions_created_at_idx").on(table.createdAt),
   ],
@@ -220,7 +220,7 @@ export const graphNodeTypes = pgTable(
   "graph_node_types",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    entityId: uuid("entity_id").references(() => entities.id, {
+    agentId: uuid("agent_id").references(() => agents.id, {
       onDelete: "cascade",
     }), // NULL = global type
     name: text("name").notNull(), // PascalCase, e.g., "Company", "Asset"
@@ -231,14 +231,14 @@ export const graphNodeTypes = pgTable(
     createdBy: text("created_by").notNull().default("system"), // 'system' | 'agent' | 'user'
     createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
   },
-  (table) => [index("graph_node_types_entity_id_idx").on(table.entityId)],
+  (table) => [index("graph_node_types_agent_id_idx").on(table.agentId)],
 );
 
 export const graphEdgeTypes = pgTable(
   "graph_edge_types",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    entityId: uuid("entity_id").references(() => entities.id, {
+    agentId: uuid("agent_id").references(() => agents.id, {
       onDelete: "cascade",
     }), // NULL = global type
     name: text("name").notNull(), // snake_case, e.g., "issued_by", "affects"
@@ -248,7 +248,7 @@ export const graphEdgeTypes = pgTable(
     createdBy: text("created_by").notNull().default("system"), // 'system' | 'agent' | 'user'
     createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
   },
-  (table) => [index("graph_edge_types_entity_id_idx").on(table.entityId)],
+  (table) => [index("graph_edge_types_agent_id_idx").on(table.agentId)],
 );
 
 // Junction tables for edge type -> node type constraints (many-to-many)
@@ -294,18 +294,18 @@ export const graphNodes = pgTable(
   "graph_nodes",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    entityId: uuid("entity_id")
+    agentId: uuid("agent_id")
       .notNull()
-      .references(() => entities.id, { onDelete: "cascade" }),
+      .references(() => agents.id, { onDelete: "cascade" }),
     type: text("type").notNull(), // References graphNodeTypes.name
     name: text("name").notNull(), // Human-readable identifier
     properties: jsonb("properties").notNull().default({}), // Validated against type schema; temporal fields live here
     createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
   },
   (table) => [
-    index("graph_nodes_entity_id_idx").on(table.entityId),
+    index("graph_nodes_agent_id_idx").on(table.agentId),
     index("graph_nodes_type_idx").on(table.type),
-    index("graph_nodes_entity_type_idx").on(table.entityId, table.type),
+    index("graph_nodes_agent_type_idx").on(table.agentId, table.type),
   ],
 );
 
@@ -313,9 +313,9 @@ export const graphEdges = pgTable(
   "graph_edges",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    entityId: uuid("entity_id")
+    agentId: uuid("agent_id")
       .notNull()
-      .references(() => entities.id, { onDelete: "cascade" }),
+      .references(() => agents.id, { onDelete: "cascade" }),
     type: text("type").notNull(), // References graphEdgeTypes.name
     sourceId: uuid("source_id")
       .notNull()
@@ -327,7 +327,7 @@ export const graphEdges = pgTable(
     createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
   },
   (table) => [
-    index("graph_edges_entity_id_idx").on(table.entityId),
+    index("graph_edges_agent_id_idx").on(table.agentId),
     index("graph_edges_type_idx").on(table.type),
     index("graph_edges_source_id_idx").on(table.sourceId),
     index("graph_edges_target_id_idx").on(table.targetId),
@@ -342,7 +342,7 @@ export const usersRelations = relations(users, ({ many }) => ({
   accounts: many(accounts),
   sessions: many(sessions),
   apiKeys: many(userApiKeys),
-  entities: many(entities),
+  agents: many(agents),
   inboxItems: many(inboxItems),
 }));
 
@@ -367,9 +367,9 @@ export const userApiKeysRelations = relations(userApiKeys, ({ one }) => ({
   }),
 }));
 
-export const entitiesRelations = relations(entities, ({ one, many }) => ({
+export const agentsRelations = relations(agents, ({ one, many }) => ({
   user: one(users, {
-    fields: [entities.userId],
+    fields: [agents.userId],
     references: [users.id],
   }),
   conversations: many(conversations),
@@ -386,9 +386,9 @@ export const entitiesRelations = relations(entities, ({ one, many }) => ({
 export const conversationsRelations = relations(
   conversations,
   ({ one, many }) => ({
-    entity: one(entities, {
-      fields: [conversations.entityId],
-      references: [entities.id],
+    agent: one(agents, {
+      fields: [conversations.agentId],
+      references: [agents.id],
     }),
     messages: many(messages),
   }),
@@ -411,9 +411,9 @@ export const messagesRelations = relations(messages, ({ one, many }) => ({
 }));
 
 export const memoriesRelations = relations(memories, ({ one }) => ({
-  entity: one(entities, {
-    fields: [memories.entityId],
-    references: [entities.id],
+  agent: one(agents, {
+    fields: [memories.agentId],
+    references: [agents.id],
   }),
   sourceMessage: one(messages, {
     fields: [memories.sourceMessageId],
@@ -426,18 +426,18 @@ export const inboxItemsRelations = relations(inboxItems, ({ one }) => ({
     fields: [inboxItems.userId],
     references: [users.id],
   }),
-  entity: one(entities, {
-    fields: [inboxItems.entityId],
-    references: [entities.id],
+  agent: one(agents, {
+    fields: [inboxItems.agentId],
+    references: [agents.id],
   }),
 }));
 
 export const workerIterationsRelations = relations(
   workerIterations,
   ({ one, many }) => ({
-    entity: one(entities, {
-      fields: [workerIterations.entityId],
-      references: [entities.id],
+    agent: one(agents, {
+      fields: [workerIterations.agentId],
+      references: [agents.id],
     }),
     llmInteractions: many(llmInteractions),
   }),
@@ -446,9 +446,9 @@ export const workerIterationsRelations = relations(
 export const llmInteractionsRelations = relations(
   llmInteractions,
   ({ one }) => ({
-    entity: one(entities, {
-      fields: [llmInteractions.entityId],
-      references: [entities.id],
+    agent: one(agents, {
+      fields: [llmInteractions.agentId],
+      references: [agents.id],
     }),
     workerIteration: one(workerIterations, {
       fields: [llmInteractions.workerIterationId],
@@ -462,18 +462,18 @@ export const llmInteractionsRelations = relations(
 // ============================================================================
 
 export const graphNodeTypesRelations = relations(graphNodeTypes, ({ one }) => ({
-  entity: one(entities, {
-    fields: [graphNodeTypes.entityId],
-    references: [entities.id],
+  agent: one(agents, {
+    fields: [graphNodeTypes.agentId],
+    references: [agents.id],
   }),
 }));
 
 export const graphEdgeTypesRelations = relations(
   graphEdgeTypes,
   ({ one, many }) => ({
-    entity: one(entities, {
-      fields: [graphEdgeTypes.entityId],
-      references: [entities.id],
+    agent: one(agents, {
+      fields: [graphEdgeTypes.agentId],
+      references: [agents.id],
     }),
     sourceTypes: many(graphEdgeTypeSourceTypes),
     targetTypes: many(graphEdgeTypeTargetTypes),
@@ -509,18 +509,18 @@ export const graphEdgeTypeTargetTypesRelations = relations(
 );
 
 export const graphNodesRelations = relations(graphNodes, ({ one, many }) => ({
-  entity: one(entities, {
-    fields: [graphNodes.entityId],
-    references: [entities.id],
+  agent: one(agents, {
+    fields: [graphNodes.agentId],
+    references: [agents.id],
   }),
   outgoingEdges: many(graphEdges, { relationName: "sourceNode" }),
   incomingEdges: many(graphEdges, { relationName: "targetNode" }),
 }));
 
 export const graphEdgesRelations = relations(graphEdges, ({ one }) => ({
-  entity: one(entities, {
-    fields: [graphEdges.entityId],
-    references: [entities.id],
+  agent: one(agents, {
+    fields: [graphEdges.agentId],
+    references: [agents.id],
   }),
   sourceNode: one(graphNodes, {
     fields: [graphEdges.sourceId],

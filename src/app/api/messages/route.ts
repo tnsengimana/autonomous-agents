@@ -1,20 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth/config';
-import { getEntityById } from '@/lib/db/queries/entities';
+import { getAgentById } from '@/lib/db/queries/agents';
 import { getOrCreateConversation } from '@/lib/db/queries/conversations';
 import { createTurnMessages } from '@/lib/db/queries/messages';
 import { streamLLMResponse, type StreamOptions } from '@/lib/llm/providers';
 import { buildMessageContext } from '@/lib/llm/conversation';
 import { buildGraphContextBlock } from '@/lib/llm/knowledge-graph';
-import { getMemoriesByEntityId } from '@/lib/db/queries/memories';
+import { getMemoriesByAgentId } from '@/lib/db/queries/memories';
 import { buildMemoryContextBlock } from '@/lib/llm/memory';
 
 /**
  * POST /api/messages
  *
- * Handles user messages to entities:
+ * Handles user messages to agents:
  * 1. User sends message
- * 2. Get or create conversation for entity
+ * 2. Get or create conversation for agent
  * 3. Build context (memories, graph, conversation history)
  * 4. Stream LLM response
  * 5. Save turn atomically
@@ -29,11 +29,11 @@ export async function POST(request: NextRequest) {
 
     // 2. Parse request body
     const body = await request.json();
-    const { entityId, content } = body;
+    const { agentId, content } = body;
 
-    if (!entityId || typeof entityId !== 'string') {
+    if (!agentId || typeof agentId !== 'string') {
       return NextResponse.json(
-        { error: 'entityId is required' },
+        { error: 'agentId is required' },
         { status: 400 }
       );
     }
@@ -45,36 +45,36 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 3. Verify entity ownership
-    const entity = await getEntityById(entityId);
-    if (!entity) {
-      return NextResponse.json({ error: 'Entity not found' }, { status: 404 });
+    // 3. Verify agent ownership
+    const agent = await getAgentById(agentId);
+    if (!agent) {
+      return NextResponse.json({ error: 'Agent not found' }, { status: 404 });
     }
 
-    if (entity.userId !== session.user.id) {
+    if (agent.userId !== session.user.id) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
     // 4. Get or create conversation
-    const conversation = await getOrCreateConversation(entityId);
+    const conversation = await getOrCreateConversation(agentId);
 
     // 5. Build context
     const [memories, graphContext, conversationHistory] = await Promise.all([
-      getMemoriesByEntityId(entityId),
-      buildGraphContextBlock(entityId),
+      getMemoriesByAgentId(agentId),
+      buildGraphContextBlock(agentId),
       buildMessageContext(conversation.id),
     ]);
 
     const memoryContext = buildMemoryContextBlock(memories);
 
-    // Build system prompt with entity context
-    if (!entity.conversationSystemPrompt) {
+    // Build system prompt with agent context
+    if (!agent.conversationSystemPrompt) {
       return NextResponse.json(
-        { error: 'Entity missing conversationSystemPrompt configuration' },
+        { error: 'Agent missing conversationSystemPrompt configuration' },
         { status: 500 }
       );
     }
-    const systemPrompt = `${entity.conversationSystemPrompt}
+    const systemPrompt = `${agent.conversationSystemPrompt}
 
 ${memoryContext}
 
@@ -89,7 +89,7 @@ ${graphContext}`;
     // 6. Stream LLM response
     const streamOptions: StreamOptions = {
       userId: session.user.id,
-      entityId,
+      agentId,
     };
 
     // Collect the full response while streaming

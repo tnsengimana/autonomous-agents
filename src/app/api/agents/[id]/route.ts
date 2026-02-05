@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth/config";
 import {
-  getEntityById,
-  updateEntity,
-  deleteEntity,
-} from "@/lib/db/queries/entities";
+  getAgentById,
+  updateAgent,
+  deleteAgent,
+} from "@/lib/db/queries/agents";
 import { z } from "zod";
 
-const updateEntitySchema = z.object({
+const updateAgentSchema = z.object({
   name: z.string().min(1).optional(),
   purpose: z.string().optional(),
   iterationIntervalMs: z.number().int().positive().optional(),
@@ -15,7 +15,7 @@ const updateEntitySchema = z.object({
 });
 
 /**
- * GET /api/entities/[id] - Get entity details
+ * GET /api/agents/[id] - Get agent details
  */
 export async function GET(
   request: NextRequest,
@@ -28,28 +28,28 @@ export async function GET(
     }
 
     const { id } = await params;
-    const entity = await getEntityById(id);
+    const agent = await getAgentById(id);
 
-    if (!entity) {
-      return NextResponse.json({ error: "Entity not found" }, { status: 404 });
+    if (!agent) {
+      return NextResponse.json({ error: "Agent not found" }, { status: 404 });
     }
 
-    if (entity.userId !== session.user.id) {
+    if (agent.userId !== session.user.id) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    return NextResponse.json(entity);
+    return NextResponse.json(agent);
   } catch (error) {
-    console.error("Error fetching entity:", error);
+    console.error("Error fetching agent:", error);
     return NextResponse.json(
-      { error: "Failed to fetch entity" },
+      { error: "Failed to fetch agent" },
       { status: 500 }
     );
   }
 }
 
 /**
- * PATCH /api/entities/[id] - Update entity details
+ * PATCH /api/agents/[id] - Update agent details
  */
 export async function PATCH(
   request: NextRequest,
@@ -63,18 +63,18 @@ export async function PATCH(
 
     const { id } = await params;
 
-    // Verify entity exists and belongs to user
-    const entity = await getEntityById(id);
-    if (!entity) {
-      return NextResponse.json({ error: "Entity not found" }, { status: 404 });
+    // Verify agent exists and belongs to user
+    const agent = await getAgentById(id);
+    if (!agent) {
+      return NextResponse.json({ error: "Agent not found" }, { status: 404 });
     }
 
-    if (entity.userId !== session.user.id) {
+    if (agent.userId !== session.user.id) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
     const body = await request.json();
-    const validation = updateEntitySchema.safeParse(body);
+    const validation = updateAgentSchema.safeParse(body);
 
     if (!validation.success) {
       return NextResponse.json(
@@ -83,22 +83,22 @@ export async function PATCH(
       );
     }
 
-    await updateEntity(id, validation.data);
+    await updateAgent(id, validation.data);
 
-    // Return updated entity
-    const updatedEntity = await getEntityById(id);
-    return NextResponse.json(updatedEntity);
+    // Return updated agent
+    const updatedAgent = await getAgentById(id);
+    return NextResponse.json(updatedAgent);
   } catch (error) {
-    console.error("Error updating entity:", error);
+    console.error("Error updating agent:", error);
     return NextResponse.json(
-      { error: "Failed to update entity" },
+      { error: "Failed to update agent" },
       { status: 500 }
     );
   }
 }
 
 /**
- * DELETE /api/entities/[id] - Delete an entity
+ * DELETE /api/agents/[id] - Delete an agent
  */
 export async function DELETE(
   request: NextRequest,
@@ -112,23 +112,23 @@ export async function DELETE(
 
     const { id } = await params;
 
-    // Verify entity exists and belongs to user
-    const entity = await getEntityById(id);
-    if (!entity) {
-      return NextResponse.json({ error: "Entity not found" }, { status: 404 });
+    // Verify agent exists and belongs to user
+    const agent = await getAgentById(id);
+    if (!agent) {
+      return NextResponse.json({ error: "Agent not found" }, { status: 404 });
     }
 
-    if (entity.userId !== session.user.id) {
+    if (agent.userId !== session.user.id) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    await deleteEntity(id);
+    await deleteAgent(id);
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error("Error deleting entity:", error);
+    console.error("Error deleting agent:", error);
     return NextResponse.json(
-      { error: "Failed to delete entity" },
+      { error: "Failed to delete agent" },
       { status: 500 }
     );
   }

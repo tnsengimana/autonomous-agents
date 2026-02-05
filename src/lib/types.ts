@@ -8,7 +8,7 @@
 import type { InferSelectModel } from "drizzle-orm";
 import type {
   conversations,
-  entities,
+  agents,
   graphEdges,
   graphEdgeTypes,
   graphEdgeTypeSourceTypes,
@@ -26,7 +26,7 @@ import type {
 // ============================================================================
 
 export type Conversation = InferSelectModel<typeof conversations>;
-export type Entity = InferSelectModel<typeof entities>;
+export type Agent = InferSelectModel<typeof agents>;
 export type Memory = InferSelectModel<typeof memories>;
 export type Message = InferSelectModel<typeof messages>;
 export type UserApiKey = InferSelectModel<typeof userApiKeys>;
@@ -48,7 +48,7 @@ export type GraphEdge = InferSelectModel<typeof graphEdges>;
 // Status Types
 // ============================================================================
 
-export type EntityStatus = "active" | "paused" | "archived";
+export type AgentStatus = "active" | "paused" | "archived";
 export type MemoryType = "preference" | "insight" | "fact";
 export type MessageRole = "user" | "llm" | "summary";
 
@@ -139,7 +139,7 @@ export interface LLMResponse {
 export interface InboxItem {
   id: string;
   userId: string;
-  entityId: string;
+  agentId: string;
   title: string;
   content: string;
   readAt: Date | null;

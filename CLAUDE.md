@@ -4,12 +4,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Autonomous Agents is a TypeScript/Next.js application where users create entities that run continuously to fulfill a mission. Each entity has a system prompt, a knowledge graph, and runs in a 5-minute iteration loop where it autonomously researches and learns using web search and graph tools.
+Autonomous Agents is a TypeScript/Next.js application where users create agents that run continuously to fulfill a mission. Each agent has a system prompt, a knowledge graph, and runs in a 5-minute iteration loop where it autonomously researches and learns using web search and graph tools.
 
 **Key Concepts**:
-- **Entity**: The central unit with a name, purpose, system prompt, and knowledge graph
-- **Knowledge Graph (KGoT)**: Entity's accumulated knowledge stored as typed nodes and edges
-- **Background Worker**: Runs entities in 5-minute iteration loops, calling the LLM with tools
+- **Agent**: The central unit with a name, purpose, system prompt, and knowledge graph
+- **Knowledge Graph (KGoT)**: Agent's accumulated knowledge stored as typed nodes and edges
+- **Background Worker**: Runs agents in 5-minute iteration loops, calling the LLM with tools
 - **LLM Interactions**: Trace of all background LLM calls stored for debugging/auditing
 
 ## Commands
@@ -39,37 +39,37 @@ npx drizzle-kit studio            # Open Drizzle Studio UI
 
 ## Architecture
 
-### Entity-Centric Architecture
+### Agent-Centric Architecture
 
-The system is built around entities that run autonomously:
+The system is built around agents that run autonomously:
 
-- **One Conversation Per Entity**: Each entity has a single conversation for user interaction
-- **Knowledge Graph**: Each entity has a KGoT (Knowledge Graph of Thoughts) that stores learned knowledge
-- **Background Iterations**: The worker calls the LLM every 5 minutes to let the entity work autonomously
+- **One Conversation Per Agent**: Each agent has a single conversation for user interaction
+- **Knowledge Graph**: Each agent has a KGoT (Knowledge Graph of Thoughts) that stores learned knowledge
+- **Background Iterations**: The worker calls the LLM every 5 minutes to let the agent work autonomously
 
 ### Core Components
 
-**LLM & Tools** (`src/lib/agents/`)
+**LLM & Tools** (`src/lib/llm/`)
 - `llm.ts` - Provider abstraction (OpenAI, Anthropic, Gemini, LMStudio). Looks up user's encrypted API keys, falls back to env vars
 - `knowledge-graph.ts` - Builds graph context block for LLM prompts
-- `graph-type-initializer.ts` - Initializes node/edge types for new entities
+- `graph-configuration.ts` - Initializes node/edge types for new agents
 - `conversation.ts` - Conversation management
 - `memory.ts` - Memory extraction from user conversations
 - `compaction.ts` - Conversation compaction via summary messages
 
-**Tools** (`src/lib/agents/tools/`)
+**Tools** (`src/lib/llm/tools/`)
 - `graph-tools.ts` - Knowledge graph manipulation (addGraphNode, addGraphEdge, queryGraph, etc.)
 - `tavily-tools.ts` - Web search tools (tavilySearch, tavilyExtract, tavilyResearch)
 - `index.ts` - Tool registry, provides `getBackgroundTools()` and `getForegroundTools()`
 
 **Database** (`src/lib/db/`)
 - PostgreSQL with Drizzle ORM
-- Schema: users, entities, conversations, messages, memories, briefings, inboxItems, llmInteractions
+- Schema: users, agents, conversations, messages, memories, inboxItems, llmInteractions, workerIterations
 - Knowledge Graph tables: graphNodeTypes, graphEdgeTypes, graphNodes, graphEdges
 - `drizzle.config.ts` points to `src/lib/db/schema.ts`
 
 **Background Worker** (`src/worker/runner.ts`)
-- 5-minute iteration loop for each active entity
+- 5-minute iteration loop for each active agent
 - Each iteration:
   1. Creates `llm_interaction` record
   2. Builds system prompt with graph context
@@ -85,14 +85,14 @@ The system is built around entities that run autonomously:
 ### Data Flow
 
 **User Interaction (Foreground)**:
-1. User sends message to entity via chat UI
-2. Entity loads memories (user context)
+1. User sends message to agent via chat UI
+2. Agent loads memories (user context)
 3. Responds to user message
 4. Can optionally use foreground tools (web search, graph queries)
 
 **Autonomous Work (Background)**:
-1. Worker picks up active entity every 5 minutes
-2. Builds system prompt with entity's purpose and graph context
+1. Worker picks up active agent every 5 minutes
+2. Builds system prompt with agent's purpose and graph context
 3. Calls LLM with "Continue your work" prompt
 4. LLM uses tools to:
    - Search the web (Tavily)
@@ -111,14 +111,14 @@ The system is built around entities that run autonomously:
 
 ## Autonomous Operation
 
-For entities to run autonomously:
+For agents to run autonomously:
 
-1. **Entity status must be 'active'** - Set via UI or database
+1. **Agent status must be 'active'** - Set via UI or database
 2. **Worker process must be running** - Start separately from dev server:
    ```bash
    npx ts-node --project tsconfig.json src/worker/index.ts
    ```
-3. **5-minute iterations**: Worker processes all active entities every 5 minutes
+3. **5-minute iterations**: Worker processes all active agents every 5 minutes
 4. **Insights via notifications**: Configure node types with `notifyUser=true` to push discoveries to inbox
 
 ## Workflow Preferences

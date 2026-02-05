@@ -19,15 +19,15 @@ export async function getConversationById(
 }
 
 /**
- * Get the conversation for an entity (one conversation per entity)
+ * Get the conversation for an agent (one conversation per agent)
  */
 export async function getLatestConversation(
-  entityId: string
+  agentId: string
 ): Promise<Conversation | null> {
   const result = await db
     .select()
     .from(conversations)
-    .where(eq(conversations.entityId, entityId))
+    .where(eq(conversations.agentId, agentId))
     .orderBy(desc(conversations.createdAt))
     .limit(1);
 
@@ -35,44 +35,44 @@ export async function getLatestConversation(
 }
 
 /**
- * Get all conversations for an entity
+ * Get all conversations for an agent
  */
-export async function getConversationsByEntityId(
-  entityId: string
+export async function getConversationsByAgentId(
+  agentId: string
 ): Promise<Conversation[]> {
   return db
     .select()
     .from(conversations)
-    .where(eq(conversations.entityId, entityId))
+    .where(eq(conversations.agentId, agentId))
     .orderBy(desc(conversations.createdAt));
 }
 
 /**
- * Create a new conversation for an entity
+ * Create a new conversation for an agent
  */
 export async function createConversation(
-  entityId: string
+  agentId: string
 ): Promise<Conversation> {
   const result = await db
     .insert(conversations)
-    .values({ entityId })
+    .values({ agentId })
     .returning();
 
   return result[0];
 }
 
 /**
- * Get or create a conversation for an entity
+ * Get or create a conversation for an agent
  * Creates a new conversation if none exists
  */
 export async function getOrCreateConversation(
-  entityId: string
+  agentId: string
 ): Promise<Conversation> {
-  const existing = await getLatestConversation(entityId);
+  const existing = await getLatestConversation(agentId);
   if (existing) {
     return existing;
   }
-  return createConversation(entityId);
+  return createConversation(agentId);
 }
 
 /**
