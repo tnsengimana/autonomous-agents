@@ -8,7 +8,7 @@ import { eq, desc } from "drizzle-orm";
 import { db } from "../client";
 import { agents } from "../schema";
 import type { Agent } from "@/lib/types";
-import { initializeAndPersistTypesForAgent } from "@/lib/llm/graph-configuration";
+import { initializeAndPersistTypesForAgent } from "@/lib/llm/graph-types";
 
 // ============================================================================
 // CRUD Operations
@@ -161,9 +161,7 @@ export async function deleteAgent(agentId: string): Promise<void> {
 /**
  * Get the user ID for an agent
  */
-export async function getAgentUserId(
-  agentId: string,
-): Promise<string | null> {
+export async function getAgentUserId(agentId: string): Promise<string | null> {
   const result = await db
     .select({ userId: agents.userId })
     .from(agents)

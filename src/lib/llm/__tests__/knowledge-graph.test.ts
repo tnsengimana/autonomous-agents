@@ -15,7 +15,7 @@ import {
 } from "../knowledge-graph";
 import { createNodeType } from "@/lib/db/queries/graph-types";
 import { createNode } from "@/lib/db/queries/graph-data";
-import * as graphTypeInitializer from "../graph-configuration";
+import * as graphTypeInitializer from "../graph-types";
 
 // ============================================================================
 // Test Setup
@@ -42,7 +42,8 @@ beforeAll(async () => {
       userId: testUserId,
       name: "Test Research Team",
       purpose: "Financial research and analysis",
-      conversationSystemPrompt: "You are a test agent for knowledge graph testing.",
+      conversationSystemPrompt:
+        "You are a test agent for knowledge graph testing.",
       classificationSystemPrompt: "You classify information for testing.",
       insightSynthesisSystemPrompt: "You synthesize insights for testing.",
       graphConstructionSystemPrompt: "You construct graphs for testing.",
@@ -116,7 +117,8 @@ describe("buildGraphContextBlock", () => {
         userId: testUserId,
         name: "Empty Test Agent",
         purpose: "Testing empty graph",
-        conversationSystemPrompt: "You are a test agent for empty graph testing.",
+        conversationSystemPrompt:
+          "You are a test agent for empty graph testing.",
         classificationSystemPrompt: "You classify information for testing.",
         insightSynthesisSystemPrompt: "You synthesize insights for testing.",
         graphConstructionSystemPrompt: "You construct graphs for testing.",
@@ -162,7 +164,8 @@ describe("ensureGraphTypesInitialized", () => {
         userId: testUserId,
         name: "No Types Agent",
         purpose: "Testing type initialization",
-        conversationSystemPrompt: "You are a test agent for type initialization.",
+        conversationSystemPrompt:
+          "You are a test agent for type initialization.",
         classificationSystemPrompt: "You classify information for testing.",
         insightSynthesisSystemPrompt: "You synthesize insights for testing.",
         graphConstructionSystemPrompt: "You construct graphs for testing.",
@@ -278,7 +281,8 @@ describe("Integration", () => {
         userId: testUserId,
         name: "Integration Test Team",
         purpose: "Integration testing",
-        conversationSystemPrompt: "You are a test agent for integration testing.",
+        conversationSystemPrompt:
+          "You are a test agent for integration testing.",
         classificationSystemPrompt: "You classify information for testing.",
         insightSynthesisSystemPrompt: "You synthesize insights for testing.",
         graphConstructionSystemPrompt: "You construct graphs for testing.",

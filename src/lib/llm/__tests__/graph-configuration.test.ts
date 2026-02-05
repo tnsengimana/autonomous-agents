@@ -16,7 +16,7 @@ import {
   initializeTypesForAgent,
   persistInitializedTypes,
   type TypeInitializationResult,
-} from "../graph-configuration";
+} from "../graph-types";
 import {
   getNodeTypesByAgent,
   getEdgeTypesByAgent,
@@ -330,7 +330,8 @@ describe("persistInitializedTypes", () => {
         userId: testUserId,
         name: "Persist Test Agent",
         purpose: "Testing persistence",
-        conversationSystemPrompt: "You are a test agent for persistence testing.",
+        conversationSystemPrompt:
+          "You are a test agent for persistence testing.",
         classificationSystemPrompt: "You classify information for testing.",
         insightSynthesisSystemPrompt: "You synthesize insights for testing.",
         graphConstructionSystemPrompt: "You construct graphs for testing.",
@@ -340,10 +341,7 @@ describe("persistInitializedTypes", () => {
       .returning();
 
     try {
-      await persistInitializedTypes(
-        testAgent.id,
-        mockTypeInitializationResult,
-      );
+      await persistInitializedTypes(testAgent.id, mockTypeInitializationResult);
 
       const nodeTypes = await getNodeTypesByAgent(testAgent.id);
 
@@ -374,7 +372,8 @@ describe("persistInitializedTypes", () => {
         userId: testUserId,
         name: "Edge Persist Test Agent",
         purpose: "Testing edge persistence",
-        conversationSystemPrompt: "You are a test agent for edge persistence testing.",
+        conversationSystemPrompt:
+          "You are a test agent for edge persistence testing.",
         classificationSystemPrompt: "You classify information for testing.",
         insightSynthesisSystemPrompt: "You synthesize insights for testing.",
         graphConstructionSystemPrompt: "You construct graphs for testing.",
@@ -384,10 +383,7 @@ describe("persistInitializedTypes", () => {
       .returning();
 
     try {
-      await persistInitializedTypes(
-        testAgent.id,
-        mockTypeInitializationResult,
-      );
+      await persistInitializedTypes(testAgent.id, mockTypeInitializationResult);
 
       const edgeTypes = await getEdgeTypesByAgent(testAgent.id);
 
@@ -429,10 +425,7 @@ describe("persistInitializedTypes", () => {
       .returning();
 
     try {
-      await persistInitializedTypes(
-        testAgent.id,
-        mockTypeInitializationResult,
-      );
+      await persistInitializedTypes(testAgent.id, mockTypeInitializationResult);
 
       const edgeTypes = await getEdgeTypesByAgent(testAgent.id);
 
@@ -465,7 +458,8 @@ describe("persistInitializedTypes", () => {
         userId: testUserId,
         name: "Empty Types Test Agent",
         purpose: "Testing empty types",
-        conversationSystemPrompt: "You are a test agent for empty types testing.",
+        conversationSystemPrompt:
+          "You are a test agent for empty types testing.",
         classificationSystemPrompt: "You classify information for testing.",
         insightSynthesisSystemPrompt: "You synthesize insights for testing.",
         graphConstructionSystemPrompt: "You construct graphs for testing.",
@@ -501,7 +495,8 @@ describe("persistInitializedTypes", () => {
         userId: testUserId,
         name: "Invalid Ref Test Agent",
         purpose: "Testing invalid references",
-        conversationSystemPrompt: "You are a test agent for invalid reference testing.",
+        conversationSystemPrompt:
+          "You are a test agent for invalid reference testing.",
         classificationSystemPrompt: "You classify information for testing.",
         insightSynthesisSystemPrompt: "You synthesize insights for testing.",
         graphConstructionSystemPrompt: "You construct graphs for testing.",

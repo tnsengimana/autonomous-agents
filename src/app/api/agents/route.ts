@@ -1,12 +1,15 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { auth } from "@/lib/auth/config";
 import { createAgent, getAgentsByUserId } from "@/lib/db/queries/agents";
-import { generateAgentConfiguration } from "@/lib/llm/agent-configuration";
+import { generateAgentConfiguration } from "@/lib/llm/agents";
 import { z } from "zod";
 
 const createAgentSchema = z.object({
   purpose: z.string().min(1, "Mission/purpose is required"),
-  iterationIntervalMs: z.number().int().positive("Iteration interval must be a positive number"),
+  iterationIntervalMs: z
+    .number()
+    .int()
+    .positive("Iteration interval must be a positive number"),
 });
 
 /**

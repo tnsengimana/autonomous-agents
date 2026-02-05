@@ -16,9 +16,7 @@ import {
  * This is included in background work sessions to help agents understand
  * the available types and current graph state.
  */
-export async function buildGraphContextBlock(
-  agentId: string,
-): Promise<string> {
+export async function buildGraphContextBlock(agentId: string): Promise<string> {
   const [typeContext, graphData, stats] = await Promise.all([
     formatTypesForLLMContext(agentId),
     serializeGraphForLLM(agentId, 50), // Include recent graph state
@@ -114,8 +112,7 @@ export async function ensureGraphTypesInitialized(
   }
 
   // Initialize types for this agent
-  const { initializeAndPersistTypesForAgent } =
-    await import("./graph-configuration");
+  const { initializeAndPersistTypesForAgent } = await import("./graph-types");
 
   console.log(`[Graph] Initializing types for agent ${agent.name}`);
   await initializeAndPersistTypesForAgent(agentId, agent, options);

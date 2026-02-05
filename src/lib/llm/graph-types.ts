@@ -1,5 +1,5 @@
 /**
- * Graph Type Initializer
+ * Graph Types
  *
  * Uses LLM to generate appropriate base node and edge types
  * when a new agent is created, based on the agent's purpose.
