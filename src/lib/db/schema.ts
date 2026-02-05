@@ -184,6 +184,30 @@ export const briefings = pgTable(
 );
 
 // ============================================================================
+// Worker Iterations (Background Processing Cycles)
+// ============================================================================
+
+export const workerIterations = pgTable(
+  "worker_iterations",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    entityId: uuid("entity_id")
+      .notNull()
+      .references(() => entities.id, { onDelete: "cascade" }),
+    status: text("status").notNull().default("running"), // 'running' | 'completed' | 'failed'
+    classificationResult: text("classification_result"), // 'synthesize' | 'populate'
+    classificationReasoning: text("classification_reasoning"),
+    errorMessage: text("error_message"),
+    createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
+    completedAt: timestamp("completed_at", { mode: "date" }),
+  },
+  (table) => [
+    index("worker_iterations_entity_id_idx").on(table.entityId),
+    index("worker_iterations_created_at_idx").on(table.createdAt),
+  ],
+);
+
+// ============================================================================
 // LLM Interactions (Background Trace)
 // ============================================================================
 
@@ -194,6 +218,10 @@ export const llmInteractions = pgTable(
     entityId: uuid("entity_id")
       .notNull()
       .references(() => entities.id, { onDelete: "cascade" }),
+    workerIterationId: uuid("worker_iteration_id").references(
+      () => workerIterations.id,
+      { onDelete: "cascade" },
+    ),
     systemPrompt: text("system_prompt").notNull(),
     phase: text("phase"), // 'classification' | 'insight_synthesis' | 'graph_construction'
     request: jsonb("request").notNull(),
@@ -203,6 +231,7 @@ export const llmInteractions = pgTable(
   },
   (table) => [
     index("llm_interactions_entity_id_idx").on(table.entityId),
+    index("llm_interactions_worker_iteration_id_idx").on(table.workerIterationId),
     index("llm_interactions_created_at_idx").on(table.createdAt),
   ],
 );
@@ -372,6 +401,7 @@ export const entitiesRelations = relations(entities, ({ one, many }) => ({
   memories: many(memories),
   inboxItems: many(inboxItems),
   briefings: many(briefings),
+  workerIterations: many(workerIterations),
   llmInteractions: many(llmInteractions),
   graphNodeTypes: many(graphNodeTypes),
   graphEdgeTypes: many(graphEdgeTypes),
@@ -443,12 +473,27 @@ export const briefingsRelations = relations(briefings, ({ one }) => ({
   }),
 }));
 
+export const workerIterationsRelations = relations(
+  workerIterations,
+  ({ one, many }) => ({
+    entity: one(entities, {
+      fields: [workerIterations.entityId],
+      references: [entities.id],
+    }),
+    llmInteractions: many(llmInteractions),
+  }),
+);
+
 export const llmInteractionsRelations = relations(
   llmInteractions,
   ({ one }) => ({
     entity: one(entities, {
       fields: [llmInteractions.entityId],
       references: [entities.id],
+    }),
+    workerIteration: one(workerIterations, {
+      fields: [llmInteractions.workerIterationId],
+      references: [workerIterations.id],
     }),
   }),
 );

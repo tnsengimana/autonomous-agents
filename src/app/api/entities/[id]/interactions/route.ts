@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth/config";
 import { getEntityById } from "@/lib/db/queries/entities";
-import { getLLMInteractionsByEntity } from "@/lib/db/queries/llm-interactions";
+import { getWorkerIterationsWithInteractions } from "@/lib/db/queries/worker-iterations";
 
 /**
- * GET /api/entities/[id]/interactions - List LLM interactions for an entity
+ * GET /api/entities/[id]/interactions - List worker iterations with LLM interactions for an entity
  */
 export async function GET(
   request: NextRequest,
@@ -24,14 +24,14 @@ export async function GET(
       return NextResponse.json({ error: "Entity not found" }, { status: 404 });
     }
 
-    // Get interactions
-    const interactions = await getLLMInteractionsByEntity(entityId);
+    // Get worker iterations with their interactions
+    const iterations = await getWorkerIterationsWithInteractions(entityId);
 
-    return NextResponse.json(interactions);
+    return NextResponse.json(iterations);
   } catch (error) {
-    console.error("Error fetching LLM interactions:", error);
+    console.error("Error fetching worker iterations:", error);
     return NextResponse.json(
-      { error: "Failed to fetch interactions" },
+      { error: "Failed to fetch iterations" },
       { status: 500 }
     );
   }

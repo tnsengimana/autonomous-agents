@@ -15,6 +15,8 @@ import { llmInteractions } from '../schema';
 export interface LLMInteraction {
   id: string;
   entityId: string;
+  workerIterationId: string | null;
+  phase: string | null;
   systemPrompt: string;
   request: Record<string, unknown>;
   response: Record<string, unknown> | null;
@@ -24,6 +26,7 @@ export interface LLMInteraction {
 
 export interface CreateLLMInteractionInput {
   entityId: string;
+  workerIterationId?: string;
   systemPrompt: string;
   request: Record<string, unknown>;
   phase?: string; // 'classification' | 'insight_synthesis' | 'graph_construction' | 'conversation'
@@ -48,6 +51,7 @@ export async function createLLMInteraction(
     .insert(llmInteractions)
     .values({
       entityId: data.entityId,
+      workerIterationId: data.workerIterationId,
       systemPrompt: data.systemPrompt,
       request: data.request,
       phase: data.phase,
@@ -58,6 +62,8 @@ export async function createLLMInteraction(
   return {
     id: interaction.id,
     entityId: interaction.entityId,
+    workerIterationId: interaction.workerIterationId,
+    phase: interaction.phase,
     systemPrompt: interaction.systemPrompt,
     request: interaction.request as Record<string, unknown>,
     response: interaction.response as Record<string, unknown> | null,
@@ -99,6 +105,8 @@ export async function getLLMInteractionsByEntity(
   return results.map((row) => ({
     id: row.id,
     entityId: row.entityId,
+    workerIterationId: row.workerIterationId,
+    phase: row.phase,
     systemPrompt: row.systemPrompt,
     request: row.request as Record<string, unknown>,
     response: row.response as Record<string, unknown> | null,
@@ -127,6 +135,8 @@ export async function getLLMInteractionById(
   return {
     id: row.id,
     entityId: row.entityId,
+    workerIterationId: row.workerIterationId,
+    phase: row.phase,
     systemPrompt: row.systemPrompt,
     request: row.request as Record<string, unknown>,
     response: row.response as Record<string, unknown> | null,

@@ -36,7 +36,10 @@ CREATE TABLE "entities" (
 	"user_id" uuid NOT NULL,
 	"name" text NOT NULL,
 	"purpose" text,
-	"system_prompt" text NOT NULL,
+	"conversation_system_prompt" text NOT NULL,
+	"classification_system_prompt" text NOT NULL,
+	"insight_synthesis_system_prompt" text NOT NULL,
+	"graph_construction_system_prompt" text NOT NULL,
 	"status" text DEFAULT 'active' NOT NULL,
 	"created_at" timestamp DEFAULT now() NOT NULL,
 	"updated_at" timestamp DEFAULT now() NOT NULL
@@ -72,7 +75,6 @@ CREATE TABLE "graph_edges" (
 	"source_id" uuid NOT NULL,
 	"target_id" uuid NOT NULL,
 	"properties" jsonb DEFAULT '{}'::jsonb NOT NULL,
-	"source_conversation_id" uuid,
 	"created_at" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
@@ -94,7 +96,6 @@ CREATE TABLE "graph_nodes" (
 	"type" text NOT NULL,
 	"name" text NOT NULL,
 	"properties" jsonb DEFAULT '{}'::jsonb NOT NULL,
-	"source_conversation_id" uuid,
 	"created_at" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
@@ -113,7 +114,9 @@ CREATE TABLE "inbox_items" (
 CREATE TABLE "llm_interactions" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"entity_id" uuid NOT NULL,
+	"worker_iteration_id" uuid,
 	"system_prompt" text NOT NULL,
+	"phase" text,
 	"request" jsonb NOT NULL,
 	"response" jsonb,
 	"created_at" timestamp DEFAULT now() NOT NULL,
@@ -172,6 +175,17 @@ CREATE TABLE "verification_tokens" (
 	CONSTRAINT "verification_tokens_identifier_token_pk" PRIMARY KEY("identifier","token")
 );
 --> statement-breakpoint
+CREATE TABLE "worker_iterations" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"entity_id" uuid NOT NULL,
+	"status" text DEFAULT 'running' NOT NULL,
+	"classification_result" text,
+	"classification_reasoning" text,
+	"error_message" text,
+	"created_at" timestamp DEFAULT now() NOT NULL,
+	"completed_at" timestamp
+);
+--> statement-breakpoint
 ALTER TABLE "accounts" ADD CONSTRAINT "accounts_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "briefings" ADD CONSTRAINT "briefings_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "briefings" ADD CONSTRAINT "briefings_entity_id_entities_id_fk" FOREIGN KEY ("entity_id") REFERENCES "public"."entities"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
@@ -185,20 +199,20 @@ ALTER TABLE "graph_edge_types" ADD CONSTRAINT "graph_edge_types_entity_id_entiti
 ALTER TABLE "graph_edges" ADD CONSTRAINT "graph_edges_entity_id_entities_id_fk" FOREIGN KEY ("entity_id") REFERENCES "public"."entities"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "graph_edges" ADD CONSTRAINT "graph_edges_source_id_graph_nodes_id_fk" FOREIGN KEY ("source_id") REFERENCES "public"."graph_nodes"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "graph_edges" ADD CONSTRAINT "graph_edges_target_id_graph_nodes_id_fk" FOREIGN KEY ("target_id") REFERENCES "public"."graph_nodes"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "graph_edges" ADD CONSTRAINT "graph_edges_source_conversation_id_conversations_id_fk" FOREIGN KEY ("source_conversation_id") REFERENCES "public"."conversations"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "graph_node_types" ADD CONSTRAINT "graph_node_types_entity_id_entities_id_fk" FOREIGN KEY ("entity_id") REFERENCES "public"."entities"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "graph_nodes" ADD CONSTRAINT "graph_nodes_entity_id_entities_id_fk" FOREIGN KEY ("entity_id") REFERENCES "public"."entities"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "graph_nodes" ADD CONSTRAINT "graph_nodes_source_conversation_id_conversations_id_fk" FOREIGN KEY ("source_conversation_id") REFERENCES "public"."conversations"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "inbox_items" ADD CONSTRAINT "inbox_items_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "inbox_items" ADD CONSTRAINT "inbox_items_entity_id_entities_id_fk" FOREIGN KEY ("entity_id") REFERENCES "public"."entities"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "inbox_items" ADD CONSTRAINT "inbox_items_briefing_id_briefings_id_fk" FOREIGN KEY ("briefing_id") REFERENCES "public"."briefings"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "llm_interactions" ADD CONSTRAINT "llm_interactions_entity_id_entities_id_fk" FOREIGN KEY ("entity_id") REFERENCES "public"."entities"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "llm_interactions" ADD CONSTRAINT "llm_interactions_worker_iteration_id_worker_iterations_id_fk" FOREIGN KEY ("worker_iteration_id") REFERENCES "public"."worker_iterations"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "memories" ADD CONSTRAINT "memories_entity_id_entities_id_fk" FOREIGN KEY ("entity_id") REFERENCES "public"."entities"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "memories" ADD CONSTRAINT "memories_source_message_id_messages_id_fk" FOREIGN KEY ("source_message_id") REFERENCES "public"."messages"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "messages" ADD CONSTRAINT "messages_conversation_id_conversations_id_fk" FOREIGN KEY ("conversation_id") REFERENCES "public"."conversations"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "messages" ADD CONSTRAINT "messages_previous_message_id_messages_id_fk" FOREIGN KEY ("previous_message_id") REFERENCES "public"."messages"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "sessions" ADD CONSTRAINT "sessions_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "user_api_keys" ADD CONSTRAINT "user_api_keys_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "worker_iterations" ADD CONSTRAINT "worker_iterations_entity_id_entities_id_fk" FOREIGN KEY ("entity_id") REFERENCES "public"."entities"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 CREATE INDEX "briefings_user_id_idx" ON "briefings" USING btree ("user_id");--> statement-breakpoint
 CREATE INDEX "briefings_entity_id_idx" ON "briefings" USING btree ("entity_id");--> statement-breakpoint
 CREATE INDEX "entities_user_id_idx" ON "entities" USING btree ("user_id");--> statement-breakpoint
@@ -216,4 +230,7 @@ CREATE INDEX "graph_nodes_entity_id_idx" ON "graph_nodes" USING btree ("entity_i
 CREATE INDEX "graph_nodes_type_idx" ON "graph_nodes" USING btree ("type");--> statement-breakpoint
 CREATE INDEX "graph_nodes_entity_type_idx" ON "graph_nodes" USING btree ("entity_id","type");--> statement-breakpoint
 CREATE INDEX "llm_interactions_entity_id_idx" ON "llm_interactions" USING btree ("entity_id");--> statement-breakpoint
-CREATE INDEX "llm_interactions_created_at_idx" ON "llm_interactions" USING btree ("created_at");
+CREATE INDEX "llm_interactions_worker_iteration_id_idx" ON "llm_interactions" USING btree ("worker_iteration_id");--> statement-breakpoint
+CREATE INDEX "llm_interactions_created_at_idx" ON "llm_interactions" USING btree ("created_at");--> statement-breakpoint
+CREATE INDEX "worker_iterations_entity_id_idx" ON "worker_iterations" USING btree ("entity_id");--> statement-breakpoint
+CREATE INDEX "worker_iterations_created_at_idx" ON "worker_iterations" USING btree ("created_at");

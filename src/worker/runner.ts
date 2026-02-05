@@ -28,6 +28,10 @@ import {
   createLLMInteraction,
   updateLLMInteraction,
 } from "@/lib/db/queries/llm-interactions";
+import {
+  createWorkerIteration,
+  updateWorkerIteration,
+} from "@/lib/db/queries/worker-iterations";
 import type { Entity } from "@/lib/types";
 
 // ============================================================================
@@ -125,6 +129,7 @@ function parseClassificationResponse(text: string): ClassificationResult {
 async function runClassificationPhase(
   entity: Entity,
   graphContext: string,
+  workerIterationId: string,
 ): Promise<ClassificationResult> {
   log(`[Classification] Starting for entity: ${entity.name}`);
 
@@ -151,6 +156,7 @@ Respond with your decision and detailed reasoning about what specific work to do
   // Create llm_interaction record for classification
   const interaction = await createLLMInteraction({
     entityId: entity.id,
+    workerIterationId,
     systemPrompt: systemPrompt,
     request: { messages: requestMessages },
     phase: "classification",
@@ -211,6 +217,7 @@ async function runInsightSynthesisPhase(
   entity: Entity,
   classificationReasoning: string,
   graphContext: string,
+  workerIterationId: string,
 ): Promise<void> {
   log(`[InsightSynthesis] Starting for entity: ${entity.name}`);
 
@@ -237,6 +244,7 @@ Analyze the existing knowledge in your graph and create Insight nodes that captu
   // Create llm_interaction record
   const interaction = await createLLMInteraction({
     entityId: entity.id,
+    workerIterationId,
     systemPrompt: systemPrompt,
     request: { messages: requestMessages },
     phase: "insight_synthesis",
@@ -286,6 +294,7 @@ async function runGraphConstructionPhase(
   entity: Entity,
   classificationReasoning: string,
   graphContext: string,
+  workerIterationId: string,
 ): Promise<void> {
   log(`[GraphConstruction] Starting for entity: ${entity.name}`);
 
@@ -312,6 +321,7 @@ Research and gather external information to fill knowledge gaps. Use Tavily tool
   // Create llm_interaction record
   const interaction = await createLLMInteraction({
     entityId: entity.id,
+    workerIterationId,
     systemPrompt: systemPrompt,
     request: { messages: requestMessages },
     phase: "graph_construction",
@@ -367,6 +377,12 @@ Research and gather external information to fill knowledge gaps. Use Tavily tool
 async function processEntityIteration(entity: Entity): Promise<void> {
   log(`Processing iteration for entity: ${entity.name} (${entity.id})`);
 
+  // Create worker iteration record
+  const workerIteration = await createWorkerIteration({
+    entityId: entity.id,
+  });
+  log(`Created worker iteration: ${workerIteration.id}`);
+
   try {
     // Ensure graph types are initialized for this entity
     await ensureGraphTypesInitialized(
@@ -385,10 +401,16 @@ async function processEntityIteration(entity: Entity): Promise<void> {
       !entity.insightSynthesisSystemPrompt ||
       !entity.graphConstructionSystemPrompt
     ) {
+      const errorMsg = "Missing required multi-phase prompts";
       logError(
         `Entity ${entity.name} missing required multi-phase prompts, skipping`,
-        new Error("Missing required prompts"),
+        new Error(errorMsg),
       );
+      await updateWorkerIteration(workerIteration.id, {
+        status: "failed",
+        errorMessage: errorMsg,
+        completedAt: new Date(),
+      });
       return;
     }
 
@@ -396,7 +418,17 @@ async function processEntityIteration(entity: Entity): Promise<void> {
     const graphContext = await buildGraphContextBlock(entity.id);
 
     // Step 1: CLASSIFICATION
-    const classification = await runClassificationPhase(entity, graphContext);
+    const classification = await runClassificationPhase(
+      entity,
+      graphContext,
+      workerIteration.id,
+    );
+
+    // Update iteration with classification result
+    await updateWorkerIteration(workerIteration.id, {
+      classificationResult: classification.action,
+      classificationReasoning: classification.reasoning,
+    });
 
     // Step 2: EXECUTE ACTION based on classification
     if (classification.action === "synthesize") {
@@ -404,18 +436,34 @@ async function processEntityIteration(entity: Entity): Promise<void> {
         entity,
         classification.reasoning,
         graphContext,
+        workerIteration.id,
       );
     } else {
       await runGraphConstructionPhase(
         entity,
         classification.reasoning,
         graphContext,
+        workerIteration.id,
       );
     }
 
+    // Mark iteration as completed
+    await updateWorkerIteration(workerIteration.id, {
+      status: "completed",
+      completedAt: new Date(),
+    });
+
     log(`Completed two-step iteration for entity ${entity.name}`);
   } catch (error) {
+    const errorMsg = error instanceof Error ? error.message : String(error);
     logError(`Error in iteration for entity ${entity.name}:`, error);
+
+    // Mark iteration as failed
+    await updateWorkerIteration(workerIteration.id, {
+      status: "failed",
+      errorMessage: errorMsg,
+      completedAt: new Date(),
+    });
   }
 }
 
