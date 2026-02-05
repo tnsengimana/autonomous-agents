@@ -12,17 +12,20 @@
  * - "synthesize" = RETRIEVE branch: create Insight nodes from existing knowledge
  */
 
-import { streamLLMResponseWithTools } from "@/lib/llm/providers";
+import {
+  streamLLMResponseWithTools,
+  generateLLMObject,
+} from "@/lib/llm/providers";
 import {
   buildGraphContextBlock,
   ensureGraphTypesInitialized,
 } from "@/lib/llm/knowledge-graph";
 import {
-  getClassificationTools,
   getInsightSynthesisTools,
   getGraphConstructionTools,
   type ToolContext,
 } from "@/lib/llm/tools";
+import { z } from "zod";
 import { getActiveEntities } from "@/lib/db/queries/entities";
 import {
   createLLMInteraction,
@@ -48,13 +51,23 @@ export function stopRunner(): void {
 }
 
 // ============================================================================
-// Types
+// Types & Schemas
 // ============================================================================
 
-interface ClassificationResult {
-  action: "synthesize" | "populate";
-  reasoning: string;
-}
+const ClassificationResultSchema = z.object({
+  action: z
+    .enum(["synthesize", "populate"])
+    .describe(
+      "The action to take: 'synthesize' to create insights from existing knowledge, 'populate' to gather more external knowledge",
+    ),
+  reasoning: z
+    .string()
+    .describe(
+      "Detailed reasoning explaining why this action was chosen and what specific work should be done",
+    ),
+});
+
+type ClassificationResult = z.infer<typeof ClassificationResultSchema>;
 
 // ============================================================================
 // Utility Functions
@@ -79,52 +92,8 @@ function logError(message: string, error: unknown): void {
 // ============================================================================
 
 /**
- * Parse the LLM response to extract classification action and reasoning.
- * Expects the LLM to return structured text with action and reasoning.
- */
-function parseClassificationResponse(text: string): ClassificationResult {
-  // Try to find action in the response
-  const lowerText = text.toLowerCase();
-
-  // Default to populate if we can't determine the action
-  let action: "synthesize" | "populate" = "populate";
-
-  // Look for explicit action indicators
-  if (
-    lowerText.includes("action: synthesize") ||
-    lowerText.includes("action:synthesize") ||
-    lowerText.includes('"action": "synthesize"') ||
-    lowerText.includes("'action': 'synthesize'") ||
-    lowerText.includes("decision: synthesize") ||
-    lowerText.includes("i choose to synthesize") ||
-    lowerText.includes("i will synthesize") ||
-    lowerText.includes("proceed with synthesis") ||
-    lowerText.includes("ready to synthesize")
-  ) {
-    action = "synthesize";
-  } else if (
-    lowerText.includes("action: populate") ||
-    lowerText.includes("action:populate") ||
-    lowerText.includes('"action": "populate"') ||
-    lowerText.includes("'action': 'populate'") ||
-    lowerText.includes("decision: populate") ||
-    lowerText.includes("i choose to populate") ||
-    lowerText.includes("i will populate") ||
-    lowerText.includes("need more data") ||
-    lowerText.includes("need to gather") ||
-    lowerText.includes("need to research")
-  ) {
-    action = "populate";
-  }
-
-  // Use the full text as reasoning
-  const reasoning = text.trim() || "No reasoning provided";
-
-  return { action, reasoning };
-}
-
-/**
  * Run the classification phase to decide whether to synthesize or populate.
+ * Uses structured output (generateLLMObject) to get a JSON response.
  */
 async function runClassificationPhase(
   entity: Entity,
@@ -147,9 +116,7 @@ ${graphContext}
 
 Based on the graph state above, decide:
 - "synthesize" if you have enough knowledge to derive meaningful insights
-- "populate" if you need to gather more external knowledge
-
-Respond with your decision and detailed reasoning about what specific work to do.`,
+- "populate" if you need to gather more external knowledge`,
     },
   ];
 
@@ -162,39 +129,21 @@ Respond with your decision and detailed reasoning about what specific work to do
     phase: "classification",
   });
 
-  // Get classification tools (queryGraph only)
-  const toolContext: ToolContext = { entityId: entity.id };
-  const tools = getClassificationTools();
-
   log(
-    `[Classification] Calling LLM with ${tools.length} tools for entity ${entity.name}`,
+    `[Classification] Calling LLM with structured output for entity ${entity.name}`,
   );
 
-  const { fullResponse } = await streamLLMResponseWithTools(
+  const classification = await generateLLMObject(
     requestMessages,
+    ClassificationResultSchema,
     systemPrompt,
-    {
-      tools,
-      toolContext,
-      entityId: entity.id,
-      maxSteps: 5, // Classification shouldn't need many steps
-    },
+    { entityId: entity.id },
   );
-
-  const result = await fullResponse;
 
   await updateLLMInteraction(interaction.id, {
-    response: {
-      text: result.text,
-      toolCalls: result.toolCalls,
-      toolResults: result.toolResults,
-      steps: result.steps,
-    },
+    response: classification,
     completedAt: new Date(),
   });
-
-  // Parse the classification result
-  const classification = parseClassificationResponse(result.text);
 
   log(
     `[Classification] Entity ${entity.name} decided: ${classification.action}`,

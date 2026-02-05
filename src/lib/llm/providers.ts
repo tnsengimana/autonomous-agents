@@ -717,6 +717,11 @@ export async function generateLLMObject<T>(
       { memories: [] },
       // Briefing decision (no briefing)
       { shouldBrief: false, reason: "Mock mode - no briefing" },
+      // Worker classification decision
+      {
+        action: "populate",
+        reasoning: "Mock mode - default to populate to gather more knowledge",
+      },
       // User intent classification (default to regular_chat for most messages)
       {
         intent: "regular_chat",
