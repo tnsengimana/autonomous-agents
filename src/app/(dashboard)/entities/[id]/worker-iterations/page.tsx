@@ -233,7 +233,7 @@ function IterationItem({ iteration }: { iteration: WorkerIteration }) {
   );
 }
 
-export default function InteractionsPage() {
+export default function WorkerIterationsPage() {
   const params = useParams();
   const entityId = params.id as string;
   const [iterations, setIterations] = useState<WorkerIteration[]>([]);
@@ -243,7 +243,7 @@ export default function InteractionsPage() {
   useEffect(() => {
     async function loadIterations() {
       try {
-        const response = await fetch(`/api/entities/${entityId}/interactions`);
+        const response = await fetch(`/api/entities/${entityId}/worker-iterations`);
         if (!response.ok) {
           throw new Error("Failed to load iterations");
         }
