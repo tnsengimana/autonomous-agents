@@ -52,7 +52,7 @@ export default async function AgentDetailPage({
             agentType="team"
             agentId={agent.id}
             agentName={agent.name}
-            currentStatus={agent.status as "active" | "paused" | "archived"}
+            isActive={agent.isActive}
             currentIntervalMs={agent.iterationIntervalMs}
             backUrl="/agents"
           />
@@ -91,7 +91,9 @@ export default async function AgentDetailPage({
           <CardContent className="space-y-3">
             <div className="flex items-center justify-between">
               <span className="text-sm text-muted-foreground">Status</span>
-              <Badge variant="secondary">{agent.status}</Badge>
+              <Badge variant={agent.isActive ? "default" : "secondary"}>
+                {agent.isActive ? "Active" : "Paused"}
+              </Badge>
             </div>
             <Separator />
             <div className="flex items-center justify-between">

@@ -17,7 +17,7 @@ import { Label } from "@/components/ui/label";
 interface AgentActionsProps {
   agentId: string;
   agentName: string;
-  currentStatus: "active" | "paused" | "archived";
+  isActive: boolean;
   currentIntervalMs: number;
   backUrl: string;
   // Deprecated prop for backward compatibility
@@ -50,7 +50,7 @@ function intervalToMs(value: number, unit: IntervalUnit): number {
 export function AgentActions({
   agentId,
   agentName,
-  currentStatus,
+  isActive,
   currentIntervalMs,
   backUrl,
 }: AgentActionsProps) {
@@ -64,15 +64,14 @@ export function AgentActions({
   const [editIntervalUnit, setEditIntervalUnit] = useState<IntervalUnit>(initialInterval.unit);
   const [error, setError] = useState<string | null>(null);
 
-  const handleToggleStatus = async () => {
+  const handleToggleActive = async () => {
     setIsLoading(true);
     setError(null);
     try {
-      const newStatus = currentStatus === "active" ? "paused" : "active";
       const response = await fetch(`/api/agents/${agentId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: newStatus }),
+        body: JSON.stringify({ isActive: !isActive }),
       });
 
       if (!response.ok) {
@@ -165,10 +164,10 @@ export function AgentActions({
         <Button
           variant="outline"
           size="sm"
-          onClick={handleToggleStatus}
+          onClick={handleToggleActive}
           disabled={isLoading}
         >
-          {isLoading ? "..." : currentStatus === "active" ? "Pause" : "Resume"}
+          {isLoading ? "..." : isActive ? "Pause" : "Resume"}
         </Button>
         <Button
           variant="destructive"

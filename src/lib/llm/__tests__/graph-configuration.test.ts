@@ -335,7 +335,7 @@ describe("persistInitializedTypes", () => {
         insightSynthesisSystemPrompt: "You synthesize insights for testing.",
         graphConstructionSystemPrompt: "You construct graphs for testing.",
         iterationIntervalMs: 300000,
-        status: "active",
+        isActive: true,
       })
       .returning();
 
@@ -379,7 +379,7 @@ describe("persistInitializedTypes", () => {
         insightSynthesisSystemPrompt: "You synthesize insights for testing.",
         graphConstructionSystemPrompt: "You construct graphs for testing.",
         iterationIntervalMs: 300000,
-        status: "active",
+        isActive: true,
       })
       .returning();
 
@@ -424,7 +424,7 @@ describe("persistInitializedTypes", () => {
         insightSynthesisSystemPrompt: "You synthesize insights for testing.",
         graphConstructionSystemPrompt: "You construct graphs for testing.",
         iterationIntervalMs: 300000,
-        status: "active",
+        isActive: true,
       })
       .returning();
 
@@ -470,7 +470,7 @@ describe("persistInitializedTypes", () => {
         insightSynthesisSystemPrompt: "You synthesize insights for testing.",
         graphConstructionSystemPrompt: "You construct graphs for testing.",
         iterationIntervalMs: 300000,
-        status: "active",
+        isActive: true,
       })
       .returning();
 
@@ -506,7 +506,7 @@ describe("persistInitializedTypes", () => {
         insightSynthesisSystemPrompt: "You synthesize insights for testing.",
         graphConstructionSystemPrompt: "You construct graphs for testing.",
         iterationIntervalMs: 300000,
-        status: "active",
+        isActive: true,
       })
       .returning();
 
@@ -568,7 +568,7 @@ describe("Integration", () => {
         insightSynthesisSystemPrompt: "You synthesize insights for testing.",
         graphConstructionSystemPrompt: "You construct graphs for testing.",
         iterationIntervalMs: 300000,
-        status: "active",
+        isActive: true,
       })
       .returning();
 

@@ -47,7 +47,7 @@ beforeAll(async () => {
       insightSynthesisSystemPrompt: "You synthesize insights for testing.",
       graphConstructionSystemPrompt: "You construct graphs for testing.",
       iterationIntervalMs: 300000,
-      status: "active",
+      isActive: true,
     })
     .returning();
   testAgentId = agent.id;
@@ -121,7 +121,7 @@ describe("buildGraphContextBlock", () => {
         insightSynthesisSystemPrompt: "You synthesize insights for testing.",
         graphConstructionSystemPrompt: "You construct graphs for testing.",
         iterationIntervalMs: 300000,
-        status: "active",
+        isActive: true,
       })
       .returning();
 
@@ -167,7 +167,7 @@ describe("ensureGraphTypesInitialized", () => {
         insightSynthesisSystemPrompt: "You synthesize insights for testing.",
         graphConstructionSystemPrompt: "You construct graphs for testing.",
         iterationIntervalMs: 300000,
-        status: "active",
+        isActive: true,
       })
       .returning();
 
@@ -234,7 +234,7 @@ describe("ensureGraphTypesInitialized", () => {
         insightSynthesisSystemPrompt: "You synthesize insights for testing.",
         graphConstructionSystemPrompt: "You construct graphs for testing.",
         iterationIntervalMs: 300000,
-        status: "active",
+        isActive: true,
       })
       .returning();
 
@@ -283,7 +283,7 @@ describe("Integration", () => {
         insightSynthesisSystemPrompt: "You synthesize insights for testing.",
         graphConstructionSystemPrompt: "You construct graphs for testing.",
         iterationIntervalMs: 300000,
-        status: "active",
+        isActive: true,
       })
       .returning();
 

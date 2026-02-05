@@ -94,7 +94,7 @@ function logError(message: string, error: unknown): void {
  * Returns true if the agent has never been processed or if enough time has passed.
  */
 async function isAgentDueForIteration(agent: Agent): Promise<boolean> {
-  if (agent.status !== "active") {
+  if (!agent.isActive) {
     return false;
   }
 

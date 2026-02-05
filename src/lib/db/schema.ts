@@ -102,7 +102,7 @@ export const agents = pgTable(
     graphConstructionSystemPrompt: text("graph_construction_system_prompt").notNull(),
     // Worker iteration interval in milliseconds
     iterationIntervalMs: integer("iteration_interval_ms").notNull(),
-    status: text("status").notNull().default("active"), // 'active', 'paused', 'archived'
+    isActive: boolean("is_active").notNull().default(true),
     createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { mode: "date" }).defaultNow().notNull(),
   },

@@ -11,7 +11,7 @@ const updateAgentSchema = z.object({
   name: z.string().min(1).optional(),
   purpose: z.string().optional(),
   iterationIntervalMs: z.number().int().positive().optional(),
-  status: z.enum(["active", "paused", "archived"]).optional(),
+  isActive: z.boolean().optional(),
 });
 
 /**

@@ -7,7 +7,7 @@
 import { eq, desc } from "drizzle-orm";
 import { db } from "../client";
 import { agents } from "../schema";
-import type { Agent, AgentStatus } from "@/lib/types";
+import type { Agent } from "@/lib/types";
 import { initializeAndPersistTypesForAgent } from "@/lib/llm/graph-configuration";
 
 // ============================================================================
@@ -26,7 +26,7 @@ export async function createAgent(data: {
   insightSynthesisSystemPrompt: string;
   graphConstructionSystemPrompt: string;
   iterationIntervalMs: number;
-  status?: AgentStatus;
+  isActive?: boolean;
 }): Promise<Agent> {
   const result = await db
     .insert(agents)
@@ -39,7 +39,7 @@ export async function createAgent(data: {
       insightSynthesisSystemPrompt: data.insightSynthesisSystemPrompt,
       graphConstructionSystemPrompt: data.graphConstructionSystemPrompt,
       iterationIntervalMs: data.iterationIntervalMs,
-      status: data.status ?? "active",
+      isActive: data.isActive ?? true,
     })
     .returning();
 
@@ -102,7 +102,7 @@ export async function getActiveAgents(): Promise<Agent[]> {
   return db
     .select()
     .from(agents)
-    .where(eq(agents.status, "active"))
+    .where(eq(agents.isActive, true))
     .orderBy(desc(agents.createdAt));
 }
 
@@ -115,7 +115,7 @@ export async function updateAgent(
     name?: string;
     purpose?: string | null;
     iterationIntervalMs?: number;
-    status?: AgentStatus;
+    isActive?: boolean;
   },
 ): Promise<void> {
   await db
@@ -125,23 +125,30 @@ export async function updateAgent(
 }
 
 /**
- * Update agent status
+ * Set agent active state
  */
-export async function updateAgentStatus(
+export async function setAgentActive(
   agentId: string,
-  status: AgentStatus,
+  isActive: boolean,
 ): Promise<void> {
   await db
     .update(agents)
-    .set({ status, updatedAt: new Date() })
+    .set({ isActive, updatedAt: new Date() })
     .where(eq(agents.id, agentId));
 }
 
 /**
- * Activate an agent (set status to 'active')
+ * Activate an agent (set isActive to true)
  */
 export async function activateAgent(agentId: string): Promise<void> {
-  await updateAgentStatus(agentId, "active");
+  await setAgentActive(agentId, true);
+}
+
+/**
+ * Pause an agent (set isActive to false)
+ */
+export async function pauseAgent(agentId: string): Promise<void> {
+  await setAgentActive(agentId, false);
 }
 
 /**

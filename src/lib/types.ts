@@ -48,7 +48,6 @@ export type GraphEdge = InferSelectModel<typeof graphEdges>;
 // Status Types
 // ============================================================================
 
-export type AgentStatus = "active" | "paused" | "archived";
 export type MemoryType = "preference" | "insight" | "fact";
 export type MessageRole = "user" | "llm" | "summary";
 

@@ -70,7 +70,7 @@ export async function POST(request: NextRequest) {
       insightSynthesisSystemPrompt: config.insightSynthesisSystemPrompt,
       graphConstructionSystemPrompt: config.graphConstructionSystemPrompt,
       iterationIntervalMs,
-      status: "active",
+      isActive: true,
     });
 
     return NextResponse.json(agent, { status: 201 });
