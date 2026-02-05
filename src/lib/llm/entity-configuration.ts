@@ -2,6 +2,23 @@ import { z } from 'zod';
 import { generateLLMObject } from '@/lib/llm/providers';
 
 /**
+ * Format interval in milliseconds to human-readable string
+ */
+function formatInterval(ms: number): string {
+  const minutes = ms / (60 * 1000);
+  const hours = ms / (60 * 60 * 1000);
+  const days = ms / (24 * 60 * 60 * 1000);
+
+  if (days >= 1 && Number.isInteger(days)) {
+    return days === 1 ? '1 day' : `${days} days`;
+  }
+  if (hours >= 1 && Number.isInteger(hours)) {
+    return hours === 1 ? '1 hour' : `${hours} hours`;
+  }
+  return minutes === 1 ? '1 minute' : `${minutes} minutes`;
+}
+
+/**
  * Schema for the generated entity configuration with four distinct system prompts
  */
 const EntityConfigurationSchema = z.object({
@@ -72,11 +89,12 @@ Generate a conversationSystemPrompt (3-5 paragraphs) that instructs the agent to
  * Meta-prompt for generating the CLASSIFICATION system prompt.
  * This prompt decides whether to synthesize insights or gather more data.
  */
-const CLASSIFICATION_META_PROMPT = `You are an expert agent architect. Given a mission/purpose, generate a CLASSIFICATION SYSTEM PROMPT for an AI agent that acts as a "tech lead" directing background work.
+function getClassificationMetaPrompt(interval: string): string {
+  return `You are an expert agent architect. Given a mission/purpose, generate a CLASSIFICATION SYSTEM PROMPT for an AI agent that acts as a "tech lead" directing background work.
 
 ## Context
 
-This agent runs autonomously every 5 minutes. At the start of each iteration, the classification phase analyzes the current state of the Knowledge Graph and decides:
+This agent runs autonomously every ${interval}. At the start of each iteration, the classification phase analyzes the current state of the Knowledge Graph and decides:
 - **"synthesize"**: Enough knowledge exists to derive valuable insights
 - **"populate"**: Need to gather more external data to fill knowledge gaps
 
@@ -121,6 +139,7 @@ The reasoning must be specific and actionable:
 - Don't repeatedly synthesize the same patterns without new data
 - Don't endlessly populate without creating insights
 - Maintain a healthy rhythm between both actions`;
+}
 
 /**
  * Meta-prompt for generating the INSIGHT SYNTHESIS system prompt.
@@ -249,7 +268,10 @@ For each piece of knowledge:
 // Unified Meta-Prompt for Generating All Four System Prompts
 // ============================================================================
 
-const UNIFIED_META_PROMPT = `You are an expert agent architect. Given a mission/purpose, generate FOUR DISTINCT SYSTEM PROMPTS for an autonomous AI agent that runs continuously.
+function getUnifiedMetaPrompt(interval: string): string {
+  const classificationMetaPrompt = getClassificationMetaPrompt(interval);
+
+  return `You are an expert agent architect. Given a mission/purpose, generate FOUR DISTINCT SYSTEM PROMPTS for an autonomous AI agent that runs continuously.
 
 ## Agent Architecture Overview
 
@@ -262,7 +284,7 @@ This agent operates in four distinct phases, each with its own system prompt:
 
 ## What This Agent Does
 
-- Runs autonomously in the background every 5 minutes (classification + one action)
+- Runs autonomously in the background every ${interval} (classification + one action)
 - Maintains a Knowledge Graph of typed nodes and edges
 - Uses web search tools to research and discover information
 - Creates Insight nodes (signals, observations, patterns) to surface discoveries
@@ -276,7 +298,7 @@ Generate all four system prompts tailored to the given mission:
 ${CONVERSATION_META_PROMPT.split('## Output Requirements')[1]}
 
 ### 2. classificationSystemPrompt (4-6 paragraphs)
-${CLASSIFICATION_META_PROMPT.split('## Output Requirements')[1]}
+${classificationMetaPrompt.split('## Output Requirements')[1]}
 
 ### 3. insightSynthesisSystemPrompt (4-6 paragraphs)
 ${INSIGHT_SYNTHESIS_META_PROMPT.split('## Output Requirements')[1]}
@@ -299,6 +321,7 @@ For each prompt, incorporate:
 - Appropriate sources and research strategies for the field
 - Domain-specific insight types and patterns
 - Field-specific quality standards and best practices`;
+}
 
 // ============================================================================
 // Entity Configuration Generation
@@ -310,8 +333,11 @@ For each prompt, incorporate:
  */
 export async function generateEntityConfiguration(
   purpose: string,
+  iterationIntervalMs: number,
   options?: { userId?: string }
 ): Promise<EntityConfiguration> {
+  const interval = formatInterval(iterationIntervalMs);
+
   const userPrompt = `Mission: ${purpose}
 
 Generate the complete agent configuration with:
@@ -323,7 +349,7 @@ Each system prompt should be detailed and actionable, giving clear guidance for 
   return generateLLMObject(
     [{ role: 'user', content: userPrompt }],
     EntityConfigurationSchema,
-    UNIFIED_META_PROMPT,
+    getUnifiedMetaPrompt(interval),
     {
       temperature: 0.7,
       userId: options?.userId,

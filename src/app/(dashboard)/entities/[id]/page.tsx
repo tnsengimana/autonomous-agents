@@ -53,6 +53,7 @@ export default async function EntityDetailPage({
             entityId={entity.id}
             entityName={entity.name}
             currentStatus={entity.status as "active" | "paused" | "archived"}
+            currentIntervalMs={entity.iterationIntervalMs}
             backUrl="/entities"
           />
         </div>

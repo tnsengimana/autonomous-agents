@@ -18,15 +18,40 @@ interface EntityActionsProps {
   entityId: string;
   entityName: string;
   currentStatus: "active" | "paused" | "archived";
+  currentIntervalMs: number;
   backUrl: string;
   // Deprecated prop for backward compatibility
   entityType?: "team" | "aide";
+}
+
+type IntervalUnit = "minutes" | "hours" | "days";
+
+function msToInterval(ms: number): { value: number; unit: IntervalUnit } {
+  const days = ms / (24 * 60 * 60 * 1000);
+  if (days >= 1 && Number.isInteger(days)) {
+    return { value: days, unit: "days" };
+  }
+  const hours = ms / (60 * 60 * 1000);
+  if (hours >= 1 && Number.isInteger(hours)) {
+    return { value: hours, unit: "hours" };
+  }
+  return { value: ms / (60 * 1000), unit: "minutes" };
+}
+
+function intervalToMs(value: number, unit: IntervalUnit): number {
+  const multipliers = {
+    minutes: 60 * 1000,
+    hours: 60 * 60 * 1000,
+    days: 24 * 60 * 60 * 1000,
+  };
+  return value * multipliers[unit];
 }
 
 export function EntityActions({
   entityId,
   entityName,
   currentStatus,
+  currentIntervalMs,
   backUrl,
 }: EntityActionsProps) {
   const router = useRouter();
@@ -34,6 +59,9 @@ export function EntityActions({
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [editName, setEditName] = useState(entityName);
+  const initialInterval = msToInterval(currentIntervalMs);
+  const [editIntervalValue, setEditIntervalValue] = useState(initialInterval.value.toString());
+  const [editIntervalUnit, setEditIntervalUnit] = useState<IntervalUnit>(initialInterval.unit);
   const [error, setError] = useState<string | null>(null);
 
   const handleToggleStatus = async () => {
@@ -66,13 +94,20 @@ export function EntityActions({
       return;
     }
 
+    const intervalValue = parseInt(editIntervalValue, 10);
+    if (isNaN(intervalValue) || intervalValue <= 0) {
+      setError("Please enter a valid interval value");
+      return;
+    }
+
     setIsLoading(true);
     setError(null);
     try {
+      const iterationIntervalMs = intervalToMs(intervalValue, editIntervalUnit);
       const response = await fetch(`/api/entities/${entityId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: editName }),
+        body: JSON.stringify({ name: editName, iterationIntervalMs }),
       });
 
       if (!response.ok) {
@@ -117,6 +152,9 @@ export function EntityActions({
           size="sm"
           onClick={() => {
             setEditName(entityName);
+            const interval = msToInterval(currentIntervalMs);
+            setEditIntervalValue(interval.value.toString());
+            setEditIntervalUnit(interval.unit);
             setError(null);
             setIsEditOpen(true);
           }}
@@ -168,6 +206,28 @@ export function EntityActions({
                 onChange={(e) => setEditName(e.target.value)}
                 placeholder="Enter entity name"
               />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="intervalValue">Iteration Interval</Label>
+              <div className="flex gap-2">
+                <Input
+                  id="intervalValue"
+                  type="number"
+                  min="1"
+                  value={editIntervalValue}
+                  onChange={(e) => setEditIntervalValue(e.target.value)}
+                  className="w-24"
+                />
+                <select
+                  value={editIntervalUnit}
+                  onChange={(e) => setEditIntervalUnit(e.target.value as IntervalUnit)}
+                  className="rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                >
+                  <option value="minutes">Minutes</option>
+                  <option value="hours">Hours</option>
+                  <option value="days">Days</option>
+                </select>
+              </div>
             </div>
           </div>
           <DialogFooter>

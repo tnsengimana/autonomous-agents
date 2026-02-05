@@ -19,6 +19,8 @@ export default function NewEntityPage() {
   const [error, setError] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     purpose: "",
+    intervalValue: "",
+    intervalUnit: "minutes" as "minutes" | "hours" | "days",
   });
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -26,13 +28,31 @@ export default function NewEntityPage() {
     setIsCreating(true);
     setError(null);
 
+    // Convert interval to milliseconds
+    const intervalValue = parseInt(formData.intervalValue, 10);
+    if (isNaN(intervalValue) || intervalValue <= 0) {
+      setError("Please enter a valid interval value");
+      setIsCreating(false);
+      return;
+    }
+
+    const multipliers = {
+      minutes: 60 * 1000,
+      hours: 60 * 60 * 1000,
+      days: 24 * 60 * 60 * 1000,
+    };
+    const iterationIntervalMs = intervalValue * multipliers[formData.intervalUnit];
+
     try {
       const response = await fetch("/api/entities", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(formData),
+        body: JSON.stringify({
+          purpose: formData.purpose,
+          iterationIntervalMs,
+        }),
       });
 
       if (!response.ok) {
@@ -100,6 +120,36 @@ export default function NewEntityPage() {
               />
               <p className="text-xs text-muted-foreground">
                 Describe the mission clearly. The entity&apos;s name and configuration will be generated automatically.
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="intervalValue">Iteration Interval</Label>
+              <div className="flex gap-2">
+                <input
+                  id="intervalValue"
+                  name="intervalValue"
+                  type="number"
+                  min="1"
+                  placeholder="5"
+                  value={formData.intervalValue}
+                  onChange={handleChange}
+                  className="w-24 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                  required
+                />
+                <select
+                  name="intervalUnit"
+                  value={formData.intervalUnit}
+                  onChange={(e) => setFormData(prev => ({ ...prev, intervalUnit: e.target.value as "minutes" | "hours" | "days" }))}
+                  className="rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                >
+                  <option value="minutes">Minutes</option>
+                  <option value="hours">Hours</option>
+                  <option value="days">Days</option>
+                </select>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                How often the entity should run its background iteration cycle.
               </p>
             </div>
 

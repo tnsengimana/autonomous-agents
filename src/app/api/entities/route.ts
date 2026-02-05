@@ -6,6 +6,7 @@ import { z } from "zod";
 
 const createEntitySchema = z.object({
   purpose: z.string().min(1, "Mission/purpose is required"),
+  iterationIntervalMs: z.number().int().positive("Iteration interval must be a positive number"),
 });
 
 /**
@@ -50,12 +51,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { purpose } = validation.data;
+    const { purpose, iterationIntervalMs } = validation.data;
 
     // Generate name and all four system prompts from mission/purpose
-    const config = await generateEntityConfiguration(purpose, {
-      userId: session.user.id,
-    });
+    const config = await generateEntityConfiguration(
+      purpose,
+      iterationIntervalMs,
+      { userId: session.user.id },
+    );
 
     // Create the entity with generated name and all four system prompts
     const entity = await createEntity({
@@ -66,6 +69,7 @@ export async function POST(request: NextRequest) {
       classificationSystemPrompt: config.classificationSystemPrompt,
       insightSynthesisSystemPrompt: config.insightSynthesisSystemPrompt,
       graphConstructionSystemPrompt: config.graphConstructionSystemPrompt,
+      iterationIntervalMs,
       status: "active",
     });
 

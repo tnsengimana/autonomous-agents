@@ -100,6 +100,8 @@ export const entities = pgTable(
     classificationSystemPrompt: text("classification_system_prompt").notNull(),
     insightSynthesisSystemPrompt: text("insight_synthesis_system_prompt").notNull(),
     graphConstructionSystemPrompt: text("graph_construction_system_prompt").notNull(),
+    // Worker iteration interval in milliseconds
+    iterationIntervalMs: integer("iteration_interval_ms").notNull(),
     status: text("status").notNull().default("active"), // 'active', 'paused', 'archived'
     createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { mode: "date" }).defaultNow().notNull(),

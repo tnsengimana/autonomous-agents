@@ -1,5 +1,5 @@
 {
-  "id": "861bb844-24fb-4564-942d-cd471ec6b8fc",
+  "id": "cdc9ddba-ae0a-4dbb-a7db-a739f82e73ca",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -331,6 +331,12 @@
         "graph_construction_system_prompt": {
           "name": "graph_construction_system_prompt",
           "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "iteration_interval_ms": {
+          "name": "iteration_interval_ms",
+          "type": "integer",
           "primaryKey": false,
           "notNull": true
         },

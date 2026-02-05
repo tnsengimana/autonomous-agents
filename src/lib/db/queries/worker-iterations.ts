@@ -194,3 +194,33 @@ export async function getWorkerIterationById(
     completedAt: row.completedAt,
   };
 }
+
+/**
+ * Get the last completed worker iteration for an entity
+ */
+export async function getLastCompletedIteration(
+  entityId: string
+): Promise<WorkerIteration | null> {
+  const results = await db
+    .select()
+    .from(workerIterations)
+    .where(eq(workerIterations.entityId, entityId))
+    .orderBy(desc(workerIterations.completedAt))
+    .limit(1);
+
+  if (results.length === 0) {
+    return null;
+  }
+
+  const row = results[0];
+  return {
+    id: row.id,
+    entityId: row.entityId,
+    status: row.status,
+    classificationResult: row.classificationResult,
+    classificationReasoning: row.classificationReasoning,
+    errorMessage: row.errorMessage,
+    createdAt: row.createdAt,
+    completedAt: row.completedAt,
+  };
+}

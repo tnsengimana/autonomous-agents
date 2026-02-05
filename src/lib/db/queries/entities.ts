@@ -25,6 +25,7 @@ export async function createEntity(data: {
   classificationSystemPrompt: string;
   insightSynthesisSystemPrompt: string;
   graphConstructionSystemPrompt: string;
+  iterationIntervalMs: number;
   status?: EntityStatus;
 }): Promise<Entity> {
   const result = await db
@@ -37,6 +38,7 @@ export async function createEntity(data: {
       classificationSystemPrompt: data.classificationSystemPrompt,
       insightSynthesisSystemPrompt: data.insightSynthesisSystemPrompt,
       graphConstructionSystemPrompt: data.graphConstructionSystemPrompt,
+      iterationIntervalMs: data.iterationIntervalMs,
       status: data.status ?? "active",
     })
     .returning();
@@ -112,6 +114,7 @@ export async function updateEntity(
   data: {
     name?: string;
     purpose?: string | null;
+    iterationIntervalMs?: number;
     status?: EntityStatus;
   },
 ): Promise<void> {

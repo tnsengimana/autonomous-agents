@@ -34,6 +34,7 @@ import {
 import {
   createWorkerIteration,
   updateWorkerIteration,
+  getLastCompletedIteration,
 } from "@/lib/db/queries/worker-iterations";
 import type { Entity } from "@/lib/types";
 
@@ -41,7 +42,8 @@ import type { Entity } from "@/lib/types";
 // Configuration
 // ============================================================================
 
-const ITERATION_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
+// How often to check if any entity needs processing
+const POLL_INTERVAL_MS = 10 * 1000; // 10 seconds
 
 // Shutdown flag
 let isShuttingDown = false;
@@ -85,6 +87,23 @@ function log(message: string, ...args: unknown[]): void {
 function logError(message: string, error: unknown): void {
   const timestamp = new Date().toISOString();
   console.error(`[${timestamp}] [Worker] ${message}`, error);
+}
+
+/**
+ * Check if an entity is due for its next iteration based on its interval.
+ * Returns true if the entity has never been processed or if enough time has passed.
+ */
+async function isEntityDueForIteration(entity: Entity): Promise<boolean> {
+  const lastIteration = await getLastCompletedIteration(entity.id);
+
+  // Never processed - due immediately
+  if (!lastIteration || !lastIteration.completedAt) {
+    return true;
+  }
+
+  const timeSinceLastIteration =
+    Date.now() - lastIteration.completedAt.getTime();
+  return timeSinceLastIteration >= entity.iterationIntervalMs;
 }
 
 // ============================================================================
@@ -406,12 +425,12 @@ async function processEntityIteration(entity: Entity): Promise<void> {
 /**
  * The main runner loop
  *
- * Iterates through all active entities and processes each one.
- * Sleeps for 5 minutes between iterations.
+ * Polls for active entities and processes those that are due based on their
+ * individual iteration intervals.
  */
 export async function startRunner(): Promise<void> {
   log(
-    "Worker runner started (two-step classification -> action flow, 5-minute interval)",
+    "Worker runner started (two-step classification -> action flow, per-entity intervals)",
   );
 
   // Register all tools before starting
@@ -430,24 +449,26 @@ export async function startRunner(): Promise<void> {
       const entities = await getActiveEntities();
 
       if (entities.length > 0) {
-        log(`Found ${entities.length} active entity(ies) to process`);
-
-        // Process each entity's iteration
+        // Check each entity to see if it's due for processing
         for (const entity of entities) {
           if (isShuttingDown) break;
-          await processEntityIteration(entity);
+
+          const isDue = await isEntityDueForIteration(entity);
+          if (isDue) {
+            log(
+              `Entity ${entity.name} is due (interval: ${entity.iterationIntervalMs / 1000}s)`,
+            );
+            await processEntityIteration(entity);
+          }
         }
-      } else {
-        log("No active entities found");
       }
     } catch (error) {
       logError("Runner error:", error);
     }
 
-    // Wait before next iteration (unless shutting down)
+    // Poll again after a short interval (unless shutting down)
     if (!isShuttingDown) {
-      log(`Sleeping for ${ITERATION_INTERVAL_MS / 1000} seconds...`);
-      await sleep(ITERATION_INTERVAL_MS);
+      await sleep(POLL_INTERVAL_MS);
     }
   }
 

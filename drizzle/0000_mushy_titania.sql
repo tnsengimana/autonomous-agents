@@ -40,6 +40,7 @@ CREATE TABLE "entities" (
 	"classification_system_prompt" text NOT NULL,
 	"insight_synthesis_system_prompt" text NOT NULL,
 	"graph_construction_system_prompt" text NOT NULL,
+	"iteration_interval_ms" integer NOT NULL,
 	"status" text DEFAULT 'active' NOT NULL,
 	"created_at" timestamp DEFAULT now() NOT NULL,
 	"updated_at" timestamp DEFAULT now() NOT NULL
