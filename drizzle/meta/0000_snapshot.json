@@ -1,5 +1,5 @@
 {
-  "id": "cdc9ddba-ae0a-4dbb-a7db-a739f82e73ca",
+  "id": "8e88bd2e-9f71-4ebf-968f-9e3f088ebc21",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -105,184 +105,8 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
-    "public.briefings": {
-      "name": "briefings",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "user_id": {
-          "name": "user_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "entity_id": {
-          "name": "entity_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "title": {
-          "name": "title",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "summary": {
-          "name": "summary",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "content": {
-          "name": "content",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "briefings_user_id_idx": {
-          "name": "briefings_user_id_idx",
-          "columns": [
-            {
-              "expression": "user_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "briefings_entity_id_idx": {
-          "name": "briefings_entity_id_idx",
-          "columns": [
-            {
-              "expression": "entity_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "briefings_user_id_users_id_fk": {
-          "name": "briefings_user_id_users_id_fk",
-          "tableFrom": "briefings",
-          "tableTo": "users",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "briefings_entity_id_entities_id_fk": {
-          "name": "briefings_entity_id_entities_id_fk",
-          "tableFrom": "briefings",
-          "tableTo": "entities",
-          "columnsFrom": [
-            "entity_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.conversations": {
-      "name": "conversations",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "entity_id": {
-          "name": "entity_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {
-        "conversations_entity_id_entities_id_fk": {
-          "name": "conversations_entity_id_entities_id_fk",
-          "tableFrom": "conversations",
-          "tableTo": "entities",
-          "columnsFrom": [
-            "entity_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.entities": {
-      "name": "entities",
+    "public.agents": {
+      "name": "agents",
       "schema": "",
       "columns": {
         "id": {
@@ -328,6 +152,12 @@
           "primaryKey": false,
           "notNull": true
         },
+        "knowledge_acquisition_system_prompt": {
+          "name": "knowledge_acquisition_system_prompt",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
         "graph_construction_system_prompt": {
           "name": "graph_construction_system_prompt",
           "type": "text",
@@ -340,12 +170,12 @@
           "primaryKey": false,
           "notNull": true
         },
-        "status": {
-          "name": "status",
-          "type": "text",
+        "is_active": {
+          "name": "is_active",
+          "type": "boolean",
           "primaryKey": false,
           "notNull": true,
-          "default": "'active'"
+          "default": true
         },
         "created_at": {
           "name": "created_at",
@@ -363,8 +193,8 @@
         }
       },
       "indexes": {
-        "entities_user_id_idx": {
-          "name": "entities_user_id_idx",
+        "agents_user_id_idx": {
+          "name": "agents_user_id_idx",
           "columns": [
             {
               "expression": "user_id",
@@ -380,12 +210,66 @@
         }
       },
       "foreignKeys": {
-        "entities_user_id_users_id_fk": {
-          "name": "entities_user_id_users_id_fk",
-          "tableFrom": "entities",
+        "agents_user_id_users_id_fk": {
+          "name": "agents_user_id_users_id_fk",
+          "tableFrom": "agents",
           "tableTo": "users",
           "columnsFrom": [
             "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.conversations": {
+      "name": "conversations",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "agent_id": {
+          "name": "agent_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "conversations_agent_id_agents_id_fk": {
+          "name": "conversations_agent_id_agents_id_fk",
+          "tableFrom": "conversations",
+          "tableTo": "agents",
+          "columnsFrom": [
+            "agent_id"
           ],
           "columnsTo": [
             "id"
@@ -591,8 +475,8 @@
           "notNull": true,
           "default": "gen_random_uuid()"
         },
-        "entity_id": {
-          "name": "entity_id",
+        "agent_id": {
+          "name": "agent_id",
           "type": "uuid",
           "primaryKey": false,
           "notNull": false
@@ -637,11 +521,11 @@
         }
       },
       "indexes": {
-        "graph_edge_types_entity_id_idx": {
-          "name": "graph_edge_types_entity_id_idx",
+        "graph_edge_types_agent_id_idx": {
+          "name": "graph_edge_types_agent_id_idx",
           "columns": [
             {
-              "expression": "entity_id",
+              "expression": "agent_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -654,12 +538,12 @@
         }
       },
       "foreignKeys": {
-        "graph_edge_types_entity_id_entities_id_fk": {
-          "name": "graph_edge_types_entity_id_entities_id_fk",
+        "graph_edge_types_agent_id_agents_id_fk": {
+          "name": "graph_edge_types_agent_id_agents_id_fk",
           "tableFrom": "graph_edge_types",
-          "tableTo": "entities",
+          "tableTo": "agents",
           "columnsFrom": [
-            "entity_id"
+            "agent_id"
           ],
           "columnsTo": [
             "id"
@@ -685,8 +569,8 @@
           "notNull": true,
           "default": "gen_random_uuid()"
         },
-        "entity_id": {
-          "name": "entity_id",
+        "agent_id": {
+          "name": "agent_id",
           "type": "uuid",
           "primaryKey": false,
           "notNull": true
@@ -725,11 +609,11 @@
         }
       },
       "indexes": {
-        "graph_edges_entity_id_idx": {
-          "name": "graph_edges_entity_id_idx",
+        "graph_edges_agent_id_idx": {
+          "name": "graph_edges_agent_id_idx",
           "columns": [
             {
-              "expression": "entity_id",
+              "expression": "agent_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -787,12 +671,12 @@
         }
       },
       "foreignKeys": {
-        "graph_edges_entity_id_entities_id_fk": {
-          "name": "graph_edges_entity_id_entities_id_fk",
+        "graph_edges_agent_id_agents_id_fk": {
+          "name": "graph_edges_agent_id_agents_id_fk",
           "tableFrom": "graph_edges",
-          "tableTo": "entities",
+          "tableTo": "agents",
           "columnsFrom": [
-            "entity_id"
+            "agent_id"
           ],
           "columnsTo": [
             "id"
@@ -844,8 +728,8 @@
           "notNull": true,
           "default": "gen_random_uuid()"
         },
-        "entity_id": {
-          "name": "entity_id",
+        "agent_id": {
+          "name": "agent_id",
           "type": "uuid",
           "primaryKey": false,
           "notNull": false
@@ -897,11 +781,11 @@
         }
       },
       "indexes": {
-        "graph_node_types_entity_id_idx": {
-          "name": "graph_node_types_entity_id_idx",
+        "graph_node_types_agent_id_idx": {
+          "name": "graph_node_types_agent_id_idx",
           "columns": [
             {
-              "expression": "entity_id",
+              "expression": "agent_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -914,12 +798,12 @@
         }
       },
       "foreignKeys": {
-        "graph_node_types_entity_id_entities_id_fk": {
-          "name": "graph_node_types_entity_id_entities_id_fk",
+        "graph_node_types_agent_id_agents_id_fk": {
+          "name": "graph_node_types_agent_id_agents_id_fk",
           "tableFrom": "graph_node_types",
-          "tableTo": "entities",
+          "tableTo": "agents",
           "columnsFrom": [
-            "entity_id"
+            "agent_id"
           ],
           "columnsTo": [
             "id"
@@ -945,8 +829,8 @@
           "notNull": true,
           "default": "gen_random_uuid()"
         },
-        "entity_id": {
-          "name": "entity_id",
+        "agent_id": {
+          "name": "agent_id",
           "type": "uuid",
           "primaryKey": false,
           "notNull": true
@@ -979,11 +863,11 @@
         }
       },
       "indexes": {
-        "graph_nodes_entity_id_idx": {
-          "name": "graph_nodes_entity_id_idx",
+        "graph_nodes_agent_id_idx": {
+          "name": "graph_nodes_agent_id_idx",
           "columns": [
             {
-              "expression": "entity_id",
+              "expression": "agent_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -1009,11 +893,11 @@
           "method": "btree",
           "with": {}
         },
-        "graph_nodes_entity_type_idx": {
-          "name": "graph_nodes_entity_type_idx",
+        "graph_nodes_agent_type_idx": {
+          "name": "graph_nodes_agent_type_idx",
           "columns": [
             {
-              "expression": "entity_id",
+              "expression": "agent_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -1032,12 +916,12 @@
         }
       },
       "foreignKeys": {
-        "graph_nodes_entity_id_entities_id_fk": {
-          "name": "graph_nodes_entity_id_entities_id_fk",
+        "graph_nodes_agent_id_agents_id_fk": {
+          "name": "graph_nodes_agent_id_agents_id_fk",
           "tableFrom": "graph_nodes",
-          "tableTo": "entities",
+          "tableTo": "agents",
           "columnsFrom": [
-            "entity_id"
+            "agent_id"
           ],
           "columnsTo": [
             "id"
@@ -1069,21 +953,9 @@
           "primaryKey": false,
           "notNull": true
         },
-        "entity_id": {
-          "name": "entity_id",
+        "agent_id": {
+          "name": "agent_id",
           "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "briefing_id": {
-          "name": "briefing_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "type": {
-          "name": "type",
-          "type": "text",
           "primaryKey": false,
           "notNull": true
         },
@@ -1128,30 +1000,17 @@
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
-        "inbox_items_entity_id_entities_id_fk": {
-          "name": "inbox_items_entity_id_entities_id_fk",
+        "inbox_items_agent_id_agents_id_fk": {
+          "name": "inbox_items_agent_id_agents_id_fk",
           "tableFrom": "inbox_items",
-          "tableTo": "entities",
+          "tableTo": "agents",
           "columnsFrom": [
-            "entity_id"
+            "agent_id"
           ],
           "columnsTo": [
             "id"
           ],
           "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "inbox_items_briefing_id_briefings_id_fk": {
-          "name": "inbox_items_briefing_id_briefings_id_fk",
-          "tableFrom": "inbox_items",
-          "tableTo": "briefings",
-          "columnsFrom": [
-            "briefing_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "set null",
           "onUpdate": "no action"
         }
       },
@@ -1172,8 +1031,8 @@
           "notNull": true,
           "default": "gen_random_uuid()"
         },
-        "entity_id": {
-          "name": "entity_id",
+        "agent_id": {
+          "name": "agent_id",
           "type": "uuid",
           "primaryKey": false,
           "notNull": true
@@ -1223,11 +1082,11 @@
         }
       },
       "indexes": {
-        "llm_interactions_entity_id_idx": {
-          "name": "llm_interactions_entity_id_idx",
+        "llm_interactions_agent_id_idx": {
+          "name": "llm_interactions_agent_id_idx",
           "columns": [
             {
-              "expression": "entity_id",
+              "expression": "agent_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -1270,12 +1129,12 @@
         }
       },
       "foreignKeys": {
-        "llm_interactions_entity_id_entities_id_fk": {
-          "name": "llm_interactions_entity_id_entities_id_fk",
+        "llm_interactions_agent_id_agents_id_fk": {
+          "name": "llm_interactions_agent_id_agents_id_fk",
           "tableFrom": "llm_interactions",
-          "tableTo": "entities",
+          "tableTo": "agents",
           "columnsFrom": [
-            "entity_id"
+            "agent_id"
           ],
           "columnsTo": [
             "id"
@@ -1314,8 +1173,8 @@
           "notNull": true,
           "default": "gen_random_uuid()"
         },
-        "entity_id": {
-          "name": "entity_id",
+        "agent_id": {
+          "name": "agent_id",
           "type": "uuid",
           "primaryKey": false,
           "notNull": true
@@ -1355,12 +1214,12 @@
       },
       "indexes": {},
       "foreignKeys": {
-        "memories_entity_id_entities_id_fk": {
-          "name": "memories_entity_id_entities_id_fk",
+        "memories_agent_id_agents_id_fk": {
+          "name": "memories_agent_id_agents_id_fk",
           "tableFrom": "memories",
-          "tableTo": "entities",
+          "tableTo": "agents",
           "columnsFrom": [
-            "entity_id"
+            "agent_id"
           ],
           "columnsTo": [
             "id"
@@ -1693,8 +1552,8 @@
           "notNull": true,
           "default": "gen_random_uuid()"
         },
-        "entity_id": {
-          "name": "entity_id",
+        "agent_id": {
+          "name": "agent_id",
           "type": "uuid",
           "primaryKey": false,
           "notNull": true
@@ -1739,11 +1598,11 @@
         }
       },
       "indexes": {
-        "worker_iterations_entity_id_idx": {
-          "name": "worker_iterations_entity_id_idx",
+        "worker_iterations_agent_id_idx": {
+          "name": "worker_iterations_agent_id_idx",
           "columns": [
             {
-              "expression": "entity_id",
+              "expression": "agent_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -1771,12 +1630,12 @@
         }
       },
       "foreignKeys": {
-        "worker_iterations_entity_id_entities_id_fk": {
-          "name": "worker_iterations_entity_id_entities_id_fk",
+        "worker_iterations_agent_id_agents_id_fk": {
+          "name": "worker_iterations_agent_id_agents_id_fk",
           "tableFrom": "worker_iterations",
-          "tableTo": "entities",
+          "tableTo": "agents",
           "columnsFrom": [
-            "entity_id"
+            "agent_id"
           ],
           "columnsTo": [
             "id"

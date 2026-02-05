@@ -31,7 +31,7 @@ const DEFAULT_MODEL = {
   openai: "gpt-4o",
   anthropic: "claude-sonnet-4-20250514",
   google: "gemini-3-flash-preview", // Using flash as default since pro has reliability issues
-  lmstudio: "mistralai/ministral-3-14b-reasoning",
+  lmstudio: "openai/gpt-oss-20b",
 } as const;
 
 const FALLBACK_MODEL = {
@@ -182,8 +182,8 @@ export interface StreamWithToolsOptions extends StreamOptions {
  * Events are stored in chronological order to capture the interleaved flow.
  */
 export type LLMResponseEvent =
-  | { llmThought: string }  // Internal reasoning (from reasoning models like DeepSeek-R1, o1)
-  | { llmOutput: string }   // Text visible to user
+  | { llmThought: string } // Internal reasoning (from reasoning models like DeepSeek-R1, o1)
+  | { llmOutput: string } // Text visible to user
   | { toolCalls: Array<{ toolName: string; args: Record<string, unknown> }> }
   | { toolResults: Array<{ toolName: string; result: unknown }> };
 
@@ -472,15 +472,21 @@ export async function streamLLMResponseWithTools(
     /**
      * Convert a step to events and add to the accumulated events array
      */
-    function processStep(step: {
-      text?: string;
-      toolCalls?: Array<{ toolName: string }>;
-      toolResults?: Array<{ toolName: string }>;
-    } & Record<string, unknown>): void {
+    function processStep(
+      step: {
+        text?: string;
+        toolCalls?: Array<{ toolName: string }>;
+        toolResults?: Array<{ toolName: string }>;
+      } & Record<string, unknown>,
+    ): void {
       // Check for reasoning (from reasoning models like DeepSeek-R1, o1)
       if (step.reasoning && Array.isArray(step.reasoning)) {
-        for (const reasoningPart of step.reasoning as Array<Record<string, unknown>>) {
-          const reasoningText = String(reasoningPart.text || reasoningPart.reasoning || "");
+        for (const reasoningPart of step.reasoning as Array<
+          Record<string, unknown>
+        >) {
+          const reasoningText = String(
+            reasoningPart.text || reasoningPart.reasoning || "",
+          );
           if (reasoningText.trim()) {
             events.push({ llmThought: reasoningText });
           }
@@ -552,7 +558,16 @@ export async function streamLLMResponseWithTools(
       );
       if (totalToolCalls > 0) {
         const toolNames = events
-          .filter((e): e is { toolCalls: Array<{ toolName: string; args: Record<string, unknown> }> } => "toolCalls" in e)
+          .filter(
+            (
+              e,
+            ): e is {
+              toolCalls: Array<{
+                toolName: string;
+                args: Record<string, unknown>;
+              }>;
+            } => "toolCalls" in e,
+          )
           .flatMap((e) => e.toolCalls.map((tc) => tc.toolName));
         console.log(`[LLM] Tool calls made:`, toolNames);
       }
