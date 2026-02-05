@@ -5,27 +5,27 @@
  * Types can be global (entityId=null) or entity-specific.
  */
 
-import { eq, and, or, isNull, inArray } from 'drizzle-orm';
-import { db } from '../client';
+import { eq, and, or, isNull, inArray } from "drizzle-orm";
+import { db } from "../client";
 import {
   graphNodeTypes,
   graphEdgeTypes,
   graphEdgeTypeSourceTypes,
   graphEdgeTypeTargetTypes,
-} from '../schema';
+} from "../schema";
 import type {
   GraphNodeType,
   GraphEdgeType,
   GraphEdgeTypeWithConstraints,
-  GraphTypeCreatedBy,
-} from '@/lib/types';
+  GraphTypeCreator as GraphTypeCreator,
+} from "@/lib/types";
 
 // Re-export types for convenience
 export type {
   GraphNodeType,
   GraphEdgeType,
   GraphEdgeTypeWithConstraints,
-  GraphTypeCreatedBy,
+  GraphTypeCreator,
 };
 
 // ============================================================================
@@ -42,7 +42,7 @@ export async function createNodeType(data: {
   propertiesSchema: object;
   exampleProperties?: object;
   notifyUser?: boolean;
-  createdBy?: GraphTypeCreatedBy;
+  createdBy?: GraphTypeCreator;
 }): Promise<GraphNodeType> {
   const result = await db
     .insert(graphNodeTypes)
@@ -53,7 +53,7 @@ export async function createNodeType(data: {
       propertiesSchema: data.propertiesSchema,
       exampleProperties: data.exampleProperties ?? null,
       notifyUser: data.notifyUser ?? false,
-      createdBy: data.createdBy ?? 'system',
+      createdBy: data.createdBy ?? "system",
     })
     .returning();
 
@@ -63,15 +63,17 @@ export async function createNodeType(data: {
 /**
  * Get all node types available to an entity (entity-specific + global types)
  */
-export async function getNodeTypesByEntity(entityId: string): Promise<GraphNodeType[]> {
+export async function getNodeTypesByEntity(
+  entityId: string,
+): Promise<GraphNodeType[]> {
   return db
     .select()
     .from(graphNodeTypes)
     .where(
       or(
         eq(graphNodeTypes.entityId, entityId),
-        isNull(graphNodeTypes.entityId)
-      )
+        isNull(graphNodeTypes.entityId),
+      ),
     );
 }
 
@@ -80,17 +82,14 @@ export async function getNodeTypesByEntity(entityId: string): Promise<GraphNodeT
  */
 export async function getNodeTypeByName(
   entityId: string,
-  name: string
+  name: string,
 ): Promise<GraphNodeType | null> {
   // First check for entity-specific type
   const entitySpecific = await db
     .select()
     .from(graphNodeTypes)
     .where(
-      and(
-        eq(graphNodeTypes.entityId, entityId),
-        eq(graphNodeTypes.name, name)
-      )
+      and(eq(graphNodeTypes.entityId, entityId), eq(graphNodeTypes.name, name)),
     )
     .limit(1);
 
@@ -102,12 +101,7 @@ export async function getNodeTypeByName(
   const global = await db
     .select()
     .from(graphNodeTypes)
-    .where(
-      and(
-        isNull(graphNodeTypes.entityId),
-        eq(graphNodeTypes.name, name)
-      )
-    )
+    .where(and(isNull(graphNodeTypes.entityId), eq(graphNodeTypes.name, name)))
     .limit(1);
 
   return global[0] ?? null;
@@ -118,7 +112,7 @@ export async function getNodeTypeByName(
  */
 export async function nodeTypeExists(
   entityId: string,
-  name: string
+  name: string,
 ): Promise<boolean> {
   const nodeType = await getNodeTypeByName(entityId, name);
   return nodeType !== null;
@@ -139,7 +133,7 @@ export async function createEdgeType(data: {
   targetNodeTypeNames?: string[];
   propertiesSchema?: object;
   exampleProperties?: object;
-  createdBy?: GraphTypeCreatedBy;
+  createdBy?: GraphTypeCreator;
 }): Promise<GraphEdgeType> {
   const entityId = data.entityId ?? null;
 
@@ -152,7 +146,7 @@ export async function createEdgeType(data: {
       description: data.description,
       propertiesSchema: data.propertiesSchema ?? null,
       exampleProperties: data.exampleProperties ?? null,
-      createdBy: data.createdBy ?? 'system',
+      createdBy: data.createdBy ?? "system",
     })
     .returning();
 
@@ -186,16 +180,13 @@ export async function createEdgeType(data: {
 /**
  * Helper to get a global node type by name
  */
-async function getGlobalNodeTypeByName(name: string): Promise<GraphNodeType | null> {
+async function getGlobalNodeTypeByName(
+  name: string,
+): Promise<GraphNodeType | null> {
   const result = await db
     .select()
     .from(graphNodeTypes)
-    .where(
-      and(
-        isNull(graphNodeTypes.entityId),
-        eq(graphNodeTypes.name, name)
-      )
-    )
+    .where(and(isNull(graphNodeTypes.entityId), eq(graphNodeTypes.name, name)))
     .limit(1);
 
   return result[0] ?? null;
@@ -205,7 +196,7 @@ async function getGlobalNodeTypeByName(name: string): Promise<GraphNodeType | nu
  * Get all edge types available to an entity with their source/target constraints populated
  */
 export async function getEdgeTypesByEntity(
-  entityId: string
+  entityId: string,
 ): Promise<GraphEdgeTypeWithConstraints[]> {
   // Get edge types (entity-specific + global)
   const edgeTypes = await db
@@ -214,8 +205,8 @@ export async function getEdgeTypesByEntity(
     .where(
       or(
         eq(graphEdgeTypes.entityId, entityId),
-        isNull(graphEdgeTypes.entityId)
-      )
+        isNull(graphEdgeTypes.entityId),
+      ),
     );
 
   // For each edge type, populate source and target node types
@@ -230,7 +221,7 @@ export async function getEdgeTypesByEntity(
 
     const sourceNodeTypes: GraphNodeType[] = [];
     if (sourceTypeLinks.length > 0) {
-      const sourceNodeTypeIds = sourceTypeLinks.map(link => link.nodeTypeId);
+      const sourceNodeTypeIds = sourceTypeLinks.map((link) => link.nodeTypeId);
       const sourceTypes = await db
         .select()
         .from(graphNodeTypes)
@@ -246,7 +237,7 @@ export async function getEdgeTypesByEntity(
 
     const targetNodeTypes: GraphNodeType[] = [];
     if (targetTypeLinks.length > 0) {
-      const targetNodeTypeIds = targetTypeLinks.map(link => link.nodeTypeId);
+      const targetNodeTypeIds = targetTypeLinks.map((link) => link.nodeTypeId);
       const targetTypes = await db
         .select()
         .from(graphNodeTypes)
@@ -269,14 +260,12 @@ export async function getEdgeTypesByEntity(
  */
 export async function addSourceNodeTypeToEdgeType(
   edgeTypeId: string,
-  nodeTypeId: string
+  nodeTypeId: string,
 ): Promise<void> {
-  await db
-    .insert(graphEdgeTypeSourceTypes)
-    .values({
-      edgeTypeId,
-      nodeTypeId,
-    });
+  await db.insert(graphEdgeTypeSourceTypes).values({
+    edgeTypeId,
+    nodeTypeId,
+  });
 }
 
 /**
@@ -284,14 +273,12 @@ export async function addSourceNodeTypeToEdgeType(
  */
 export async function addTargetNodeTypeToEdgeType(
   edgeTypeId: string,
-  nodeTypeId: string
+  nodeTypeId: string,
 ): Promise<void> {
-  await db
-    .insert(graphEdgeTypeTargetTypes)
-    .values({
-      edgeTypeId,
-      nodeTypeId,
-    });
+  await db.insert(graphEdgeTypeTargetTypes).values({
+    edgeTypeId,
+    nodeTypeId,
+  });
 }
 
 /**
@@ -299,17 +286,14 @@ export async function addTargetNodeTypeToEdgeType(
  */
 export async function getEdgeTypeByName(
   entityId: string,
-  name: string
+  name: string,
 ): Promise<GraphEdgeType | null> {
   // First check for entity-specific type
   const entitySpecific = await db
     .select()
     .from(graphEdgeTypes)
     .where(
-      and(
-        eq(graphEdgeTypes.entityId, entityId),
-        eq(graphEdgeTypes.name, name)
-      )
+      and(eq(graphEdgeTypes.entityId, entityId), eq(graphEdgeTypes.name, name)),
     )
     .limit(1);
 
@@ -321,12 +305,7 @@ export async function getEdgeTypeByName(
   const global = await db
     .select()
     .from(graphEdgeTypes)
-    .where(
-      and(
-        isNull(graphEdgeTypes.entityId),
-        eq(graphEdgeTypes.name, name)
-      )
-    )
+    .where(and(isNull(graphEdgeTypes.entityId), eq(graphEdgeTypes.name, name)))
     .limit(1);
 
   return global[0] ?? null;
@@ -337,7 +316,7 @@ export async function getEdgeTypeByName(
  */
 export async function edgeTypeExists(
   entityId: string,
-  name: string
+  name: string,
 ): Promise<boolean> {
   const edgeType = await getEdgeTypeByName(entityId, name);
   return edgeType !== null;
@@ -351,16 +330,18 @@ export async function edgeTypeExists(
  * Format all types available to an entity for LLM context
  * Returns a human-readable format that helps the LLM understand available types
  */
-export async function formatTypesForLLMContext(entityId: string): Promise<string> {
+export async function formatTypesForLLMContext(
+  entityId: string,
+): Promise<string> {
   const nodeTypes = await getNodeTypesByEntity(entityId);
   const edgeTypes = await getEdgeTypesByEntity(entityId);
 
   const lines: string[] = [];
 
   // Format node types
-  lines.push('### Node Types');
+  lines.push("### Node Types");
   if (nodeTypes.length === 0) {
-    lines.push('No node types defined.');
+    lines.push("No node types defined.");
   } else {
     for (const nodeType of nodeTypes) {
       const schema = nodeType.propertiesSchema as {
@@ -371,42 +352,46 @@ export async function formatTypesForLLMContext(entityId: string): Promise<string
       // Build property description
       const properties = schema.properties ?? {};
       const required = schema.required ?? [];
-      const optional = Object.keys(properties).filter(p => !required.includes(p));
+      const optional = Object.keys(properties).filter(
+        (p) => !required.includes(p),
+      );
 
-      let propDesc = '';
+      let propDesc = "";
       if (required.length > 0) {
-        propDesc += `\n  Required: ${required.join(', ')}`;
+        propDesc += `\n  Required: ${required.join(", ")}`;
       }
       if (optional.length > 0) {
-        propDesc += `\n  Optional: ${optional.join(', ')}`;
+        propDesc += `\n  Optional: ${optional.join(", ")}`;
       }
 
       // Add example if available
-      let exampleDesc = '';
+      let exampleDesc = "";
       if (nodeType.exampleProperties) {
         exampleDesc = `\n  Example: ${JSON.stringify(nodeType.exampleProperties)}`;
       }
 
-      lines.push(`- **${nodeType.name}**: ${nodeType.description}${propDesc}${exampleDesc}`);
+      lines.push(
+        `- **${nodeType.name}**: ${nodeType.description}${propDesc}${exampleDesc}`,
+      );
     }
   }
 
-  lines.push('');
+  lines.push("");
 
   // Format edge types
-  lines.push('### Edge Types');
+  lines.push("### Edge Types");
   if (edgeTypes.length === 0) {
-    lines.push('No edge types defined.');
+    lines.push("No edge types defined.");
   } else {
     for (const edgeType of edgeTypes) {
       // Build constraint description
-      const sourceNames = edgeType.sourceNodeTypes.map(t => t.name);
-      const targetNames = edgeType.targetNodeTypes.map(t => t.name);
+      const sourceNames = edgeType.sourceNodeTypes.map((t) => t.name);
+      const targetNames = edgeType.targetNodeTypes.map((t) => t.name);
 
-      let constraintDesc = '';
+      let constraintDesc = "";
       if (sourceNames.length > 0 || targetNames.length > 0) {
-        const sourceStr = sourceNames.length > 0 ? sourceNames.join('|') : '*';
-        const targetStr = targetNames.length > 0 ? targetNames.join('|') : '*';
+        const sourceStr = sourceNames.length > 0 ? sourceNames.join("|") : "*";
+        const targetStr = targetNames.length > 0 ? targetNames.join("|") : "*";
         constraintDesc = `: ${sourceStr} -> ${targetStr}`;
       }
 
@@ -415,5 +400,5 @@ export async function formatTypesForLLMContext(entityId: string): Promise<string
     }
   }
 
-  return lines.join('\n');
+  return lines.join("\n");
 }

@@ -5,7 +5,7 @@
  * Application-specific types are defined here for domain logic.
  */
 
-import type { InferSelectModel } from 'drizzle-orm';
+import type { InferSelectModel } from "drizzle-orm";
 import type {
   conversations,
   entities,
@@ -19,7 +19,7 @@ import type {
   messages,
   userApiKeys,
   llmInteractions,
-} from '@/lib/db/schema';
+} from "@/lib/db/schema";
 
 // ============================================================================
 // Database Model Types (inferred from Drizzle schema)
@@ -35,8 +35,12 @@ export type LLMInteraction = InferSelectModel<typeof llmInteractions>;
 // Knowledge Graph Types
 export type GraphNodeType = InferSelectModel<typeof graphNodeTypes>;
 export type GraphEdgeType = InferSelectModel<typeof graphEdgeTypes>;
-export type GraphEdgeTypeSourceType = InferSelectModel<typeof graphEdgeTypeSourceTypes>;
-export type GraphEdgeTypeTargetType = InferSelectModel<typeof graphEdgeTypeTargetTypes>;
+export type GraphEdgeTypeSourceType = InferSelectModel<
+  typeof graphEdgeTypeSourceTypes
+>;
+export type GraphEdgeTypeTargetType = InferSelectModel<
+  typeof graphEdgeTypeTargetTypes
+>;
 export type GraphNode = InferSelectModel<typeof graphNodes>;
 export type GraphEdge = InferSelectModel<typeof graphEdges>;
 
@@ -44,9 +48,9 @@ export type GraphEdge = InferSelectModel<typeof graphEdges>;
 // Status Types
 // ============================================================================
 
-export type EntityStatus = 'active' | 'paused' | 'archived';
-export type MemoryType = 'preference' | 'insight' | 'fact';
-export type MessageRole = 'user' | 'llm' | 'summary';
+export type EntityStatus = "active" | "paused" | "archived";
+export type MemoryType = "preference" | "insight" | "fact";
+export type MessageRole = "user" | "llm" | "summary";
 
 // ============================================================================
 // Message Content Types (JSON structure for messages.content)
@@ -77,7 +81,10 @@ export interface SummaryMessageContent {
 }
 
 /** Union type for all message content types */
-export type MessageContent = UserMessageContent | LLMMessageContent | SummaryMessageContent;
+export type MessageContent =
+  | UserMessageContent
+  | LLMMessageContent
+  | SummaryMessageContent;
 
 // ============================================================================
 // Extended Types
@@ -103,14 +110,14 @@ export interface ConversationWithMessages extends Conversation {
 // LLM Provider Types
 // ============================================================================
 
-export type LLMProvider = 'openai' | 'anthropic' | 'google' | 'lmstudio';
+export type LLMProvider = "openai" | "anthropic" | "google" | "lmstudio";
 
 // ============================================================================
 // LLM Types
 // ============================================================================
 
 export interface LLMMessage {
-  role: 'user' | 'assistant' | 'system';
+  role: "user" | "assistant" | "system";
   content: string;
 }
 
@@ -143,7 +150,7 @@ export interface InboxItem {
 // Knowledge Graph Types
 // ============================================================================
 
-export type GraphTypeCreatedBy = 'system' | 'agent' | 'user';
+export type GraphTypeCreator = "system" | "agent" | "user";
 
 // Convenience type with resolved relations for edge types
 export interface GraphEdgeTypeWithConstraints extends GraphEdgeType {
