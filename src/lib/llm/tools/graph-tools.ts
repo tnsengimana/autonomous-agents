@@ -660,9 +660,9 @@ export const AddInsightNodeParamsSchema = z.object({
   name: z.string().min(1).describe('Name for the insight node (e.g., "AAPL Buy Signal")'),
   properties: z.object({
     type: z.enum(['signal', 'observation', 'pattern']).describe('signal=actionable, observation=notable trend, pattern=recurring behavior'),
-    summary: z.string().min(1).describe('The explanation/reasoning for this insight'),
-    action: z.enum(['buy', 'sell', 'hold']).optional().describe('Recommended action (only for signals)'),
-    strength: z.number().min(0).max(1).optional().describe('Confidence level (0=low, 1=high)'),
+    summary: z.string().min(1).describe('1-2 sentence executive summary for inbox notifications'),
+    content: z.string().min(1).describe('REQUIRED: Detailed markdown analysis document with citations. Include sections for Analysis, Supporting Evidence, Risk Factors. Use [node:uuid] and [edge:uuid] citations to reference source data.'),
+    confidence: z.number().min(0).max(1).optional().describe('Confidence level (0=low, 1=high)'),
     generated_at: z.string().describe('When this insight was derived (ISO datetime)'),
   }),
 });
@@ -672,7 +672,7 @@ export type AddInsightNodeParams = z.infer<typeof AddInsightNodeParamsSchema>;
 const addInsightNodeTool: Tool = {
   schema: {
     name: 'addInsightNode',
-    description: 'Create an Insight node in the knowledge graph. This also creates an inbox notification and appends the insight to the conversation for user discussion. Use this for derived analysis including signals, observations, and patterns.',
+    description: 'Create an Insight node in the knowledge graph. This also creates an inbox notification and appends the insight to the conversation for user discussion. Use this for derived analysis including signals, observations, and patterns. IMPORTANT: Both summary AND content fields are REQUIRED.',
     parameters: [
       {
         name: 'name',
@@ -683,7 +683,7 @@ const addInsightNodeTool: Tool = {
       {
         name: 'properties',
         type: 'object',
-        description: 'Properties for the insight: type (signal|observation|pattern), summary (string), action (buy|sell|hold, optional), strength (0-1, optional), generated_at (ISO datetime)',
+        description: 'Properties for the insight: type (signal|observation|pattern), summary (1-2 sentence executive summary for notifications), content (REQUIRED: detailed markdown analysis with [node:uuid] and [edge:uuid] citations), confidence (0-1, optional), generated_at (ISO datetime)',
         required: true,
       },
     ],
@@ -734,9 +734,7 @@ const addInsightNodeTool: Tool = {
       });
 
       // 2. Create inbox item to notify the user
-      const insightTypeLabel = properties.type === 'signal'
-        ? (properties.action ? `${properties.action.toUpperCase()} Signal` : 'Signal')
-        : properties.type.charAt(0).toUpperCase() + properties.type.slice(1);
+      const insightTypeLabel = properties.type.charAt(0).toUpperCase() + properties.type.slice(1);
 
       const inboxItem = await createInboxItem({
         userId: agent.userId,
@@ -749,16 +747,13 @@ const addInsightNodeTool: Tool = {
       const conversation = await getOrCreateConversation(ctx.agentId);
 
       // Format the insight message for conversation
-      const strengthText = properties.strength !== undefined
-        ? ` (confidence: ${Math.round(properties.strength * 100)}%)`
-        : '';
-      const actionText = properties.action
-        ? `\n\n**Recommended Action:** ${properties.action.toUpperCase()}`
+      const confidenceText = properties.confidence !== undefined
+        ? ` (confidence: ${Math.round(properties.confidence * 100)}%)`
         : '';
 
       const conversationMessage = `**New Insight: ${name}**\n\n` +
-        `**Type:** ${insightTypeLabel}${strengthText}\n\n` +
-        `${properties.summary}${actionText}`;
+        `**Type:** ${insightTypeLabel}${confidenceText}\n\n` +
+        `${properties.summary}\n\n---\n\n${properties.content}`;
 
       await appendLLMMessage(conversation.id, { text: conversationMessage });
 

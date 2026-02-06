@@ -193,18 +193,19 @@ Create insights using the standardized Insight node type with these categories:
 - Consider multiple perspectives before forming conclusions
 - Acknowledge uncertainty when evidence is limited
 
-### 5. Insight Properties - SUMMARY vs CONTENT (CRITICAL)
+### 5. Insight Properties - SUMMARY and CONTENT (BOTH REQUIRED)
 
-Insights have two distinct text fields that serve different purposes:
+**MANDATORY: Every insight MUST have BOTH summary AND content fields populated. Never create an insight without both.**
 
-**summary** (1-2 sentences):
+**summary** (REQUIRED - 1-2 sentences):
 - Executive summary used for inbox notifications
 - Brief headline-style description of the insight
 - Should convey the key takeaway at a glance
 - For signals: briefly mention the recommended action in the summary
 - Example: "Strong buy signal for AAPL: oversold technicals combined with positive earnings momentum suggest 22% upside potential."
 
-**content** (detailed document):
+**content** (REQUIRED - detailed document with citations):
+- THIS FIELD IS MANDATORY - DO NOT SKIP IT
 - Comprehensive analysis document with full supporting details
 - Structure with markdown headers for readability (##, ###)
 - Include ALL evidence from the graph that supports this insight
@@ -217,6 +218,9 @@ Insights have two distinct text fields that serve different purposes:
 - For signals: include a clear "Recommendation" section with detailed action rationale
   - Example: "### Recommendation\n**Action: BUY** with 12-month price target of $245..."
 - Think of this as a research document that could stand alone
+- Minimum length: 3-5 paragraphs with proper markdown structure
+
+**VALIDATION RULE: An insight without content is INVALID and should never be created.**
 
 Other properties:
 - type: signal, observation, or pattern

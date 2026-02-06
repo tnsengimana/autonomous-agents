@@ -13,6 +13,9 @@ import {
   graphNodes,
   graphNodeTypes,
   graphEdgeTypes,
+  inboxItems,
+  conversations,
+  messages,
 } from '@/lib/db/schema';
 import { eq, and } from 'drizzle-orm';
 
@@ -24,6 +27,8 @@ import {
   getGraphSummaryTool,
   createNodeTypeTool,
   createEdgeTypeTool,
+  addInsightNodeTool,
+  AddInsightNodeParamsSchema,
 } from '../graph-tools';
 import type { GraphToolContext } from '../graph-tools';
 
@@ -88,15 +93,41 @@ beforeAll(async () => {
       },
       createdBy: 'system',
     },
+    {
+      agentId: testAgentId,
+      name: 'Insight',
+      description: 'Derived analysis including signals, observations, and patterns',
+      propertiesSchema: {
+        type: 'object',
+        required: ['type', 'summary', 'content', 'generated_at'],
+        properties: {
+          type: { type: 'string', enum: ['signal', 'observation', 'pattern'] },
+          summary: { type: 'string' },
+          content: { type: 'string' },
+          confidence: { type: 'number', minimum: 0, maximum: 1 },
+          generated_at: { type: 'string', format: 'date-time' },
+        },
+      },
+      notifyUser: true,
+      createdBy: 'system',
+    },
   ]);
 
-  // Create an initial edge type for testing
-  await db.insert(graphEdgeTypes).values({
-    agentId: testAgentId,
-    name: 'works_at',
-    description: 'A person works at a company',
-    createdBy: 'system',
-  });
+  // Create initial edge types for testing
+  await db.insert(graphEdgeTypes).values([
+    {
+      agentId: testAgentId,
+      name: 'works_at',
+      description: 'A person works at a company',
+      createdBy: 'system',
+    },
+    {
+      agentId: testAgentId,
+      name: 'derived_from',
+      description: 'An insight is derived from source data',
+      createdBy: 'system',
+    },
+  ]);
 });
 
 afterAll(async () => {
@@ -650,5 +681,405 @@ describe('createEdgeType', () => {
 
     expect(result.success).toBe(true);
     testEdgeTypeNames.push('with_props');
+  });
+});
+
+// ============================================================================
+// addInsightNode Tests
+// ============================================================================
+
+describe('addInsightNode', () => {
+  const createdInsightIds: string[] = [];
+
+  afterAll(async () => {
+    // Cleanup insights
+    await cleanupNodes(createdInsightIds);
+    // Cleanup inbox items created by insights
+    await db.delete(inboxItems).where(eq(inboxItems.agentId, testAgentId));
+  });
+
+  test('creates insight with both summary and content', async () => {
+    const result = await addInsightNodeTool.handler(
+      {
+        name: 'Test Buy Signal',
+        properties: {
+          type: 'signal',
+          summary: 'Strong buy signal for TEST: oversold with positive momentum.',
+          content: `## Analysis
+
+This is a detailed analysis with citations.
+
+### Supporting Evidence
+Based on technical indicators [node:abc123], the stock is oversold.
+
+### Recommendation
+**Action: BUY** with price target of $100.`,
+          confidence: 0.85,
+          generated_at: new Date().toISOString(),
+        },
+      },
+      testContext
+    );
+
+    expect(result.success).toBe(true);
+    expect(result.data).toBeDefined();
+    expect((result.data as { nodeId: string }).nodeId).toBeDefined();
+    expect((result.data as { inboxItemId: string }).inboxItemId).toBeDefined();
+    expect((result.data as { message: string }).message).toContain('Created insight');
+
+    createdInsightIds.push((result.data as { nodeId: string }).nodeId);
+  });
+
+  test('creates observation insight type', async () => {
+    const result = await addInsightNodeTool.handler(
+      {
+        name: 'Market Trend Observation',
+        properties: {
+          type: 'observation',
+          summary: 'Tech sector showing increased volatility after Fed announcement.',
+          content: `## Observation
+
+The technology sector has experienced increased volatility [node:def456] following the latest Federal Reserve announcement [node:ghi789].
+
+### Key Data Points
+- VIX increased 15% in the past week
+- Tech-heavy NASDAQ underperformed S&P 500 by 2.3%`,
+          generated_at: new Date().toISOString(),
+        },
+      },
+      testContext
+    );
+
+    expect(result.success).toBe(true);
+    createdInsightIds.push((result.data as { nodeId: string }).nodeId);
+  });
+
+  test('creates pattern insight type', async () => {
+    const result = await addInsightNodeTool.handler(
+      {
+        name: 'Earnings Season Pattern',
+        properties: {
+          type: 'pattern',
+          summary: 'Stocks typically rally 3-5% in the week following positive earnings surprises.',
+          content: `## Pattern Analysis
+
+Historical analysis of earnings season data [node:jkl012] reveals a consistent pattern.
+
+### Evidence
+Based on 50 earnings reports analyzed [edge:mno345], companies that beat earnings by >10% saw average returns of 4.2% in the following week.`,
+          confidence: 0.72,
+          generated_at: new Date().toISOString(),
+        },
+      },
+      testContext
+    );
+
+    expect(result.success).toBe(true);
+    createdInsightIds.push((result.data as { nodeId: string }).nodeId);
+  });
+
+  test('rejects insight missing content field', async () => {
+    const result = await addInsightNodeTool.handler(
+      {
+        name: 'Invalid Insight - No Content',
+        properties: {
+          type: 'signal',
+          summary: 'This insight is missing the content field.',
+          generated_at: new Date().toISOString(),
+        },
+      },
+      testContext
+    );
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('Invalid parameters');
+  });
+
+  test('rejects insight missing summary field', async () => {
+    const result = await addInsightNodeTool.handler(
+      {
+        name: 'Invalid Insight - No Summary',
+        properties: {
+          type: 'signal',
+          content: 'This insight is missing the summary field.',
+          generated_at: new Date().toISOString(),
+        },
+      },
+      testContext
+    );
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('Invalid parameters');
+  });
+
+  test('rejects insight with invalid type', async () => {
+    const result = await addInsightNodeTool.handler(
+      {
+        name: 'Invalid Insight - Bad Type',
+        properties: {
+          type: 'invalid_type',
+          summary: 'This insight has an invalid type.',
+          content: 'Detailed content here.',
+          generated_at: new Date().toISOString(),
+        },
+      },
+      testContext
+    );
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('Invalid parameters');
+  });
+
+  test('rejects insight missing generated_at', async () => {
+    const result = await addInsightNodeTool.handler(
+      {
+        name: 'Invalid Insight - No Timestamp',
+        properties: {
+          type: 'observation',
+          summary: 'This insight is missing generated_at.',
+          content: 'Detailed content here.',
+        },
+      },
+      testContext
+    );
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('Invalid parameters');
+  });
+
+  test('allows insight without optional confidence field', async () => {
+    const result = await addInsightNodeTool.handler(
+      {
+        name: 'Insight Without Confidence',
+        properties: {
+          type: 'observation',
+          summary: 'This insight does not have a confidence score.',
+          content: 'Detailed observation content without confidence.',
+          generated_at: new Date().toISOString(),
+        },
+      },
+      testContext
+    );
+
+    expect(result.success).toBe(true);
+    createdInsightIds.push((result.data as { nodeId: string }).nodeId);
+  });
+
+  test('rejects confidence outside valid range', async () => {
+    const resultTooHigh = await addInsightNodeTool.handler(
+      {
+        name: 'Invalid Confidence High',
+        properties: {
+          type: 'signal',
+          summary: 'Confidence too high.',
+          content: 'Detailed content.',
+          confidence: 1.5,
+          generated_at: new Date().toISOString(),
+        },
+      },
+      testContext
+    );
+
+    expect(resultTooHigh.success).toBe(false);
+    expect(resultTooHigh.error).toContain('Invalid parameters');
+
+    const resultTooLow = await addInsightNodeTool.handler(
+      {
+        name: 'Invalid Confidence Low',
+        properties: {
+          type: 'signal',
+          summary: 'Confidence too low.',
+          content: 'Detailed content.',
+          confidence: -0.1,
+          generated_at: new Date().toISOString(),
+        },
+      },
+      testContext
+    );
+
+    expect(resultTooLow.success).toBe(false);
+    expect(resultTooLow.error).toContain('Invalid parameters');
+  });
+
+  test('creates inbox notification for insight', async () => {
+    const insightName = `Inbox Test Insight ${Date.now()}`;
+    const result = await addInsightNodeTool.handler(
+      {
+        name: insightName,
+        properties: {
+          type: 'signal',
+          summary: 'This insight should create an inbox item.',
+          content: 'Detailed content for inbox test.',
+          generated_at: new Date().toISOString(),
+        },
+      },
+      testContext
+    );
+
+    expect(result.success).toBe(true);
+    const inboxItemId = (result.data as { inboxItemId: string }).inboxItemId;
+    expect(inboxItemId).toBeDefined();
+
+    // Verify inbox item was created
+    const [inboxItem] = await db
+      .select()
+      .from(inboxItems)
+      .where(eq(inboxItems.id, inboxItemId));
+
+    expect(inboxItem).toBeDefined();
+    expect(inboxItem.title).toContain(insightName);
+    expect(inboxItem.content).toBe('This insight should create an inbox item.');
+
+    createdInsightIds.push((result.data as { nodeId: string }).nodeId);
+  });
+});
+
+// ============================================================================
+// AddInsightNodeParamsSchema Validation Tests
+// ============================================================================
+
+describe('AddInsightNodeParamsSchema', () => {
+  test('validates complete insight with all fields', () => {
+    const result = AddInsightNodeParamsSchema.safeParse({
+      name: 'Complete Insight',
+      properties: {
+        type: 'signal',
+        summary: 'Brief summary.',
+        content: 'Detailed content with [node:abc123] citation.',
+        confidence: 0.9,
+        generated_at: '2026-02-05T10:00:00Z',
+      },
+    });
+
+    expect(result.success).toBe(true);
+  });
+
+  test('requires content field', () => {
+    const result = AddInsightNodeParamsSchema.safeParse({
+      name: 'Missing Content',
+      properties: {
+        type: 'signal',
+        summary: 'Brief summary.',
+        generated_at: '2026-02-05T10:00:00Z',
+      },
+    });
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      const contentError = result.error.issues.find(
+        issue => issue.path.includes('content')
+      );
+      expect(contentError).toBeDefined();
+    }
+  });
+
+  test('requires summary field', () => {
+    const result = AddInsightNodeParamsSchema.safeParse({
+      name: 'Missing Summary',
+      properties: {
+        type: 'signal',
+        content: 'Detailed content.',
+        generated_at: '2026-02-05T10:00:00Z',
+      },
+    });
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      const summaryError = result.error.issues.find(
+        issue => issue.path.includes('summary')
+      );
+      expect(summaryError).toBeDefined();
+    }
+  });
+
+  test('validates type enum values', () => {
+    const validTypes = ['signal', 'observation', 'pattern'];
+
+    for (const type of validTypes) {
+      const result = AddInsightNodeParamsSchema.safeParse({
+        name: `Valid ${type}`,
+        properties: {
+          type,
+          summary: 'Summary.',
+          content: 'Content.',
+          generated_at: '2026-02-05T10:00:00Z',
+        },
+      });
+      expect(result.success).toBe(true);
+    }
+
+    // Invalid type
+    const invalidResult = AddInsightNodeParamsSchema.safeParse({
+      name: 'Invalid Type',
+      properties: {
+        type: 'recommendation',
+        summary: 'Summary.',
+        content: 'Content.',
+        generated_at: '2026-02-05T10:00:00Z',
+      },
+    });
+    expect(invalidResult.success).toBe(false);
+  });
+
+  test('confidence must be between 0 and 1', () => {
+    // Valid confidence values
+    const validValues = [0, 0.5, 1];
+    for (const confidence of validValues) {
+      const result = AddInsightNodeParamsSchema.safeParse({
+        name: 'Valid Confidence',
+        properties: {
+          type: 'signal',
+          summary: 'Summary.',
+          content: 'Content.',
+          confidence,
+          generated_at: '2026-02-05T10:00:00Z',
+        },
+      });
+      expect(result.success).toBe(true);
+    }
+
+    // Invalid confidence values
+    const invalidValues = [-0.1, 1.1, 2];
+    for (const confidence of invalidValues) {
+      const result = AddInsightNodeParamsSchema.safeParse({
+        name: 'Invalid Confidence',
+        properties: {
+          type: 'signal',
+          summary: 'Summary.',
+          content: 'Content.',
+          confidence,
+          generated_at: '2026-02-05T10:00:00Z',
+        },
+      });
+      expect(result.success).toBe(false);
+    }
+  });
+
+  test('content cannot be empty string', () => {
+    const result = AddInsightNodeParamsSchema.safeParse({
+      name: 'Empty Content',
+      properties: {
+        type: 'signal',
+        summary: 'Summary.',
+        content: '',
+        generated_at: '2026-02-05T10:00:00Z',
+      },
+    });
+
+    expect(result.success).toBe(false);
+  });
+
+  test('summary cannot be empty string', () => {
+    const result = AddInsightNodeParamsSchema.safeParse({
+      name: 'Empty Summary',
+      properties: {
+        type: 'signal',
+        summary: '',
+        content: 'Content.',
+        generated_at: '2026-02-05T10:00:00Z',
+      },
+    });
+
+    expect(result.success).toBe(false);
   });
 });
