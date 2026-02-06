@@ -64,9 +64,9 @@ export const AGENT_ANALYSIS_NODE_TYPE = {
 Apple's services segment continues to demonstrate accelerating growth compared to its hardware divisions.
 
 ### Supporting Evidence
-- Q4 earnings report [node:abc-123] showed services revenue grew 24% YoY
-- Hardware revenue [node:def-456] grew only 3% in the same period
-- Services margins [node:ghi-789] reached 71%, significantly above hardware margins
+- Q4 earnings report [node:11111111-1111-4111-8111-111111111111] showed services revenue grew 24% YoY
+- Hardware revenue [node:22222222-2222-4222-8222-222222222222] grew only 3% in the same period
+- Services margins [node:33333333-3333-4333-8333-333333333333] reached 71%, significantly above hardware margins
 
 ### Implications
 This shift suggests Apple is successfully transitioning toward a higher-margin business model, which could impact long-term valuation multiples.`,
@@ -121,8 +121,8 @@ export const AGENT_ADVICE_NODE_TYPE = {
 Based on recent analysis, AAPL presents a compelling buying opportunity.
 
 ### Supporting AgentAnalyses
-- [node:analysis-123] Services revenue pattern shows accelerating growth trajectory
-- [node:analysis-456] Institutional accumulation observation indicates smart money confidence
+- [node:44444444-4444-4444-8444-444444444444] Services revenue pattern shows accelerating growth trajectory
+- [node:55555555-5555-4555-8555-555555555555] Institutional accumulation observation indicates smart money confidence
 
 ### Risk Factors
 - China revenue exposure remains elevated

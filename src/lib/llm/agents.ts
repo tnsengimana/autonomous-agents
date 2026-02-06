@@ -250,10 +250,11 @@ If the available knowledge is insufficient to properly analyze the Observer's ob
 - Comprehensive analysis document with full supporting details
 - Structure with markdown headers for readability (##, ###)
 - Include ALL evidence from the graph that supports this analysis
-- CRITICAL: Add citations to graph nodes/edges using [node:nodeUUId] or [edge:edgeUUID] format
+- CRITICAL: Add citations to graph nodes/edges using [node:nodeUUID] or [edge:edgeUUID] format
   - Example: "The Q4 earnings report [node:fa09195c-a510-4d05-bbdb-299e6ec5c1de] exceeded expectations..."
   - Example: "Based on technical indicators [node:ed2cb222-60cb-4d94-b6ca-f42b8fe77fb0], the stock is oversold..."
   - Example: "This relationship [edge:7c7ca1b3-09be-4550-822a-205d0c15c0ef] shows a strong correlation..."
+- Use IDs from queryGraph or graph context directly; never cite by node names or labels
 - These citations allow users to trace claims back to source data in the graph
 - Include sections for: Analysis, Supporting Evidence
 - Think of this as a research document that could stand alone

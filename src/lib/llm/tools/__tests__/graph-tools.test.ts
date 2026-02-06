@@ -410,6 +410,7 @@ describe('addGraphEdge', () => {
 
 describe('queryGraph', () => {
   const testNodeIds: string[] = [];
+  let queryEdgeId: string | null = null;
 
   beforeAll(async () => {
     // Create test nodes for querying
@@ -423,6 +424,21 @@ describe('queryGraph', () => {
         testNodeIds.push((result.data as { nodeId: string }).nodeId);
       }
     }
+
+    const edgeResult = await addGraphEdgeTool.handler(
+      {
+        type: 'derived_from',
+        sourceName: 'Query Company A',
+        sourceType: 'Company',
+        targetName: 'Query Company B',
+        targetType: 'Company',
+      },
+      testContext
+    );
+
+    if (edgeResult.success) {
+      queryEdgeId = (edgeResult.data as { edgeId: string }).edgeId;
+    }
   });
 
   afterAll(async () => {
@@ -435,6 +451,11 @@ describe('queryGraph', () => {
     expect(result.success).toBe(true);
     expect((result.data as { nodes: unknown[] }).nodes).toBeInstanceOf(Array);
     expect((result.data as { edges: unknown[] }).edges).toBeInstanceOf(Array);
+    const edges = (result.data as { edges: Array<{ id: string }> }).edges;
+    if (queryEdgeId) {
+      expect(edges.some((edge) => edge.id === queryEdgeId)).toBe(true);
+    }
+    expect(edges.every((edge) => typeof edge.id === 'string')).toBe(true);
   });
 
   test('filters by node type', async () => {
@@ -748,9 +769,53 @@ describe('createEdgeType', () => {
 
 describe('addAgentAnalysisNode', () => {
   const createdAnalysisIds: string[] = [];
+  const citationNodeIds: string[] = [];
+  let citedNodeOneId = '';
+  let citedNodeTwoId = '';
+  let citedEdgeId = '';
+
+  beforeAll(async () => {
+    const citedCompanyResult = await addGraphNodeTool.handler(
+      {
+        type: 'Company',
+        name: 'Citation Company',
+        properties: { ticker: 'CITE1' },
+      },
+      testContext
+    );
+    const citedPersonResult = await addGraphNodeTool.handler(
+      {
+        type: 'Person',
+        name: 'Citation Analyst',
+        properties: { role: 'Analyst' },
+      },
+      testContext
+    );
+
+    expect(citedCompanyResult.success).toBe(true);
+    expect(citedPersonResult.success).toBe(true);
+
+    citedNodeOneId = (citedCompanyResult.data as { nodeId: string }).nodeId;
+    citedNodeTwoId = (citedPersonResult.data as { nodeId: string }).nodeId;
+    citationNodeIds.push(citedNodeOneId, citedNodeTwoId);
+
+    const citedEdgeResult = await addGraphEdgeTool.handler(
+      {
+        type: 'works_at',
+        sourceName: 'Citation Analyst',
+        sourceType: 'Person',
+        targetName: 'Citation Company',
+        targetType: 'Company',
+      },
+      testContext
+    );
+
+    expect(citedEdgeResult.success).toBe(true);
+    citedEdgeId = (citedEdgeResult.data as { edgeId: string }).edgeId;
+  });
 
   afterAll(async () => {
-    await cleanupNodes(createdAnalysisIds);
+    await cleanupNodes([...createdAnalysisIds, ...citationNodeIds]);
   });
 
   test('creates observation analysis', async () => {
@@ -762,7 +827,7 @@ describe('addAgentAnalysisNode', () => {
           summary: 'Tech sector showing increased volatility after Fed announcement.',
           content: `## Observation
 
-The technology sector has experienced increased volatility [node:def456] following the latest Federal Reserve announcement [node:ghi789].
+The technology sector has experienced increased volatility [node:${citedNodeOneId}] following the latest Federal Reserve announcement [node:${citedNodeTwoId}].
 
 ### Key Data Points
 - VIX increased 15% in the past week
@@ -792,10 +857,10 @@ The technology sector has experienced increased volatility [node:def456] followi
           summary: 'Stocks typically rally 3-5% in the week following positive earnings surprises.',
           content: `## Pattern Analysis
 
-Historical analysis of earnings season data [node:jkl012] reveals a consistent pattern.
+Historical analysis of earnings season data [node:${citedNodeOneId}] reveals a consistent pattern.
 
 ### Evidence
-Based on 50 earnings reports analyzed [edge:mno345], companies that beat earnings by >10% saw average returns of 4.2% in the following week.`,
+Based on 50 earnings reports analyzed [edge:${citedEdgeId}], companies that beat earnings by >10% saw average returns of 4.2% in the following week.`,
           confidence: 0.72,
           generated_at: new Date().toISOString(),
         },
@@ -883,7 +948,7 @@ Based on 50 earnings reports analyzed [edge:mno345], companies that beat earning
         properties: {
           type: 'observation',
           summary: 'This analysis does not have a confidence score.',
-          content: 'Detailed observation content without confidence.',
+          content: `Detailed observation content without confidence [node:${citedNodeOneId}].`,
           generated_at: new Date().toISOString(),
         },
       },
@@ -901,7 +966,7 @@ Based on 50 earnings reports analyzed [edge:mno345], companies that beat earning
         properties: {
           type: 'observation',
           summary: 'Confidence too high.',
-          content: 'Detailed content.',
+          content: `Detailed content [node:${citedNodeOneId}].`,
           confidence: 1.5,
           generated_at: new Date().toISOString(),
         },
@@ -918,7 +983,7 @@ Based on 50 earnings reports analyzed [edge:mno345], companies that beat earning
         properties: {
           type: 'observation',
           summary: 'Confidence too low.',
-          content: 'Detailed content.',
+          content: `Detailed content [node:${citedNodeOneId}].`,
           confidence: -0.1,
           generated_at: new Date().toISOString(),
         },
@@ -928,6 +993,62 @@ Based on 50 earnings reports analyzed [edge:mno345], companies that beat earning
 
     expect(resultTooLow.success).toBe(false);
     expect(resultTooLow.error).toContain('Invalid parameters');
+  });
+
+  test('rejects analysis without citations', async () => {
+    const result = await addAgentAnalysisNodeTool.handler(
+      {
+        name: 'Invalid Analysis - No Citations',
+        properties: {
+          type: 'observation',
+          summary: 'Citationless analysis should be rejected.',
+          content: 'This analysis has claims but no graph citations.',
+          generated_at: new Date().toISOString(),
+        },
+      },
+      testContext
+    );
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('must include at least one citation');
+  });
+
+  test('rejects analysis with malformed citation IDs', async () => {
+    const result = await addAgentAnalysisNodeTool.handler(
+      {
+        name: 'Invalid Analysis - Malformed Citation',
+        properties: {
+          type: 'observation',
+          summary: 'Malformed citation should be rejected.',
+          content:
+            'This analysis cites by name [node:NVIDIA Corporation (NVDA)] instead of UUID.',
+          generated_at: new Date().toISOString(),
+        },
+      },
+      testContext
+    );
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('Invalid citation format');
+  });
+
+  test('rejects analysis citing unknown graph IDs', async () => {
+    const result = await addAgentAnalysisNodeTool.handler(
+      {
+        name: 'Invalid Analysis - Unknown Citation',
+        properties: {
+          type: 'observation',
+          summary: 'Unknown node citation should be rejected.',
+          content:
+            'This analysis cites a missing node [node:00000000-0000-0000-0000-000000000001].',
+          generated_at: new Date().toISOString(),
+        },
+      },
+      testContext
+    );
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('unknown or unauthorized');
   });
 });
 

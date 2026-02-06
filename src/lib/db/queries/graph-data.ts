@@ -179,6 +179,19 @@ export async function getEdgesByAgent(agentId: string): Promise<GraphEdge[]> {
 }
 
 /**
+ * Get an edge by ID
+ */
+export async function getEdgeById(edgeId: string): Promise<GraphEdge | null> {
+  const result = await db
+    .select()
+    .from(graphEdges)
+    .where(eq(graphEdges.id, edgeId))
+    .limit(1);
+
+  return result[0] ?? null;
+}
+
+/**
  * Get all edges connected to a node
  */
 export async function getEdgesByNode(
@@ -355,7 +368,9 @@ export async function serializeGraphForLLM(
       const source = nodeById.get(edge.sourceId);
       const target = nodeById.get(edge.targetId);
       if (source && target) {
-        lines.push(`- ${source.name} --${edge.type}--> ${target.name}`);
+        lines.push(
+          `- [edge:${edge.id}] ${source.name} --${edge.type}--> ${target.name}`
+        );
       }
     }
   }

@@ -25,6 +25,7 @@ import {
   updateNodeProperties,
   deleteNode,
   createEdge,
+  getEdgeById,
   getEdgesByNode,
   findEdge,
   getNodeNeighbors,
@@ -278,6 +279,48 @@ describe('createEdge', () => {
 
     await cleanupEdges([edge.id]);
     await cleanupNodes([source.id, target.id]);
+  });
+});
+
+// ============================================================================
+// getEdgeById Tests
+// ============================================================================
+
+describe('getEdgeById', () => {
+  test('returns edge when it exists', async () => {
+    const source = await createNode({
+      agentId: testAgentId,
+      type: 'Company',
+      name: 'Edge Lookup Source',
+    });
+    const target = await createNode({
+      agentId: testAgentId,
+      type: 'Company',
+      name: 'Edge Lookup Target',
+    });
+
+    const edge = await createEdge({
+      agentId: testAgentId,
+      type: 'related_to',
+      sourceId: source.id,
+      targetId: target.id,
+    });
+
+    const fetched = await getEdgeById(edge.id);
+    expect(fetched).not.toBeNull();
+    expect(fetched!.id).toBe(edge.id);
+    expect(fetched!.sourceId).toBe(source.id);
+    expect(fetched!.targetId).toBe(target.id);
+
+    await cleanupEdges([edge.id]);
+    await cleanupNodes([source.id, target.id]);
+  });
+
+  test('returns null when edge does not exist', async () => {
+    const fetched = await getEdgeById(
+      '00000000-0000-0000-0000-000000000000'
+    );
+    expect(fetched).toBeNull();
   });
 });
 
@@ -562,6 +605,7 @@ describe('serializeGraphForLLM', () => {
     expect(serialized).toContain(`[Company] Apple Inc. (id: ${apple.id})`);
     expect(serialized).toContain(`[Asset] AAPL (id: ${aapl.id})`);
     expect(serialized).toContain('Relationships:');
+    expect(serialized).toContain(`[edge:${edge.id}]`);
     expect(serialized).toContain('AAPL --issued_by--> Apple Inc.');
 
     await cleanupEdges([edge.id]);

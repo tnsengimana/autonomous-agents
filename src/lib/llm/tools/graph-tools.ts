@@ -145,6 +145,138 @@ function formatAvailableTypeNames(typeNames: string[]): string {
 }
 
 // ============================================================================
+// Citation Validation Helpers
+// ============================================================================
+
+const ANALYSIS_CITATION_REGEX = /\[(node|edge):([^\]]+)\]/gi;
+const UUID_V4_LIKE_REGEX =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+type ParsedCitation = {
+  kind: "node" | "edge";
+  id: string;
+  raw: string;
+};
+
+function parseGraphCitations(content: string): ParsedCitation[] {
+  const citations: ParsedCitation[] = [];
+  let match = ANALYSIS_CITATION_REGEX.exec(content);
+
+  while (match) {
+    const kind = match[1].toLowerCase() as "node" | "edge";
+    const id = match[2].trim();
+    citations.push({
+      kind,
+      id,
+      raw: match[0],
+    });
+    match = ANALYSIS_CITATION_REGEX.exec(content);
+  }
+
+  ANALYSIS_CITATION_REGEX.lastIndex = 0;
+  return citations;
+}
+
+function isUuidLike(value: string): boolean {
+  return UUID_V4_LIKE_REGEX.test(value);
+}
+
+async function validateAgentAnalysisCitations(
+  agentId: string,
+  content: string,
+): Promise<{ isValid: boolean; error?: string }> {
+  const citations = parseGraphCitations(content);
+
+  if (citations.length === 0) {
+    return {
+      isValid: false,
+      error:
+        "AgentAnalysis content must include at least one citation using [node:uuid] or [edge:uuid].",
+    };
+  }
+
+  const malformed = citations.filter((citation) => !isUuidLike(citation.id));
+  if (malformed.length > 0) {
+    const examples = malformed.slice(0, 5).map((citation) => citation.raw);
+    return {
+      isValid: false,
+      error: `Invalid citation format in AgentAnalysis content. Use [node:uuid] or [edge:uuid] only. Invalid citations: ${examples.join(", ")}`,
+    };
+  }
+
+  const uniqueNodeIds = [
+    ...new Set(
+      citations
+        .filter((citation) => citation.kind === "node")
+        .map((citation) => citation.id),
+    ),
+  ];
+  const uniqueEdgeIds = [
+    ...new Set(
+      citations
+        .filter((citation) => citation.kind === "edge")
+        .map((citation) => citation.id),
+    ),
+  ];
+
+  const { getNodeById, getEdgeById } = await import("@/lib/db/queries/graph-data");
+
+  const missingNodeIds: string[] = [];
+  const wrongAgentNodeIds: string[] = [];
+  for (const nodeId of uniqueNodeIds) {
+    const node = await getNodeById(nodeId);
+    if (!node) {
+      missingNodeIds.push(nodeId);
+      continue;
+    }
+    if (node.agentId !== agentId) {
+      wrongAgentNodeIds.push(nodeId);
+    }
+  }
+
+  const missingEdgeIds: string[] = [];
+  const wrongAgentEdgeIds: string[] = [];
+  for (const edgeId of uniqueEdgeIds) {
+    const edge = await getEdgeById(edgeId);
+    if (!edge) {
+      missingEdgeIds.push(edgeId);
+      continue;
+    }
+    if (edge.agentId !== agentId) {
+      wrongAgentEdgeIds.push(edgeId);
+    }
+  }
+
+  if (
+    missingNodeIds.length > 0 ||
+    wrongAgentNodeIds.length > 0 ||
+    missingEdgeIds.length > 0 ||
+    wrongAgentEdgeIds.length > 0
+  ) {
+    const parts: string[] = [];
+    if (missingNodeIds.length > 0) {
+      parts.push(`missing nodes: ${missingNodeIds.join(", ")}`);
+    }
+    if (wrongAgentNodeIds.length > 0) {
+      parts.push(`cross-agent nodes: ${wrongAgentNodeIds.join(", ")}`);
+    }
+    if (missingEdgeIds.length > 0) {
+      parts.push(`missing edges: ${missingEdgeIds.join(", ")}`);
+    }
+    if (wrongAgentEdgeIds.length > 0) {
+      parts.push(`cross-agent edges: ${wrongAgentEdgeIds.join(", ")}`);
+    }
+
+    return {
+      isValid: false,
+      error: `AgentAnalysis content cites unknown or unauthorized graph references (${parts.join("; ")}).`,
+    };
+  }
+
+  return { isValid: true };
+}
+
+// ============================================================================
 // addGraphNode Tool
 // ============================================================================
 
@@ -455,7 +587,7 @@ const queryGraphTool: Tool = {
   schema: {
     name: "queryGraph",
     description:
-      "Query the knowledge graph to find relevant information. Returns nodes and their relationships.",
+      "Query the knowledge graph to find relevant information. Returns nodes and relationships with node/edge IDs for precise [node:uuid] / [edge:uuid] citations.",
     parameters: [
       {
         name: "nodeType",
@@ -520,6 +652,7 @@ const queryGraphTool: Tool = {
             properties: n.properties,
           })),
           edges: edges.map((e) => ({
+            id: e.id,
             type: e.type,
             sourceId: e.sourceId,
             targetId: e.targetId,
@@ -921,7 +1054,7 @@ const addAgentAnalysisNodeTool: Tool = {
   schema: {
     name: "addAgentAnalysisNode",
     description:
-      "Create an AgentAnalysis node for observations or patterns. This does NOT notify users - it is for internal analysis only.",
+      "Create an AgentAnalysis node for observations or patterns. Citations in content must use [node:uuid] or [edge:uuid] with existing graph IDs. This does NOT notify users - it is for internal analysis only.",
     parameters: [
       {
         name: "name",
@@ -960,6 +1093,17 @@ const addAgentAnalysisNodeTool: Tool = {
           success: false,
           error:
             "AgentAnalysis node type does not exist. This should have been created during agent initialization.",
+        };
+      }
+
+      const citationValidation = await validateAgentAnalysisCitations(
+        ctx.agentId,
+        properties.content,
+      );
+      if (!citationValidation.isValid) {
+        return {
+          success: false,
+          error: citationValidation.error,
         };
       }
 

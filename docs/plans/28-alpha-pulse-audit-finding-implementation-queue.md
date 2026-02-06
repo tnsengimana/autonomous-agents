@@ -20,7 +20,7 @@
 - [x] `F4` Analyzer loops on impossible edge creation and malformed tool names.
 - [ ] `F5` Failed iterations leave orphaned open `llm_interactions`.
 - [x] `F6` Knowledge Acquisition instability (`UND_ERR_BODY_TIMEOUT`, extract failures).
-- [ ] `F7` Analysis citations do not follow required `[node:uuid]`/`[edge:uuid]` format.
+- [x] `F7` Analysis citations do not follow required `[node:uuid]`/`[edge:uuid]` format.
 - [ ] `F8` Data model overload in `Company` nodes and stringified numeric metrics.
 - [ ] `F9` Advice generation criteria are over-constrained for practical output.
 - [ ] `F10` Type initialization allows edge constraints with missing source/target sets.
@@ -106,12 +106,40 @@
       - Enforced output contract:
         - `## Findings` with inline `[S#]` citations on factual claims
         - `## Source Ledger` with per-source subsections (`### [S#]`) and `url`, `title`, `published_at`
-    - Added runtime validation for citation/ledger integrity in `src/worker/knowledge-acquisition-output-validation.ts` and fail-fast behavior when invalid.
+    - Added runtime validation for citation/ledger integrity in `src/worker/validation.ts` and fail-fast behavior when invalid.
     - Updated acquisition toolset documentation in `src/lib/llm/tools/index.ts` to reflect `webSearch` + `webExtract` only.
   - Tests:
     - Added/updated `src/lib/llm/tools/__tests__/web-tools.test.ts` for recoverable `webExtract` behaviors.
     - Updated `src/lib/llm/tools/__tests__/index.test.ts` to assert knowledge acquisition tools expose `webSearch` and `webExtract`.
-    - Added `src/worker/__tests__/knowledge-acquisition-output-validation.test.ts` for strict citation + source-ledger validation.
+    - Added `src/worker/__tests__/validation.test.ts` for strict citation + source-ledger validation.
     - Revalidated:
-      - `npm run test:run -- src/lib/llm/tools/__tests__/index.test.ts src/lib/llm/tools/__tests__/web-tools.test.ts src/worker/__tests__/knowledge-acquisition-output-validation.test.ts`
+      - `npm run test:run -- src/lib/llm/tools/__tests__/index.test.ts src/lib/llm/tools/__tests__/web-tools.test.ts src/worker/__tests__/validation.test.ts`
       - `npm run build`
+- 2026-02-06: Completed `F7`.
+  - Implemented:
+    - Added strict citation validation in `addAgentAnalysisNode` (`src/lib/llm/tools/graph-tools.ts`):
+      - Requires at least one citation in `content`.
+      - Accepts only `[node:uuid]` or `[edge:uuid]` formats.
+      - Rejects malformed citations (e.g., name-based references).
+      - Verifies cited node/edge IDs exist and belong to the same agent.
+    - Exposed edge IDs to the model so `[edge:uuid]` citations are feasible:
+      - `queryGraph` now returns `edges[].id` in `src/lib/llm/tools/graph-tools.ts`.
+      - `serializeGraphForLLM` now includes `[edge:<uuid>]` markers in relationships in `src/lib/db/queries/graph-data.ts`.
+    - Fixed analysis citation guidance in prompts/examples:
+      - Corrected UUID guidance typo and strengthened name-vs-UUID rule in `src/lib/llm/agents.ts`.
+      - Updated baseline graph type examples to UUID-shaped citations in `src/lib/llm/graph-types.ts`.
+    - Updated analyzer iteration behavior in `src/worker/runner.ts`:
+      - Added explicit runtime instruction to never cite by names.
+      - Counts `analysesProduced` based on successful `addAgentAnalysisNode` tool results (not attempted tool calls).
+  - Tests:
+    - Added edge lookup coverage in `src/lib/db/queries/__tests__/graph-data.test.ts` (`getEdgeById`).
+    - Updated serialization expectation to assert edge UUID marker in `src/lib/db/queries/__tests__/graph-data.test.ts`.
+    - Updated `queryGraph` tests to assert `edges[].id` in `src/lib/llm/tools/__tests__/graph-tools.test.ts`.
+    - Added citation-validation tests for analysis creation in `src/lib/llm/tools/__tests__/graph-tools.test.ts`:
+      - rejects missing citations
+      - rejects malformed citations
+      - rejects unknown IDs
+  - Revalidated:
+    - `npm run test:run -- src/lib/llm/tools/__tests__/graph-tools.test.ts src/lib/db/queries/__tests__/graph-data.test.ts src/lib/llm/__tests__/knowledge-graph.test.ts`
+    - `npm run test:run -- src/lib/llm/__tests__/agents.test.ts`
+    - `npm run build`

@@ -278,6 +278,8 @@ Analyze the observation using the graph data. Create AgentAnalysis nodes that ca
 Edge linkage is REQUIRED: every AgentAnalysis you create must be connected to relevant evidence nodes with addGraphEdge.
 Use listEdgeTypes before adding edges so you pick existing edge types.
 If addGraphEdge fails because an edge type is unavailable, call listEdgeTypes and retry ONCE with an available edge type.
+Citations are REQUIRED in analysis content: use only [node:uuid] or [edge:uuid] markers with real IDs from the graph.
+Never cite by name (for example, do not use [node:NVIDIA Corporation]).
 
 If you find that the available knowledge is insufficient to properly analyze this pattern, explain what additional data would be needed. Do NOT create a low-quality analysis just to produce output.`,
     },
@@ -408,17 +410,17 @@ If you find that the available knowledge is insufficient to properly analyze thi
       `Tool calls: ${toolCallCount}, Response length: ${textLength}`,
   );
 
-  // Check if any AgentAnalysis nodes were created
+  // Check if any AgentAnalysis nodes were successfully created
   const analysesProduced = result.events
     .filter(
       (
         e,
       ): e is {
-        toolCalls: Array<{ toolName: string; args: Record<string, unknown> }>;
-      } => "toolCalls" in e,
+        toolResults: Array<{ toolName: string; result: unknown }>;
+      } => "toolResults" in e,
     )
     .some((e) =>
-      e.toolCalls.some((tc) => tc.toolName === "addAgentAnalysisNode"),
+      e.toolResults.some((tr) => tr.toolName === "addAgentAnalysisNode"),
     );
 
   return analysesProduced;
