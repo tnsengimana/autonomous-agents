@@ -137,6 +137,13 @@ function isSnakeCase(name: string): boolean {
   return SNAKE_CASE_REGEX.test(name);
 }
 
+function formatAvailableTypeNames(typeNames: string[]): string {
+  if (typeNames.length === 0) {
+    return "(none)";
+  }
+  return [...typeNames].sort((a, b) => a.localeCompare(b)).join(", ");
+}
+
 // ============================================================================
 // addGraphNode Tool
 // ============================================================================
@@ -184,13 +191,28 @@ const addGraphNodeTool: Tool = {
     try {
       const { createNode, findNodeByTypeAndName, updateNodeProperties } =
         await import("@/lib/db/queries/graph-data");
-      const { nodeTypeExists } = await import("@/lib/db/queries/graph-types");
+      const { nodeTypeExists, getNodeTypesByAgent } = await import(
+        "@/lib/db/queries/graph-types"
+      );
 
       // Validate type exists
       if (!(await nodeTypeExists(ctx.agentId, type))) {
+        const availableNodeTypes = await getNodeTypesByAgent(ctx.agentId);
+        const availableNodeTypeNames = availableNodeTypes.map((t) => t.name);
+
+        console.warn(
+          `[GraphTools][WARN][addGraphNode] Missing node type for requested node create/update`,
+          {
+            agentId: ctx.agentId,
+            requestedNodeType: type,
+            requestedNodeName: name,
+            availableNodeTypes: availableNodeTypeNames,
+          },
+        );
+
         return {
           success: false,
-          error: `Node type "${type}" does not exist. Use createNodeType first or use an existing type.`,
+          error: `NODE_TYPE_NOT_FOUND: Node type "${type}" does not exist. Available node types: ${formatAvailableTypeNames(availableNodeTypeNames)}. Use listNodeTypes first, then createNodeType only if necessary.`,
         };
       }
 
@@ -226,10 +248,21 @@ const addGraphNodeTool: Tool = {
         },
       };
     } catch (error) {
+      const detail =
+        error instanceof Error ? error.message : "Failed to add graph node";
+      console.warn(
+        `[GraphTools][WARN][addGraphNode] Unexpected failure while adding/updating node`,
+        {
+          agentId: ctx.agentId,
+          requestedNodeType: type,
+          requestedNodeName: name,
+          error: detail,
+        },
+      );
+
       return {
         success: false,
-        error:
-          error instanceof Error ? error.message : "Failed to add graph node",
+        error: `Failed to add graph node "${name}" (type "${type}"): ${detail}`,
       };
     }
   },
@@ -295,17 +328,29 @@ const addGraphEdgeTool: Tool = {
     const { type, sourceName, sourceType, targetName, targetType, properties } =
       parsed.data;
     const ctx = context as GraphToolContext;
+    const edgeDescriptor = `${sourceType}:${sourceName} -[${type}]-> ${targetType}:${targetName}`;
 
     try {
       const { findNodeByTypeAndName, createEdge, findEdge } =
         await import("@/lib/db/queries/graph-data");
-      const { edgeTypeExists } = await import("@/lib/db/queries/graph-types");
+      const { edgeTypeExists, getEdgeTypesByAgent } = await import(
+        "@/lib/db/queries/graph-types"
+      );
 
       // Validate edge type exists
       if (!(await edgeTypeExists(ctx.agentId, type))) {
+        const availableEdgeTypes = await getEdgeTypesByAgent(ctx.agentId);
+        const availableEdgeTypeNames = availableEdgeTypes.map((t) => t.name);
+
+        console.warn(`[GraphTools][WARN][addGraphEdge] Missing edge type`, {
+          agentId: ctx.agentId,
+          attemptedEdge: edgeDescriptor,
+          availableEdgeTypes: availableEdgeTypeNames,
+        });
+
         return {
           success: false,
-          error: `Edge type "${type}" does not exist.`,
+          error: `EDGE_TYPE_NOT_FOUND: Edge type "${type}" does not exist. Available edge types: ${formatAvailableTypeNames(availableEdgeTypeNames)}. Use listEdgeTypes first and select an existing type.`,
         };
       }
 
@@ -322,12 +367,22 @@ const addGraphEdgeTool: Tool = {
       );
 
       if (!sourceNode) {
+        console.warn(`[GraphTools][WARN][addGraphEdge] Source node missing`, {
+          agentId: ctx.agentId,
+          attemptedEdge: edgeDescriptor,
+        });
+
         return {
           success: false,
           error: `Source node "${sourceName}" of type "${sourceType}" not found. Create it first.`,
         };
       }
       if (!targetNode) {
+        console.warn(`[GraphTools][WARN][addGraphEdge] Target node missing`, {
+          agentId: ctx.agentId,
+          attemptedEdge: edgeDescriptor,
+        });
+
         return {
           success: false,
           error: `Target node "${targetName}" of type "${targetType}" not found. Create it first.`,
@@ -351,6 +406,11 @@ const addGraphEdgeTool: Tool = {
         };
       }
 
+      console.warn(`[GraphTools][WARN][addGraphEdge] Creating edge`, {
+        agentId: ctx.agentId,
+        edge: edgeDescriptor,
+      });
+
       // Create edge
       const edge = await createEdge({
         agentId: ctx.agentId,
@@ -368,10 +428,20 @@ const addGraphEdgeTool: Tool = {
         },
       };
     } catch (error) {
+      const detail =
+        error instanceof Error ? error.message : "Failed to add graph edge";
+      console.warn(
+        `[GraphTools][WARN][addGraphEdge] Unexpected failure while adding edge`,
+        {
+          agentId: ctx.agentId,
+          attemptedEdge: edgeDescriptor,
+          error: detail,
+        },
+      );
+
       return {
         success: false,
-        error:
-          error instanceof Error ? error.message : "Failed to add graph edge",
+        error: `Failed to add graph edge ${edgeDescriptor}: ${detail}`,
       };
     }
   },

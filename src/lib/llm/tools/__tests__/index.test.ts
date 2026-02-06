@@ -1,7 +1,11 @@
 import { beforeAll, describe, expect, test } from 'vitest';
 
 import { registerGraphTools } from '../graph-tools';
-import { getGraphConstructionTools } from '../index';
+import {
+  getAnalysisGenerationTools,
+  getAdviceGenerationTools,
+  getGraphConstructionTools,
+} from '../index';
 
 describe('getGraphConstructionTools', () => {
   beforeAll(() => {
@@ -18,5 +22,35 @@ describe('getGraphConstructionTools', () => {
     expect(toolNames).toContain('listEdgeTypes');
     expect(toolNames).toContain('createNodeType');
     expect(toolNames).toContain('createEdgeType');
+  });
+});
+
+describe('getAnalysisGenerationTools', () => {
+  beforeAll(() => {
+    registerGraphTools();
+  });
+
+  test('includes edge discovery tools for analysis generation', () => {
+    const toolNames = getAnalysisGenerationTools().map((tool) => tool.schema.name);
+
+    expect(toolNames).toContain('queryGraph');
+    expect(toolNames).toContain('listEdgeTypes');
+    expect(toolNames).toContain('addAgentAnalysisNode');
+    expect(toolNames).toContain('addGraphEdge');
+  });
+});
+
+describe('getAdviceGenerationTools', () => {
+  beforeAll(() => {
+    registerGraphTools();
+  });
+
+  test('includes edge discovery tools for advice generation', () => {
+    const toolNames = getAdviceGenerationTools().map((tool) => tool.schema.name);
+
+    expect(toolNames).toContain('queryGraph');
+    expect(toolNames).toContain('listEdgeTypes');
+    expect(toolNames).toContain('addAgentAdviceNode');
+    expect(toolNames).toContain('addGraphEdge');
   });
 });

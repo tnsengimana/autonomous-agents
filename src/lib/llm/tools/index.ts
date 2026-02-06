@@ -93,25 +93,31 @@ export function getConversationTools(): Tool[] {
 
 /**
  * Get tools for the Analysis Generation phase (creating analyses from existing knowledge)
- * Tools: queryGraph, addAgentAnalysisNode, addGraphEdge
+ * Tools: queryGraph, listEdgeTypes, addAgentAnalysisNode, addGraphEdge
  */
 export function getAnalysisGenerationTools(): Tool[] {
   return getAllTools().filter((tool) =>
-    ["queryGraph", "addAgentAnalysisNode", "addGraphEdge"].includes(
-      tool.schema.name,
-    ),
+    [
+      "queryGraph",
+      "listEdgeTypes",
+      "addAgentAnalysisNode",
+      "addGraphEdge",
+    ].includes(tool.schema.name),
   );
 }
 
 /**
  * Get tools for the Advice Generation phase (creating actionable recommendations)
- * Tools: queryGraph, addAgentAdviceNode, addGraphEdge
+ * Tools: queryGraph, listEdgeTypes, addAgentAdviceNode, addGraphEdge
  */
 export function getAdviceGenerationTools(): Tool[] {
   return getAllTools().filter((tool) =>
-    ["queryGraph", "addAgentAdviceNode", "addGraphEdge"].includes(
-      tool.schema.name,
-    ),
+    [
+      "queryGraph",
+      "listEdgeTypes",
+      "addAgentAdviceNode",
+      "addGraphEdge",
+    ].includes(tool.schema.name),
   );
 }
 

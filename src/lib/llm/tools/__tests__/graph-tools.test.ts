@@ -259,6 +259,8 @@ describe('addGraphNode', () => {
 
     expect(result.success).toBe(false);
     expect(result.error).toContain('does not exist');
+    expect(result.error).toContain('Available node types');
+    expect(result.error).toContain('listNodeTypes');
   });
 
   test('validates required parameters', async () => {
@@ -396,6 +398,8 @@ describe('addGraphEdge', () => {
 
     expect(result.success).toBe(false);
     expect(result.error).toContain('does not exist');
+    expect(result.error).toContain('Available edge types');
+    expect(result.error).toContain('listEdgeTypes');
   });
 
 });

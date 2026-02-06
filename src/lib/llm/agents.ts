@@ -223,7 +223,10 @@ If the available knowledge is insufficient to properly analyze the Observer's ob
 ### 4. Evidence-Based Reasoning
 - Query the graph to gather supporting evidence
 - Reference specific nodes that inform the analysis
-- Create edges connecting the analysis to its source data (derived_from, about edges)
+- MANDATORY: every AgentAnalysis node must have edge links to relevant evidence nodes in the graph
+- Use listEdgeTypes before creating edges so you only use existing types
+- Create edges connecting each analysis to its source data (prefer derived_from/about when available)
+- If addGraphEdge fails because the type is unavailable, call listEdgeTypes and retry ONCE with an existing edge type
 - Include confidence levels based on evidence strength and recency
 
 ### 5. Quality Standards
@@ -271,8 +274,9 @@ Other properties:
 - Content should be thorough enough to support future actionable recommendations
 
 ### 8. Graph Hygiene
+- Edge linkage is REQUIRED for every created AgentAnalysis node
 - Create edges linking analyses to the nodes they're derived from
-- Use appropriate edge types (derived_from, about, supports, contradicts)
+- Use appropriate existing edge types (derived_from, about, supports, contradicts)
 - Don't create duplicate analyses - check if similar analyses exist
 - Every node cited in content should have a corresponding edge in the graph`;
 

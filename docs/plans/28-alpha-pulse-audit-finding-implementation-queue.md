@@ -17,7 +17,7 @@
 - [x] `F1` Observer `relevantNodeIds` are names instead of UUIDs.
 - [x] `F2` Edge ontology is too weak and semantically incorrect for analysis linkage.
 - [x] `F3` Graph Construction prompt/tool mismatch on type creation.
-- [ ] `F4` Analyzer loops on impossible edge creation and malformed tool names.
+- [x] `F4` Analyzer loops on impossible edge creation and malformed tool names.
 - [ ] `F5` Failed iterations leave orphaned open `llm_interactions`.
 - [ ] `F6` Knowledge Acquisition instability (`UND_ERR_BODY_TIMEOUT`, extract failures).
 - [ ] `F7` Analysis citations do not follow required `[node:uuid]`/`[edge:uuid]` format.
@@ -75,3 +75,18 @@
     - Revalidated:
       - `npm run test:run -- src/lib/llm/tools/__tests__/index.test.ts src/lib/llm/tools/__tests__/graph-tools.test.ts src/lib/llm/__tests__/graph-configuration.test.ts src/lib/llm/__tests__/agents.test.ts`
       - `npm run build`
+- 2026-02-06: Completed `F4`.
+  - Implemented:
+    - Hardened Analyzer requirements so edge linkage is mandatory for each created `AgentAnalysis`.
+      - Updated analysis meta-prompt guidance in `src/lib/llm/agents.ts` to require edge links and `listEdgeTypes` usage before edge creation.
+      - Updated analyzer runtime instructions in `src/worker/runner.ts` to require edges, call `listEdgeTypes`, and retry edge creation at most once after a missing-type failure.
+    - Added `listEdgeTypes` to analysis/advice phase toolsets in `src/lib/llm/tools/index.ts` for explicit edge-type discovery.
+    - Improved graph tool recovery ergonomics:
+      - `addGraphEdge` now returns actionable missing-type errors with available edge types and `listEdgeTypes` guidance.
+      - `addGraphNode` now returns actionable missing-type errors with available node types and `listNodeTypes` guidance.
+    - Added warning-level observability for edge operations:
+      - `addGraphEdge` emits explicit warning logs showing the exact edge attempted/created.
+      - Analyzer phase logs warning summaries of all `addGraphEdge` attempts and flags malformed `[TOOL_CALLS]` artifacts in model output.
+  - Tests:
+    - `npm run test:run -- src/lib/llm/tools/__tests__/index.test.ts src/lib/llm/tools/__tests__/graph-tools.test.ts`
+    - `npm run build`

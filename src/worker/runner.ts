@@ -121,6 +121,11 @@ function logError(message: string, error: unknown): void {
   console.error(`[${timestamp}] [Worker] ${message}`, error);
 }
 
+function logWarning(message: string, ...args: unknown[]): void {
+  const timestamp = new Date().toISOString();
+  console.warn(`[${timestamp}] [Worker] ${message}`, ...args);
+}
+
 /**
  * Check if an agent is due for its next iteration based on its interval.
  * Returns true if the agent has never been processed or if enough time has passed.
@@ -267,7 +272,11 @@ ${insight.synthesisDirection}
 ## Current Knowledge Graph
 ${graphContext}
 
-Analyze the observation using the graph data. Create AgentAnalysis nodes that capture your findings. Use the addAgentAnalysisNode tool to create analyses and addGraphEdge to connect them to relevant nodes.
+Analyze the observation using the graph data. Create AgentAnalysis nodes that capture your findings. Use the addAgentAnalysisNode tool to create analyses.
+
+Edge linkage is REQUIRED: every AgentAnalysis you create must be connected to relevant evidence nodes with addGraphEdge.
+Use listEdgeTypes before adding edges so you pick existing edge types.
+If addGraphEdge fails because an edge type is unavailable, call listEdgeTypes and retry ONCE with an available edge type.
 
 If you find that the available knowledge is insufficient to properly analyze this pattern, explain what additional data would be needed. Do NOT create a low-quality analysis just to produce output.`,
     },
@@ -309,6 +318,67 @@ If you find that the available knowledge is insufficient to properly analyze thi
   );
 
   const result = await fullResponse;
+
+  const malformedToolCallFragments = result.events
+    .filter((e): e is { llmOutput: string } => "llmOutput" in e)
+    .map((e) => e.llmOutput)
+    .filter((output) => output.includes("[TOOL_CALLS]"));
+
+  if (malformedToolCallFragments.length > 0) {
+    logWarning(
+      `[Analyzer] Detected malformed tool-call text in LLM output for agent ${agent.name}`,
+      {
+        fragments: malformedToolCallFragments.map((fragment) =>
+          fragment.slice(0, 200),
+        ),
+      },
+    );
+  }
+
+  const addGraphEdgeCalls = result.events
+    .filter(
+      (
+        e,
+      ): e is {
+        toolCalls: Array<{ toolName: string; args: Record<string, unknown> }>;
+      } => "toolCalls" in e,
+    )
+    .flatMap((e) => e.toolCalls.filter((tc) => tc.toolName === "addGraphEdge"));
+
+  if (addGraphEdgeCalls.length > 0) {
+    const edgeDescriptions = addGraphEdgeCalls.map((call) => {
+      const args = call.args as Record<string, string>;
+      const type = args.type ?? "<unknown-type>";
+      const sourceType = args.sourceType ?? "<unknown-source-type>";
+      const sourceName = args.sourceName ?? "<unknown-source>";
+      const targetType = args.targetType ?? "<unknown-target-type>";
+      const targetName = args.targetName ?? "<unknown-target>";
+      return `${sourceType}:${sourceName} -[${type}]-> ${targetType}:${targetName}`;
+    });
+
+    logWarning(
+      `[Analyzer] addGraphEdge calls attempted for agent ${agent.name}: ${edgeDescriptions.length}`,
+      { edges: edgeDescriptions },
+    );
+
+    const edgeCounts = new Map<string, number>();
+    for (const edgeDescription of edgeDescriptions) {
+      edgeCounts.set(
+        edgeDescription,
+        (edgeCounts.get(edgeDescription) ?? 0) + 1,
+      );
+    }
+    const repeatedEdgeAttempts = Array.from(edgeCounts.entries())
+      .filter(([, count]) => count > 1)
+      .map(([edge, count]) => ({ edge, attempts: count }));
+
+    if (repeatedEdgeAttempts.length > 0) {
+      logWarning(
+        `[Analyzer] Repeated addGraphEdge attempts detected for agent ${agent.name}`,
+        { repeatedEdgeAttempts },
+      );
+    }
+  }
 
   // Count tool calls from events for logging
   const toolCallCount = result.events
