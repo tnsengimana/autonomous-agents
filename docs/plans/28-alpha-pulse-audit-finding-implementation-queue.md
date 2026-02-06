@@ -168,3 +168,58 @@
     - `npm run test:run -- src/lib/llm/tools/__tests__/graph-tools.test.ts src/lib/llm/__tests__/agents.test.ts`
     - `npm run test:run`
     - `npm run build`
+
+## Unfixed Findings Recommendations
+- `F5` recommendations (discussion only; not implemented):
+  - Problem statement: failed iterations can leave `llm_interactions` rows open (`completed_at IS NULL`), creating trace ambiguity and incorrect run-state visibility.
+  - 1. Add iteration-level cleanup in a `finally` path for `processAgentIteration`:
+  - mark all unfinished interactions for the iteration as completed when the iteration fails.
+  - include terminal failure metadata in the interaction response payload.
+  - 2. Add explicit interaction terminal fields:
+  - `status` at interaction level (for example: `running|completed|failed`).
+  - `error`/`error_message` field for the terminal failure reason.
+  - 3. Ensure crash-safe consistency:
+  - if phase update fails mid-run, cleanup should still finalize prior open interactions.
+  - add warning logs with iteration id and interaction ids finalized during cleanup.
+  - 4. Tests:
+  - verify failed iterations do not leave orphaned open interactions.
+  - verify status/error fields are set as expected on failed interactions.
+- `F9` recommendations (discussion only; not implemented):
+  - F9 diagnosis is clear: advice is currently gated too hard in both prompt layers.
+  - 1. Meta-prompt is effectively unreachable: it requires “EVERY IMAGINABLE QUESTION”, “100% coverage”, and “absolute conviction” in `src/lib/llm/agents.ts:302`.
+  - 2. Runtime instruction repeats the same hard gate in `src/worker/runner.ts:439`.
+  - 3. Adviser only runs when new analyses are produced in that same iteration in `src/worker/runner.ts:835`, which further reduces chance to emit advice.
+  - My recommendation is a thresholded conservative policy (instead of absolute policy):
+  - 1. Keep default as “no advice”.
+  - 2. Permit advice when all are true:
+  - Minimum evidence count met (`BUY/SELL >= 3` AgentAnalysis nodes, `HOLD >= 2`).
+  - Freshness met (at least one supporting AgentAnalysis within last `72h`).
+  - Confidence floor met (average supporting confidence `>= 0.65` and no supporting node below `0.50` when confidence exists).
+  - Risk section required (at least 2 concrete risks + explicit invalidation conditions).
+  - Every cited AgentAnalysis must have a matching `based_on` edge.
+  - 3. If thresholds fail, the model should abstain and explicitly state why in its completion text (insufficient freshness/evidence/confidence).
+  - I also recommend discussing one system change as part of F9:
+  - Run adviser every iteration (or every N iterations), not only when fresh analyses were created, so it can act when an older but now sufficient evidence set is present.
+  - If you agree, implementation scope:
+  - 1. Threshold language in advice meta-prompt + runtime advice instruction.
+  - 2. Optional adviser scheduling tweak (`always run` vs `run every N iterations`).
+  - 3. Tests that assert the new threshold phrasing and runtime behavior.
+- `F10` recommendations (discussion only; not implemented):
+  - F10 as originally written is obsolete under the current architecture, since edge constraints are no longer modeled.
+  - Current schema has no edge source/target constraint fields (`src/lib/db/schema.ts:248`) and initialization schema has no edge constraint model (`src/lib/llm/graph-types.ts:205`).
+  - Recommended reframe: Type initialization quality hardening (without edge constraints).
+  - 1. Type initialization quality hardening (no constraints):
+  - Enforce stronger type-definition validation at generation time:
+  - node type names: non-empty + capitalized/space format
+  - edge type names: non-empty + snake_case
+  - description/justification: non-empty and meaningful length
+  - Prevent malformed schemas (still JSON-schema-like, but stricter shape checks).
+  - 2. Initialization-time sanitization + dedupe:
+  - Trim/normalize names before persistence.
+  - Skip/reject duplicates after normalization.
+  - Emit explicit warnings for dropped/invalid types with reason.
+  - 3. Semantic clarity guardrails for edge types:
+  - Require edge descriptions to state directionality (`source -> target`) and intended usage.
+  - Require one concrete example per edge type to reduce misuse.
+  - 4. Cap runaway type creation:
+  - Enforce hard max types persisted per init run to avoid ontology explosion if the LLM drifts.
