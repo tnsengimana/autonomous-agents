@@ -68,12 +68,6 @@ export async function POST(request: NextRequest) {
     const memoryContext = buildMemoryContextBlock(memories);
 
     // Build system prompt with agent context
-    if (!agent.conversationSystemPrompt) {
-      return NextResponse.json(
-        { error: 'Agent missing conversationSystemPrompt configuration' },
-        { status: 500 }
-      );
-    }
     const systemPrompt = `${agent.conversationSystemPrompt}
 
 ${memoryContext}

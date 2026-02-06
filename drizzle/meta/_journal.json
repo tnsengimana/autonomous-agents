@@ -5,36 +5,8 @@
     {
       "idx": 0,
       "version": "7",
-      "when": 1770358485581,
-      "tag": "0000_sad_phil_sheldon",
-      "breakpoints": true
-    },
-    {
-      "idx": 1,
-      "version": "7",
-      "when": 1770370182850,
-      "tag": "0001_closed_puck",
-      "breakpoints": true
-    },
-    {
-      "idx": 2,
-      "version": "7",
-      "when": 1770370694468,
-      "tag": "0002_dazzling_madame_hydra",
-      "breakpoints": true
-    },
-    {
-      "idx": 3,
-      "version": "7",
-      "when": 1770375925563,
-      "tag": "0003_closed_stark_industries",
-      "breakpoints": true
-    },
-    {
-      "idx": 4,
-      "version": "7",
-      "when": 1770378244023,
-      "tag": "0004_lovely_silverclaw",
+      "when": 1770387676578,
+      "tag": "0000_noisy_scalphunter",
       "breakpoints": true
     }
   ]

@@ -22,7 +22,7 @@ CREATE TABLE "agents" (
 	"observer_system_prompt" text NOT NULL,
 	"analysis_generation_system_prompt" text NOT NULL,
 	"advice_generation_system_prompt" text NOT NULL,
-	"knowledge_acquisition_system_prompt" text,
+	"knowledge_acquisition_system_prompt" text NOT NULL,
 	"graph_construction_system_prompt" text NOT NULL,
 	"iteration_interval_ms" integer NOT NULL,
 	"is_active" boolean DEFAULT true NOT NULL,
@@ -37,23 +37,12 @@ CREATE TABLE "conversations" (
 	"updated_at" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "graph_edge_type_source_types" (
-	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-	"edge_type_id" uuid NOT NULL,
-	"node_type_id" uuid NOT NULL
-);
---> statement-breakpoint
-CREATE TABLE "graph_edge_type_target_types" (
-	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-	"edge_type_id" uuid NOT NULL,
-	"node_type_id" uuid NOT NULL
-);
---> statement-breakpoint
 CREATE TABLE "graph_edge_types" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"agent_id" uuid,
 	"name" text NOT NULL,
 	"description" text NOT NULL,
+	"justification" text NOT NULL,
 	"properties_schema" jsonb,
 	"example_properties" jsonb,
 	"created_by" text DEFAULT 'system' NOT NULL,
@@ -75,6 +64,7 @@ CREATE TABLE "graph_node_types" (
 	"agent_id" uuid,
 	"name" text NOT NULL,
 	"description" text NOT NULL,
+	"justification" text NOT NULL,
 	"properties_schema" jsonb NOT NULL,
 	"example_properties" jsonb,
 	"created_by" text DEFAULT 'system' NOT NULL,
@@ -168,7 +158,7 @@ CREATE TABLE "worker_iterations" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"agent_id" uuid NOT NULL,
 	"status" text DEFAULT 'running' NOT NULL,
-	"observer_plan" jsonb,
+	"observer_output" jsonb,
 	"error_message" text,
 	"created_at" timestamp DEFAULT now() NOT NULL,
 	"completed_at" timestamp
@@ -177,10 +167,6 @@ CREATE TABLE "worker_iterations" (
 ALTER TABLE "accounts" ADD CONSTRAINT "accounts_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "agents" ADD CONSTRAINT "agents_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "conversations" ADD CONSTRAINT "conversations_agent_id_agents_id_fk" FOREIGN KEY ("agent_id") REFERENCES "public"."agents"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "graph_edge_type_source_types" ADD CONSTRAINT "graph_edge_type_source_types_edge_type_id_graph_edge_types_id_fk" FOREIGN KEY ("edge_type_id") REFERENCES "public"."graph_edge_types"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "graph_edge_type_source_types" ADD CONSTRAINT "graph_edge_type_source_types_node_type_id_graph_node_types_id_fk" FOREIGN KEY ("node_type_id") REFERENCES "public"."graph_node_types"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "graph_edge_type_target_types" ADD CONSTRAINT "graph_edge_type_target_types_edge_type_id_graph_edge_types_id_fk" FOREIGN KEY ("edge_type_id") REFERENCES "public"."graph_edge_types"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "graph_edge_type_target_types" ADD CONSTRAINT "graph_edge_type_target_types_node_type_id_graph_node_types_id_fk" FOREIGN KEY ("node_type_id") REFERENCES "public"."graph_node_types"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "graph_edge_types" ADD CONSTRAINT "graph_edge_types_agent_id_agents_id_fk" FOREIGN KEY ("agent_id") REFERENCES "public"."agents"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "graph_edges" ADD CONSTRAINT "graph_edges_agent_id_agents_id_fk" FOREIGN KEY ("agent_id") REFERENCES "public"."agents"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "graph_edges" ADD CONSTRAINT "graph_edges_source_id_graph_nodes_id_fk" FOREIGN KEY ("source_id") REFERENCES "public"."graph_nodes"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
@@ -199,10 +185,6 @@ ALTER TABLE "sessions" ADD CONSTRAINT "sessions_user_id_users_id_fk" FOREIGN KEY
 ALTER TABLE "user_api_keys" ADD CONSTRAINT "user_api_keys_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "worker_iterations" ADD CONSTRAINT "worker_iterations_agent_id_agents_id_fk" FOREIGN KEY ("agent_id") REFERENCES "public"."agents"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 CREATE INDEX "agents_user_id_idx" ON "agents" USING btree ("user_id");--> statement-breakpoint
-CREATE INDEX "graph_edge_type_source_types_edge_idx" ON "graph_edge_type_source_types" USING btree ("edge_type_id");--> statement-breakpoint
-CREATE INDEX "graph_edge_type_source_types_node_idx" ON "graph_edge_type_source_types" USING btree ("node_type_id");--> statement-breakpoint
-CREATE INDEX "graph_edge_type_target_types_edge_idx" ON "graph_edge_type_target_types" USING btree ("edge_type_id");--> statement-breakpoint
-CREATE INDEX "graph_edge_type_target_types_node_idx" ON "graph_edge_type_target_types" USING btree ("node_type_id");--> statement-breakpoint
 CREATE INDEX "graph_edge_types_agent_id_idx" ON "graph_edge_types" USING btree ("agent_id");--> statement-breakpoint
 CREATE INDEX "graph_edges_agent_id_idx" ON "graph_edges" USING btree ("agent_id");--> statement-breakpoint
 CREATE INDEX "graph_edges_type_idx" ON "graph_edges" USING btree ("type");--> statement-breakpoint

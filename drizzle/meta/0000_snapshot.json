@@ -1,5 +1,5 @@
 {
-  "id": "ffddb11a-50df-44b7-8b0e-09fa74f9a14b",
+  "id": "45756c5d-4137-4715-a8ef-6ff67f8d18aa",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -162,7 +162,7 @@
           "name": "knowledge_acquisition_system_prompt",
           "type": "text",
           "primaryKey": false,
-          "notNull": false
+          "notNull": true
         },
         "graph_construction_system_prompt": {
           "name": "graph_construction_system_prompt",
@@ -290,186 +290,6 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
-    "public.graph_edge_type_source_types": {
-      "name": "graph_edge_type_source_types",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "edge_type_id": {
-          "name": "edge_type_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "node_type_id": {
-          "name": "node_type_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        }
-      },
-      "indexes": {
-        "graph_edge_type_source_types_edge_idx": {
-          "name": "graph_edge_type_source_types_edge_idx",
-          "columns": [
-            {
-              "expression": "edge_type_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "graph_edge_type_source_types_node_idx": {
-          "name": "graph_edge_type_source_types_node_idx",
-          "columns": [
-            {
-              "expression": "node_type_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "graph_edge_type_source_types_edge_type_id_graph_edge_types_id_fk": {
-          "name": "graph_edge_type_source_types_edge_type_id_graph_edge_types_id_fk",
-          "tableFrom": "graph_edge_type_source_types",
-          "tableTo": "graph_edge_types",
-          "columnsFrom": [
-            "edge_type_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "graph_edge_type_source_types_node_type_id_graph_node_types_id_fk": {
-          "name": "graph_edge_type_source_types_node_type_id_graph_node_types_id_fk",
-          "tableFrom": "graph_edge_type_source_types",
-          "tableTo": "graph_node_types",
-          "columnsFrom": [
-            "node_type_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.graph_edge_type_target_types": {
-      "name": "graph_edge_type_target_types",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "edge_type_id": {
-          "name": "edge_type_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "node_type_id": {
-          "name": "node_type_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        }
-      },
-      "indexes": {
-        "graph_edge_type_target_types_edge_idx": {
-          "name": "graph_edge_type_target_types_edge_idx",
-          "columns": [
-            {
-              "expression": "edge_type_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "graph_edge_type_target_types_node_idx": {
-          "name": "graph_edge_type_target_types_node_idx",
-          "columns": [
-            {
-              "expression": "node_type_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "graph_edge_type_target_types_edge_type_id_graph_edge_types_id_fk": {
-          "name": "graph_edge_type_target_types_edge_type_id_graph_edge_types_id_fk",
-          "tableFrom": "graph_edge_type_target_types",
-          "tableTo": "graph_edge_types",
-          "columnsFrom": [
-            "edge_type_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "graph_edge_type_target_types_node_type_id_graph_node_types_id_fk": {
-          "name": "graph_edge_type_target_types_node_type_id_graph_node_types_id_fk",
-          "tableFrom": "graph_edge_type_target_types",
-          "tableTo": "graph_node_types",
-          "columnsFrom": [
-            "node_type_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
     "public.graph_edge_types": {
       "name": "graph_edge_types",
       "schema": "",
@@ -495,6 +315,12 @@
         },
         "description": {
           "name": "description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "justification": {
+          "name": "justification",
           "type": "text",
           "primaryKey": false,
           "notNull": true
@@ -748,6 +574,12 @@
         },
         "description": {
           "name": "description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "justification": {
+          "name": "justification",
           "type": "text",
           "primaryKey": false,
           "notNull": true
@@ -1564,8 +1396,8 @@
           "notNull": true,
           "default": "'running'"
         },
-        "observer_plan": {
-          "name": "observer_plan",
+        "observer_output": {
+          "name": "observer_output",
           "type": "jsonb",
           "primaryKey": false,
           "notNull": false

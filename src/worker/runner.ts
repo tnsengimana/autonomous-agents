@@ -173,11 +173,6 @@ async function runObserverPhase(
 ): Promise<ObserverOutput> {
   log(`[Observer] Starting for agent: ${agent.name}`);
 
-  const systemPrompt = agent.observerSystemPrompt;
-  if (!systemPrompt) {
-    throw new Error("Agent missing observerSystemPrompt");
-  }
-
   const requestMessages = [
     {
       role: "user" as const,
@@ -196,7 +191,7 @@ You may produce any combination: queries only, insights only, both, or neither (
   const interaction = await createLLMInteraction({
     agentId: agent.id,
     workerIterationId,
-    systemPrompt: systemPrompt,
+    systemPrompt: agent.observerSystemPrompt,
     request: { messages: requestMessages },
     phase: "observer",
   });
@@ -204,7 +199,7 @@ You may produce any combination: queries only, insights only, both, or neither (
   const output = await generateLLMObject(
     requestMessages,
     ObserverOutputSchema,
-    systemPrompt,
+    agent.observerSystemPrompt,
     { agentId: agent.id },
   );
 
@@ -251,11 +246,6 @@ async function runAnalysisGenerationPhase(
     `[Analyzer] Analysis generation for: "${insight.observation.length > 50 ? insight.observation.substring(0, 50) + "..." : insight.observation}"`,
   );
 
-  const systemPrompt = agent.analysisGenerationSystemPrompt;
-  if (!systemPrompt) {
-    throw new Error("Agent missing analysisGenerationSystemPrompt");
-  }
-
   const requestMessages = [
     {
       role: "user" as const,
@@ -289,7 +279,7 @@ If you find that the available knowledge is insufficient to properly analyze thi
   const interaction = await createLLMInteraction({
     agentId: agent.id,
     workerIterationId,
-    systemPrompt: systemPrompt,
+    systemPrompt: agent.analysisGenerationSystemPrompt,
     request: { messages: requestMessages },
     phase: "analysis_generation",
   });
@@ -304,7 +294,7 @@ If you find that the available knowledge is insufficient to properly analyze thi
 
   const { fullResponse } = await streamLLMResponseWithTools(
     requestMessages,
-    systemPrompt,
+    agent.analysisGenerationSystemPrompt,
     {
       tools,
       toolContext,
@@ -438,11 +428,6 @@ async function runAdviceGenerationPhase(
 ): Promise<void> {
   log(`[AdviceGeneration] Starting for agent: ${agent.name}`);
 
-  const systemPrompt = agent.adviceGenerationSystemPrompt;
-  if (!systemPrompt) {
-    throw new Error("Agent missing adviceGenerationSystemPrompt");
-  }
-
   const requestMessages = [
     {
       role: "user" as const,
@@ -461,7 +446,7 @@ If you create AgentAdvice, also create "based_on" edges from that AgentAdvice no
   const interaction = await createLLMInteraction({
     agentId: agent.id,
     workerIterationId,
-    systemPrompt: systemPrompt,
+    systemPrompt: agent.adviceGenerationSystemPrompt,
     request: { messages: requestMessages },
     phase: "advice_generation",
   });
@@ -476,7 +461,7 @@ If you create AgentAdvice, also create "based_on" edges from that AgentAdvice no
 
   const { fullResponse } = await streamLLMResponseWithTools(
     requestMessages,
-    systemPrompt,
+    agent.adviceGenerationSystemPrompt,
     {
       tools,
       toolContext,
@@ -537,11 +522,6 @@ async function runKnowledgeAcquisitionPhase(
     `[Researcher] Knowledge acquisition for: "${query.objective.length > 50 ? query.objective.substring(0, 50) + "..." : query.objective}"`,
   );
 
-  const systemPrompt = agent.knowledgeAcquisitionSystemPrompt;
-  if (!systemPrompt) {
-    throw new Error("Agent missing knowledgeAcquisitionSystemPrompt");
-  }
-
   const requestMessages = [
     {
       role: "user" as const,
@@ -586,7 +566,7 @@ Return a focused markdown document with high-value findings and strict source tr
   const interaction = await createLLMInteraction({
     agentId: agent.id,
     workerIterationId,
-    systemPrompt: systemPrompt,
+    systemPrompt: agent.knowledgeAcquisitionSystemPrompt,
     request: { messages: requestMessages },
     phase: "knowledge_acquisition",
   });
@@ -601,7 +581,7 @@ Return a focused markdown document with high-value findings and strict source tr
 
   const { fullResponse } = await streamLLMResponseWithTools(
     requestMessages,
-    systemPrompt,
+    agent.knowledgeAcquisitionSystemPrompt,
     {
       tools,
       toolContext,
@@ -636,9 +616,15 @@ Return a focused markdown document with high-value findings and strict source tr
     .map((e) => e.llmOutput)
     .join("");
 
+  // TODO: Validating markdown is painful because it's just a string. Alternatively,
+  // TODO: we can return a structured output from the LLM, which would make validation
+  // TODO: here a joy.
   const validation = validateKnowledgeAcquisitionOutput(markdownOutput);
 
   if (!validation.isValid) {
+    // Only log these validation errors avoid throwin an error. We will pipe
+    // this markdownOutput to the LLM anyway so it will do the actual parsing
+    // to update the graph.
     logWarning("[Researcher] Citation validation failed", {
       agentId: agent.id,
       workerIterationId,
@@ -646,15 +632,6 @@ Return a focused markdown document with high-value findings and strict source tr
       citedSourceIds: validation.citedSourceIds,
       ledgerSourceIds: validation.ledgerSourceIds,
     });
-
-    await updateLLMInteraction(interaction.id, {
-      response: { events: result.events, validation },
-      completedAt: new Date(),
-    });
-
-    throw new Error(
-      `Knowledge acquisition output failed citation validation: ${validation.errors.join(" | ")}`,
-    );
   }
 
   // Final save with completedAt timestamp
@@ -683,11 +660,6 @@ async function runGraphConstructionPhase(
 ): Promise<void> {
   log(`[GraphConstruction] Starting for agent: ${agent.name}`);
 
-  const systemPrompt = agent.graphConstructionSystemPrompt;
-  if (!systemPrompt) {
-    throw new Error("Agent missing graphConstructionSystemPrompt");
-  }
-
   const requestMessages = [
     {
       role: "user" as const,
@@ -710,7 +682,7 @@ If no existing type fits, you may use createNodeType/createEdgeType, but only af
   const interaction = await createLLMInteraction({
     agentId: agent.id,
     workerIterationId,
-    systemPrompt: systemPrompt,
+    systemPrompt: agent.graphConstructionSystemPrompt,
     request: { messages: requestMessages },
     phase: "graph_construction",
   });
@@ -725,7 +697,7 @@ If no existing type fits, you may use createNodeType/createEdgeType, but only af
 
   const { fullResponse } = await streamLLMResponseWithTools(
     requestMessages,
-    systemPrompt,
+    agent.graphConstructionSystemPrompt,
     {
       tools,
       toolContext,

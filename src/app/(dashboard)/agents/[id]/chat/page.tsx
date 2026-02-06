@@ -7,7 +7,7 @@ import { AgentChatView } from "./chat-view";
 interface AgentData {
   id: string;
   name: string;
-  conversationSystemPrompt: string | null;
+  conversationSystemPrompt: string;
 }
 
 export default function AgentChatPage() {
@@ -63,7 +63,7 @@ export default function AgentChatPage() {
       agent={{
         id: agentId,
         name: agent.name,
-        systemPrompt: agent.conversationSystemPrompt ?? "",
+        systemPrompt: agent.conversationSystemPrompt,
       }}
     />
   );

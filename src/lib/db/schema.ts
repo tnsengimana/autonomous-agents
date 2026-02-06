@@ -98,10 +98,18 @@ export const agents = pgTable(
     // Phase-specific system prompts (multi-phase architecture)
     conversationSystemPrompt: text("conversation_system_prompt").notNull(),
     observerSystemPrompt: text("observer_system_prompt").notNull(),
-    analysisGenerationSystemPrompt: text("analysis_generation_system_prompt").notNull(),
-    adviceGenerationSystemPrompt: text("advice_generation_system_prompt").notNull(),
-    knowledgeAcquisitionSystemPrompt: text("knowledge_acquisition_system_prompt"),
-    graphConstructionSystemPrompt: text("graph_construction_system_prompt").notNull(),
+    analysisGenerationSystemPrompt: text(
+      "analysis_generation_system_prompt",
+    ).notNull(),
+    adviceGenerationSystemPrompt: text(
+      "advice_generation_system_prompt",
+    ).notNull(),
+    knowledgeAcquisitionSystemPrompt: text(
+      "knowledge_acquisition_system_prompt",
+    ).notNull(),
+    graphConstructionSystemPrompt: text(
+      "graph_construction_system_prompt",
+    ).notNull(),
     // Worker iteration interval in milliseconds
     iterationIntervalMs: integer("iteration_interval_ms").notNull(),
     isActive: boolean("is_active").notNull().default(true),
@@ -208,7 +216,9 @@ export const llmInteractions = pgTable(
   },
   (table) => [
     index("llm_interactions_agent_id_idx").on(table.agentId),
-    index("llm_interactions_worker_iteration_id_idx").on(table.workerIterationId),
+    index("llm_interactions_worker_iteration_id_idx").on(
+      table.workerIterationId,
+    ),
     index("llm_interactions_created_at_idx").on(table.createdAt),
   ],
 );
@@ -435,15 +445,12 @@ export const graphNodeTypesRelations = relations(graphNodeTypes, ({ one }) => ({
   }),
 }));
 
-export const graphEdgeTypesRelations = relations(
-  graphEdgeTypes,
-  ({ one }) => ({
-    agent: one(agents, {
-      fields: [graphEdgeTypes.agentId],
-      references: [agents.id],
-    }),
+export const graphEdgeTypesRelations = relations(graphEdgeTypes, ({ one }) => ({
+  agent: one(agents, {
+    fields: [graphEdgeTypes.agentId],
+    references: [agents.id],
   }),
-);
+}));
 
 export const graphNodesRelations = relations(graphNodes, ({ one, many }) => ({
   agent: one(agents, {

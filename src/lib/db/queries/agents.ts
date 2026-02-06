@@ -25,7 +25,7 @@ export async function createAgent(data: {
   observerSystemPrompt: string;
   analysisGenerationSystemPrompt: string;
   adviceGenerationSystemPrompt: string;
-  knowledgeAcquisitionSystemPrompt?: string | null;
+  knowledgeAcquisitionSystemPrompt: string;
   graphConstructionSystemPrompt: string;
   iterationIntervalMs: number;
   isActive?: boolean;
@@ -40,7 +40,7 @@ export async function createAgent(data: {
       observerSystemPrompt: data.observerSystemPrompt,
       analysisGenerationSystemPrompt: data.analysisGenerationSystemPrompt,
       adviceGenerationSystemPrompt: data.adviceGenerationSystemPrompt,
-      knowledgeAcquisitionSystemPrompt: data.knowledgeAcquisitionSystemPrompt ?? null,
+      knowledgeAcquisitionSystemPrompt: data.knowledgeAcquisitionSystemPrompt,
       graphConstructionSystemPrompt: data.graphConstructionSystemPrompt,
       iterationIntervalMs: data.iterationIntervalMs,
       isActive: data.isActive ?? true,
