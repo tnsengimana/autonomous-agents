@@ -49,7 +49,7 @@ export default async function AgentsPage() {
                   <div className="flex items-start justify-between">
                     <CardTitle className="text-lg">{agent.name}</CardTitle>
                     <Badge
-                      variant={agent.isActive ? "default" : "secondary"}
+                      variant={agent.isActive ? "secondary" : "outline"}
                     >
                       {agent.isActive ? "Active" : "Paused"}
                     </Badge>

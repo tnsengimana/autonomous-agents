@@ -91,7 +91,7 @@ export default async function AgentDetailPage({
           <CardContent className="space-y-3">
             <div className="flex items-center justify-between">
               <span className="text-sm text-muted-foreground">Status</span>
-              <Badge variant={agent.isActive ? "default" : "secondary"}>
+              <Badge variant={agent.isActive ? "secondary" : "outline"}>
                 {agent.isActive ? "Active" : "Paused"}
               </Badge>
             </div>

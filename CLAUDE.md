@@ -124,6 +124,11 @@ For agents to run autonomously:
 3. **5-minute iterations**: Worker processes all active agents every 5 minutes
 4. **Advice via notifications**: AgentAdvice nodes (BUY/SELL/HOLD) automatically create inbox notifications
 
+## UI Guidelines
+
+- **Emphasis colors are reserved for buttons only** — buttons can use `default` (black), `destructive` (red), etc. to signal intent clearly.
+- **Badges & labels must use subtle, muted colors only** — use `secondary` (gray) or `outline` variants. Never use `default` (dark) or `destructive` (red) on badges/labels. This keeps the UI predictable: if something is colored, it's actionable.
+
 ## Workflow Preferences
 
 **IMPORTANT - Plans Location**: ALL implementation plans go in `docs/plans/` with naming `<next-incrementing-number>-<topic>.md`. Never use `.claude/plans/` or any other location. This is non-negotiable. The incrementing number in front of the plan document is important must be the next line; this allows sorting plans in order they were applied to repositories, effectively being able to track changes made over time.

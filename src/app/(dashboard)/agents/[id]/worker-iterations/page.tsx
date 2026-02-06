@@ -59,7 +59,7 @@ function getPhaseLabel(phase: string | null): string {
 
 function getPhaseVariant(
   phase: string | null,
-): "default" | "secondary" | "outline" {
+): "secondary" | "outline" {
   switch (phase) {
     case "observer":
       return "outline";
@@ -68,9 +68,9 @@ function getPhaseVariant(
     case "graph_construction":
       return "secondary";
     case "analysis_generation":
-      return "default";
+      return "secondary";
     case "advice_generation":
-      return "default";
+      return "secondary";
     default:
       return "outline";
   }
@@ -165,10 +165,10 @@ function IterationItem({ iteration }: { iteration: WorkerIteration }) {
 
   const statusVariant =
     iteration.status === "completed"
-      ? "default"
+      ? "secondary"
       : iteration.status === "failed"
-        ? "destructive"
-        : "secondary";
+        ? "outline"
+        : "outline";
 
   const planSummary = iteration.observerPlan
     ? `${iteration.observerPlan.queries?.length ?? 0} queries, ${iteration.observerPlan.insights?.length ?? 0} insights`
