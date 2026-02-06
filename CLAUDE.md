@@ -52,7 +52,7 @@ The system is built around agents that run autonomously:
 **LLM & Tools** (`src/lib/llm/`)
 - `llm.ts` - Provider abstraction (OpenAI, Anthropic, Gemini, LMStudio). Looks up user's encrypted API keys, falls back to env vars
 - `knowledge-graph.ts` - Builds graph context block for LLM prompts
-- `graph-configuration.ts` - Initializes node/edge types for new agents
+- `graph-types.ts` - Initializes node/edge types for new agents
 - `conversation.ts` - Conversation management
 - `memory.ts` - Memory extraction from user conversations
 - `compaction.ts` - Conversation compaction via summary messages
@@ -70,10 +70,12 @@ The system is built around agents that run autonomously:
 
 **Background Worker** (`src/worker/runner.ts`)
 - Per-agent iteration loop based on `iterationIntervalMs`
-- Each iteration runs a multi-phase pipeline:
-  1. **Classification**: Decides "synthesize" or "populate"
-  2. If synthesize: **Analysis Generation** (creates AgentAnalysis nodes) → **Advice Generation** (may create AgentAdvice nodes)
-  3. If populate: **Knowledge Acquisition** (web research) → **Graph Construction** (structure into graph)
+- Each iteration runs the Observer → Researcher → Analyzer → Adviser pipeline:
+  1. **Observer**: Scans graph, produces plan with queries (knowledge gaps) and insights (patterns)
+  2. **Researcher**: For each query, runs Knowledge Acquisition (web research) + Graph Construction
+  3. Rebuild graph context with enriched data
+  4. **Analyzer**: For each insight, runs Analysis Generation (creates AgentAnalysis nodes)
+  5. **Adviser**: If analyses were produced, runs Advice Generation (may create AgentAdvice nodes)
 - AgentAdvice node creation triggers user notifications via inbox items
 
 **Authentication** (`src/lib/auth/config.ts`)
@@ -91,14 +93,16 @@ The system is built around agents that run autonomously:
 
 **Autonomous Work (Background)**:
 1. Worker picks up active agent based on its iteration interval
-2. **Classification phase**: Analyzes graph state, decides "synthesize" or "populate"
-3. If "synthesize":
-   - **Analysis Generation**: Creates AgentAnalysis nodes (observations, patterns) from existing knowledge
-   - **Advice Generation**: Reviews AgentAnalysis nodes, may create AgentAdvice nodes (BUY/SELL/HOLD) which notify user
-4. If "populate":
-   - **Knowledge Acquisition**: Uses Tavily tools to research knowledge gaps
+2. **Observer phase**: Scans graph, produces plan with queries and insights
+3. **Researcher phase** (for each query):
+   - **Knowledge Acquisition**: Uses Tavily tools to research knowledge gap
    - **Graph Construction**: Structures acquired knowledge into typed graph nodes/edges
-5. All phases logged to `llm_interactions` with phase tracking
+4. Rebuild graph context (now enriched with new data)
+5. **Analyzer phase** (for each insight):
+   - **Analysis Generation**: Creates AgentAnalysis nodes from existing knowledge
+6. **Adviser phase** (if analyses were produced):
+   - **Advice Generation**: Reviews AgentAnalysis nodes, may create AgentAdvice nodes which notify user
+7. All phases logged to `llm_interactions` with phase tracking
 
 ### Key Patterns
 

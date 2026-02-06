@@ -44,7 +44,7 @@ beforeAll(async () => {
       purpose: "Financial research and analysis",
       conversationSystemPrompt:
         "You are a test agent for knowledge graph testing.",
-      classificationSystemPrompt: "You classify information for testing.",
+      observerSystemPrompt: "You observe and classify information for testing.",
       analysisGenerationSystemPrompt: "You generate analyses for testing.",
       adviceGenerationSystemPrompt: 'You generate advice for testing.',
       graphConstructionSystemPrompt: "You construct graphs for testing.",
@@ -120,7 +120,7 @@ describe("buildGraphContextBlock", () => {
         purpose: "Testing empty graph",
         conversationSystemPrompt:
           "You are a test agent for empty graph testing.",
-        classificationSystemPrompt: "You classify information for testing.",
+        observerSystemPrompt: "You observe and classify information for testing.",
         analysisGenerationSystemPrompt: "You generate analyses for testing.",
         adviceGenerationSystemPrompt: 'You generate advice for testing.',
         graphConstructionSystemPrompt: "You construct graphs for testing.",
@@ -168,7 +168,7 @@ describe("ensureGraphTypesInitialized", () => {
         purpose: "Testing type initialization",
         conversationSystemPrompt:
           "You are a test agent for type initialization.",
-        classificationSystemPrompt: "You classify information for testing.",
+        observerSystemPrompt: "You observe and classify information for testing.",
         analysisGenerationSystemPrompt: "You generate analyses for testing.",
         adviceGenerationSystemPrompt: 'You generate advice for testing.',
         graphConstructionSystemPrompt: "You construct graphs for testing.",
@@ -236,7 +236,7 @@ describe("ensureGraphTypesInitialized", () => {
         name: "No UserId Agent",
         purpose: "Testing without userId",
         conversationSystemPrompt: "You are a test agent for userId testing.",
-        classificationSystemPrompt: "You classify information for testing.",
+        observerSystemPrompt: "You observe and classify information for testing.",
         analysisGenerationSystemPrompt: "You generate analyses for testing.",
         adviceGenerationSystemPrompt: 'You generate advice for testing.',
         graphConstructionSystemPrompt: "You construct graphs for testing.",
@@ -287,7 +287,7 @@ describe("Integration", () => {
         purpose: "Integration testing",
         conversationSystemPrompt:
           "You are a test agent for integration testing.",
-        classificationSystemPrompt: "You classify information for testing.",
+        observerSystemPrompt: "You observe and classify information for testing.",
         analysisGenerationSystemPrompt: "You generate analyses for testing.",
         adviceGenerationSystemPrompt: 'You generate advice for testing.',
         graphConstructionSystemPrompt: "You construct graphs for testing.",

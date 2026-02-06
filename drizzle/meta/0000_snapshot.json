@@ -1,5 +1,5 @@
 {
-  "id": "f726998a-5790-4039-adea-aba69fa16d64",
+  "id": "ffddb11a-50df-44b7-8b0e-09fa74f9a14b",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -140,8 +140,8 @@
           "primaryKey": false,
           "notNull": true
         },
-        "classification_system_prompt": {
-          "name": "classification_system_prompt",
+        "observer_system_prompt": {
+          "name": "observer_system_prompt",
           "type": "text",
           "primaryKey": false,
           "notNull": true
@@ -1564,15 +1564,9 @@
           "notNull": true,
           "default": "'running'"
         },
-        "classification_result": {
-          "name": "classification_result",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "classification_reasoning": {
-          "name": "classification_reasoning",
-          "type": "text",
+        "observer_plan": {
+          "name": "observer_plan",
+          "type": "jsonb",
           "primaryKey": false,
           "notNull": false
         },

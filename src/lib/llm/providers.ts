@@ -31,7 +31,7 @@ const DEFAULT_MODEL = {
   openai: "gpt-4o",
   anthropic: "claude-sonnet-4-20250514",
   google: "gemini-3-flash-preview", // Using flash as default since pro has reliability issues
-  lmstudio: "zai-org/glm-4.7-flash",
+  lmstudio: "mistralai/ministral-3-14b-reasoning",
 } as const;
 
 const FALLBACK_MODEL = {
@@ -716,10 +716,10 @@ export async function generateLLMObject<T>(
       { memories: [] },
       // Briefing decision (no briefing)
       { shouldBrief: false, reason: "Mock mode - no briefing" },
-      // Worker classification decision
+      // Observer plan (replaces classification)
       {
-        action: "populate",
-        reasoning: "Mock mode - default to populate to gather more knowledge",
+        queries: [],
+        insights: [],
       },
       // User intent classification (default to regular_chat for most messages)
       {

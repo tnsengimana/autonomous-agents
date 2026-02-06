@@ -56,7 +56,7 @@ beforeAll(async () => {
     name: 'Graph Tools Test Team',
     purpose: 'Testing graph tools',
     conversationSystemPrompt: 'You are a test agent for graph tools testing.',
-    classificationSystemPrompt: 'You classify information for testing.',
+    observerSystemPrompt: 'You observe and classify information for testing.',
     analysisGenerationSystemPrompt: 'You generate analyses for testing.',
     adviceGenerationSystemPrompt: 'You generate advice for testing.',
     graphConstructionSystemPrompt: 'You construct graphs for testing.',

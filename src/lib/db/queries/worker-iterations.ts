@@ -16,8 +16,7 @@ export interface WorkerIteration {
   id: string;
   agentId: string;
   status: string;
-  classificationResult: string | null;
-  classificationReasoning: string | null;
+  observerPlan: Record<string, unknown> | null;
   errorMessage: string | null;
   createdAt: Date;
   completedAt: Date | null;
@@ -41,8 +40,7 @@ export interface CreateWorkerIterationInput {
 
 export interface UpdateWorkerIterationInput {
   status?: string;
-  classificationResult?: string;
-  classificationReasoning?: string;
+  observerPlan?: Record<string, unknown>;
   errorMessage?: string;
   completedAt?: Date;
 }
@@ -69,8 +67,7 @@ export async function createWorkerIteration(
     id: iteration.id,
     agentId: iteration.agentId,
     status: iteration.status,
-    classificationResult: iteration.classificationResult,
-    classificationReasoning: iteration.classificationReasoning,
+    observerPlan: iteration.observerPlan as Record<string, unknown> | null,
     errorMessage: iteration.errorMessage,
     createdAt: iteration.createdAt,
     completedAt: iteration.completedAt,
@@ -145,19 +142,20 @@ export async function getWorkerIterationsWithInteractions(
     id: iteration.id,
     agentId: iteration.agentId,
     status: iteration.status,
-    classificationResult: iteration.classificationResult,
-    classificationReasoning: iteration.classificationReasoning,
+    observerPlan: iteration.observerPlan as Record<string, unknown> | null,
     errorMessage: iteration.errorMessage,
     createdAt: iteration.createdAt,
     completedAt: iteration.completedAt,
     llmInteractions: (
       interactionsByIteration.get(iteration.id) || []
     ).sort((a, b) => {
-      // Sort by phase order: classification first, then action
+      // Sort by phase order: observer first, then research, then analysis/advice
       const phaseOrder: Record<string, number> = {
-        classification: 0,
-        analysis_generation: 1,
-        graph_construction: 1,
+        observer: 0,
+        knowledge_acquisition: 1,
+        graph_construction: 2,
+        analysis_generation: 3,
+        advice_generation: 4,
       };
       const aOrder = a.phase ? phaseOrder[a.phase] ?? 2 : 2;
       const bOrder = b.phase ? phaseOrder[b.phase] ?? 2 : 2;
@@ -187,8 +185,7 @@ export async function getWorkerIterationById(
     id: row.id,
     agentId: row.agentId,
     status: row.status,
-    classificationResult: row.classificationResult,
-    classificationReasoning: row.classificationReasoning,
+    observerPlan: row.observerPlan as Record<string, unknown> | null,
     errorMessage: row.errorMessage,
     createdAt: row.createdAt,
     completedAt: row.completedAt,
@@ -217,8 +214,7 @@ export async function getLastCompletedIteration(
     id: row.id,
     agentId: row.agentId,
     status: row.status,
-    classificationResult: row.classificationResult,
-    classificationReasoning: row.classificationReasoning,
+    observerPlan: row.observerPlan as Record<string, unknown> | null,
     errorMessage: row.errorMessage,
     createdAt: row.createdAt,
     completedAt: row.completedAt,

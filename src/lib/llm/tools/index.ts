@@ -159,16 +159,6 @@ export function getConversationTools(): Tool[] {
 }
 
 /**
- * Get tools for the Classification phase (deciding synthesize vs populate)
- * Tools: queryGraph only (to assess current graph state)
- */
-export function getClassificationTools(): Tool[] {
-  return getAllTools().filter((tool) =>
-    ["queryGraph"].includes(tool.schema.name),
-  );
-}
-
-/**
  * Get tools for the Analysis Generation phase (creating analyses from existing knowledge)
  * Tools: queryGraph, addAgentAnalysisNode, addGraphEdge
  */

@@ -28,10 +28,10 @@ const AgentConfigurationSchema = z.object({
   conversationSystemPrompt: z
     .string()
     .describe("System prompt for user-facing conversations"),
-  classificationSystemPrompt: z
+  observerSystemPrompt: z
     .string()
     .describe(
-      "System prompt for deciding between synthesize or populate actions",
+      "System prompt for the Observer phase that plans each iteration's work",
     ),
   analysisGenerationSystemPrompt: z
     .string()
@@ -111,59 +111,72 @@ Generate a conversationSystemPrompt (3-5 paragraphs) that instructs the agent to
 - Offer to investigate topics further in future iterations`;
 
 /**
- * Meta-prompt for generating the CLASSIFICATION system prompt.
- * This prompt decides whether to synthesize analyses or gather more data.
+ * Meta-prompt for generating the OBSERVER system prompt.
+ * The Observer is the agent's "brain" -- it scans the knowledge graph and produces a structured plan.
  */
-function getClassificationMetaPrompt(interval: string): string {
-  return `You are an expert agent architect. Given a mission/purpose, generate a CLASSIFICATION SYSTEM PROMPT for an AI agent that acts as a "tech lead" directing background work.
+function getObserverMetaPrompt(interval: string): string {
+  return `You are an expert agent architect. Given a mission/purpose, generate an OBSERVER SYSTEM PROMPT for an AI agent that acts as the central planner directing all background work.
 
 ## Context
 
-This agent runs autonomously every ${interval}. At the start of each iteration, the classification phase analyzes the current state of the Knowledge Graph and decides:
-- **"synthesize"**: Enough knowledge exists to derive valuable analyses
-- **"populate"**: Need to gather more external data to fill knowledge gaps
+This agent runs autonomously every ${interval}. At the start of each iteration, the Observer phase scans the knowledge graph and produces a structured plan with two types of work items:
+
+- **Queries**: Knowledge gaps to fill via web research. Each query has an objective, reasoning, and search hints.
+- **Insights**: Patterns or connections worth analyzing from existing graph knowledge. Each insight has an observation, relevant node IDs, and a synthesis direction.
+
+The Observer does NOT execute anything -- it only plans. It does not search the web, create graph nodes, or write analyses. It reads the graph context and decides what to investigate and what to think about. The downstream phases (Researcher, Analyzer, Adviser) handle execution.
 
 ## Output Requirements
 
-Generate a classificationSystemPrompt (4-6 paragraphs) that instructs the agent to:
+Generate an observerSystemPrompt (5-8 paragraphs) that instructs the agent to:
 
 ### 1. Graph State Analysis
-- Use queryGraph to assess the current knowledge landscape
+- Carefully review the full graph context provided
 - Identify what knowledge exists, its recency, and its completeness
 - Look for areas that are well-populated vs. sparse
 - Check temporal properties: what knowledge is stale or needs updating?
+- Notice cross-domain connections and emerging patterns
 
-### 2. Decision Criteria for "synthesize"
-Choose to synthesize when:
-- Multiple related pieces of information can be connected to derive new understanding
-- Patterns are emerging that haven't been formally captured as analyses
-- Recent data creates opportunities to update or validate existing observations
-- There's enough evidence to form a high-confidence signal or observation
-
-### 3. Decision Criteria for "populate"
-Choose to populate when:
+### 2. Query Generation (Knowledge Gaps)
+Generate queries when:
 - Key knowledge areas have gaps that limit analysis quality
 - Information is stale and needs refreshing
 - New developments require investigation
 - The mission has aspects not yet represented in the graph
 
-### 4. Granular Reasoning Output (CRITICAL)
-The reasoning must be specific and actionable:
-- Don't just say "populate" - specify WHAT to research and WHY
-- Don't just say "synthesize" - specify WHAT analyses to derive from WHICH knowledge
-- Include the specific nodes, topics, or knowledge gaps being addressed
-- Example good reasoning: "synthesize: We have 5 recent earnings reports for tech companies and 3 Fed policy updates. Derive analyses about tech sector response to monetary policy."
-- Example good reasoning: "populate: Our knowledge of renewable energy policy is from 6 months ago. Research recent legislative changes and subsidy updates."
+Each query must include:
+- **objective**: A specific, targeted research goal (not vague like "learn more about tech")
+- **reasoning**: Why this gap matters for the mission
+- **searchHints**: Concrete search queries to guide research
+
+### 3. Insight Generation (Patterns to Analyze)
+Generate insights when:
+- Multiple related pieces of information can be connected to derive new understanding
+- Patterns are emerging that haven't been formally captured as AgentAnalysis nodes
+- Recent data creates opportunities to update or validate existing observations
+- Cross-domain connections are visible that deserve deeper analysis
+
+Each insight must include:
+- **observation**: The specific pattern or connection noticed
+- **relevantNodeIds**: UUIDs of nodes that inform this observation (the Observer has access to node IDs in the graph context)
+- **synthesisDirection**: Clear guidance on what angle to analyze
+
+### 4. Plan Balance
+- Prefer a focused plan (2-4 total items) over an exhaustive one
+- It is valid to produce an empty plan if the graph is in good shape and no action is needed
+- Balance queries and insights -- don't always do one without the other
+- Avoid re-querying for knowledge that already exists in the graph
+- Avoid generating insights that duplicate existing AgentAnalysis nodes
 
 ### 5. Mission Alignment
-- Always tie decisions back to the agent's core mission
+- Every query and insight must tie back to the agent's core mission
 - Prioritize work that advances the mission's goals
-- Balance breadth (covering the mission scope) with depth (thorough understanding)
+- Don't drift into tangential topics just because they're interesting
 
-### 6. Avoid Stagnation
-- Don't repeatedly synthesize the same patterns without new data
-- Don't endlessly populate without creating analyses
-- Maintain a healthy rhythm between both actions`;
+### 6. Quality Over Quantity
+- One well-defined query is better than five vague ones
+- One specific insight pointing at concrete nodes is better than a generic observation
+- The Observer's output quality determines the quality of the entire iteration`;
 }
 
 /**
@@ -174,16 +187,17 @@ const ANALYSIS_GENERATION_META_PROMPT = `You are an expert agent architect. Give
 
 ## Context
 
-This agent has been directed to create analyses from its existing knowledge. It does NOT do external research - it analyzes and synthesizes what's already in the graph. The input includes reasoning from the classification phase explaining WHAT analyses to derive.
+This agent has been directed to analyze a specific pattern spotted by the Observer. It does NOT do external research -- it analyzes and synthesizes what's already in the graph. The input includes a specific observation, relevant node IDs, and a synthesis direction from the Observer phase.
 
 ## Output Requirements
 
 Generate an analysisGenerationSystemPrompt (4-6 paragraphs) that instructs the agent to:
 
-### 1. Follow Classification Guidance
-- Read the classification reasoning carefully - it specifies what to analyze
-- Focus on the specific knowledge areas or patterns identified
-- Don't deviate into unrelated synthesis
+### 1. Follow Observer Guidance
+- Read the Observer's observation and synthesis direction carefully
+- Focus on the specific nodes identified by the Observer
+- Use the synthesis direction to guide the angle of analysis
+- Don't deviate into unrelated analysis
 
 ### 2. Analysis Types
 Create analyses using the AgentAnalysis node type with these categories:
@@ -194,19 +208,26 @@ IMPORTANT: AgentAnalysis nodes are internal analysis. They do NOT create user no
 The agent should freely create observations and patterns as it analyzes the knowledge graph.
 Do NOT create actionable recommendations here - those belong in the Advice Generation phase.
 
-### 3. Evidence-Based Reasoning
+### 3. Handling Insufficient Data
+If the available knowledge is insufficient to properly analyze the Observer's observation:
+- Do NOT create a low-quality or speculative analysis
+- Explain what additional data would be needed
+- The next iteration's Observer will see this gap and can generate appropriate queries
+- It is perfectly acceptable to produce NO AgentAnalysis nodes
+
+### 4. Evidence-Based Reasoning
 - Query the graph to gather supporting evidence
 - Reference specific nodes that inform the analysis
 - Create edges connecting the analysis to its source data (derived_from, about edges)
 - Include confidence levels based on evidence strength and recency
 
-### 4. Quality Standards
+### 5. Quality Standards
 - Only create analyses when there's genuine analytical value
 - Avoid restating facts as analyses - analyses must ADD understanding
 - Consider multiple perspectives before forming conclusions
 - Acknowledge uncertainty when evidence is limited
 
-### 5. Analysis Properties - SUMMARY and CONTENT (BOTH REQUIRED)
+### 6. Analysis Properties - SUMMARY and CONTENT (BOTH REQUIRED)
 
 **MANDATORY: Every analysis MUST have BOTH summary AND content fields populated. Never create an analysis without both.**
 
@@ -237,14 +258,14 @@ Other properties:
 - confidence: confidence level based on evidence quality (0.0-1.0)
 - generated_at: current timestamp
 
-### 6. Analysis Value
+### 7. Analysis Value
 - Think about what observations and patterns would be genuinely useful for future advice generation
 - AgentAnalysis nodes are building blocks for AgentAdvice - focus on analytical depth
 - Consider timing: is this analysis timely and relevant now?
 - Write summaries that are clear and informative without being verbose
 - Content should be thorough enough to support future actionable recommendations
 
-### 7. Graph Hygiene
+### 8. Graph Hygiene
 - Create edges linking analyses to the nodes they're derived from
 - Use appropriate edge types (derived_from, about, supports, contradicts)
 - Don't create duplicate analyses - check if similar analyses exist
@@ -408,24 +429,36 @@ For each piece of knowledge:
 // ============================================================================
 
 function getUnifiedMetaPrompt(interval: string): string {
-  const classificationMetaPrompt = getClassificationMetaPrompt(interval);
+  const observerMetaPrompt = getObserverMetaPrompt(interval);
 
   return `You are an expert agent architect. Given a mission/purpose, generate SIX DISTINCT SYSTEM PROMPTS for an autonomous AI agent that runs continuously.
 
 ## Agent Architecture Overview
 
-This agent operates in six distinct phases, each with its own system prompt:
+This agent operates with four named actors, each with its own system prompt:
 
 1. **CONVERSATION** (Foreground): Handles user interactions, answers questions using knowledge graph
-2. **CLASSIFICATION** (Background): Analyzes graph state, decides whether to synthesize analyses or gather more data
-3. **ANALYSIS GENERATION** (Background): Creates AgentAnalysis nodes from existing knowledge when classification chooses "synthesize"
-4. **ADVICE GENERATION** (Background): Reviews AgentAnalysis nodes and may create AgentAdvice recommendations (runs after analysis generation)
-5. **KNOWLEDGE ACQUISITION** (Background): Gathers raw information using web search when classification chooses "populate"
-6. **GRAPH CONSTRUCTION** (Background): Structures acquired knowledge into the graph after knowledge acquisition
+2. **OBSERVER** (Background): Scans the graph and plans each iteration's work -- produces queries (knowledge gaps) and insights (patterns to analyze)
+3. **RESEARCHER** (Background): Executes the Observer's queries via two sub-phases:
+   - **KNOWLEDGE ACQUISITION**: Gathers raw information using web search
+   - **GRAPH CONSTRUCTION**: Structures acquired knowledge into the graph
+4. **ANALYZER** (Background): Processes the Observer's insights via **ANALYSIS GENERATION** -- creates AgentAnalysis nodes
+5. **ADVISER** (Background): Reviews AgentAnalysis nodes and may create AgentAdvice recommendations
+
+> Note: There are 5 listed actors but 6 system prompts because the RESEARCHER (item 3) covers TWO separate system prompts: \`knowledgeAcquisitionSystemPrompt\` and \`graphConstructionSystemPrompt\`. This is why the output section below says "generate SIX DISTINCT SYSTEM PROMPTS" from 5 actors.
+
+## Iteration Pipeline
+
+Every iteration follows the same pipeline:
+1. Observer produces plan with queries and insights
+2. Researcher executes each query (knowledge acquisition + graph construction)
+3. Graph context is rebuilt with enriched data
+4. Analyzer processes each insight (analysis generation on enriched graph)
+5. Adviser runs if analyses were produced (advice generation)
 
 ## What This Agent Does
 
-- Runs autonomously in the background every ${interval} (classification + one action)
+- Runs autonomously in the background every ${interval}
 - Maintains a Knowledge Graph of typed nodes and edges
 - Uses web search tools to research and discover information
 - Creates AgentAnalysis nodes (observations, patterns) and AgentAdvice nodes (BUY/SELL/HOLD recommendations)
@@ -438,8 +471,8 @@ Generate all six system prompts tailored to the given mission:
 ### 1. conversationSystemPrompt (3-5 paragraphs)
 ${CONVERSATION_META_PROMPT.split("## Output Requirements")[1]}
 
-### 2. classificationSystemPrompt (4-6 paragraphs)
-${classificationMetaPrompt.split("## Output Requirements")[1]}
+### 2. observerSystemPrompt (5-8 paragraphs)
+${observerMetaPrompt.split("## Output Requirements")[1]}
 
 ### 3. analysisGenerationSystemPrompt (4-6 paragraphs)
 ${ANALYSIS_GENERATION_META_PROMPT.split("## Output Requirements")[1]}
@@ -491,7 +524,11 @@ Generate the complete agent configuration with:
 1. A short, memorable name (2-4 words)
 2. All six system prompts tailored to this mission
 
-Each system prompt should be detailed and actionable, giving clear guidance for its specific phase of operation. The prompts should work together as a coherent system while each focusing on its unique responsibilities.`;
+Each system prompt should be detailed and actionable, giving clear guidance for its specific phase of operation. The prompts should work together as a coherent system:
+- The Observer plans what to research and what to analyze
+- The Researcher gathers and structures knowledge
+- The Analyzer creates analyses from existing knowledge
+- The Adviser creates recommendations from analyses`;
 
   return generateLLMObject(
     [{ role: "user", content: userPrompt }],

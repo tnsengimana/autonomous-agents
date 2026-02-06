@@ -196,3 +196,30 @@ Yes, this is the right move. It completes the separation and creates a consisten
 The `analysisGeneration` naming parallels `adviceGeneration` nicely. And it follows a clean pattern: `{output}GenerationSystemPrompt`.
 
 The Observer replaces the current `classificationSystemPrompt`, which becomes `observerSystemPrompt`.
+
+### Q4: Relationship to the OODA Loop
+
+**Question:** Don't you think our research doc and pretty much what we just implemented is a variant of the OODA loop?
+
+**Answer:**
+
+That's a sharp observation. It absolutely is.
+
+**OODA**: Observe → Orient → Decide → Act
+
+**Our pipeline**: Observer → Researcher → Analyzer → Adviser
+
+The mapping:
+
+| OODA | Our Pipeline | What it does |
+|---|---|---|
+| **Observe** | **Observer** | Scans the graph, notices knowledge gaps and patterns |
+| **Orient** | **Researcher** | Builds context by filling gaps — actively acquires knowledge to properly understand the situation |
+| **Decide** | **Analyzer** | Synthesizes patterns, forms conclusions about what the observations mean |
+| **Act** | **Adviser** | Recommends specific actions to the user |
+
+The main twist from classic OODA is that our "Orient" phase is *active* rather than purely mental. Boyd's Orient is about updating your mental model with what you already know — cultural traditions, previous experience, genetic heritage, new information. Our Researcher goes further: it actively goes out and gathers new information to fill the gaps the Observer identified. But that makes sense for an information agent operating in a data-rich environment.
+
+The other nice parallel is Boyd's core insight: **the loop itself matters**. The agent that cycles through OODA faster and more coherently gains an advantage. That's exactly why we killed the ping-pong problem — the old system broke the loop across multiple iterations, while now the full cycle completes in one iteration. Boyd would call this "getting inside the opponent's OODA loop" — except our opponent is entropy and information decay, not another combatant.
+
+We didn't consciously design it as OODA, but we converged on the same structure because the problem demands it: continuous autonomous sense-making in a changing environment. Boyd developed OODA for fighter pilots making split-second decisions; we built it for an agent making 5-minute decisions. The timescales are different, the structure is the same.

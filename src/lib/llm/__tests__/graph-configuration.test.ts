@@ -332,7 +332,7 @@ describe("persistInitializedTypes", () => {
         purpose: "Testing persistence",
         conversationSystemPrompt:
           "You are a test agent for persistence testing.",
-        classificationSystemPrompt: "You classify information for testing.",
+        observerSystemPrompt: "You observe and classify information for testing.",
         analysisGenerationSystemPrompt: "You generate analyses for testing.",
         adviceGenerationSystemPrompt: 'You generate advice for testing.',
         graphConstructionSystemPrompt: "You construct graphs for testing.",
@@ -375,7 +375,7 @@ describe("persistInitializedTypes", () => {
         purpose: "Testing edge persistence",
         conversationSystemPrompt:
           "You are a test agent for edge persistence testing.",
-        classificationSystemPrompt: "You classify information for testing.",
+        observerSystemPrompt: "You observe and classify information for testing.",
         analysisGenerationSystemPrompt: "You generate analyses for testing.",
         adviceGenerationSystemPrompt: 'You generate advice for testing.',
         graphConstructionSystemPrompt: "You construct graphs for testing.",
@@ -418,7 +418,7 @@ describe("persistInitializedTypes", () => {
         purpose: "Testing constraint persistence",
         conversationSystemPrompt:
           "You are a test agent for constraint persistence testing.",
-        classificationSystemPrompt: "You classify information for testing.",
+        observerSystemPrompt: "You observe and classify information for testing.",
         analysisGenerationSystemPrompt: "You generate analyses for testing.",
         adviceGenerationSystemPrompt: 'You generate advice for testing.',
         graphConstructionSystemPrompt: "You construct graphs for testing.",
@@ -463,7 +463,7 @@ describe("persistInitializedTypes", () => {
         purpose: "Testing empty types",
         conversationSystemPrompt:
           "You are a test agent for empty types testing.",
-        classificationSystemPrompt: "You classify information for testing.",
+        observerSystemPrompt: "You observe and classify information for testing.",
         analysisGenerationSystemPrompt: "You generate analyses for testing.",
         adviceGenerationSystemPrompt: 'You generate advice for testing.',
         graphConstructionSystemPrompt: "You construct graphs for testing.",
@@ -502,7 +502,7 @@ describe("persistInitializedTypes", () => {
         purpose: "Testing invalid references",
         conversationSystemPrompt:
           "You are a test agent for invalid reference testing.",
-        classificationSystemPrompt: "You classify information for testing.",
+        observerSystemPrompt: "You observe and classify information for testing.",
         analysisGenerationSystemPrompt: "You generate analyses for testing.",
         adviceGenerationSystemPrompt: 'You generate advice for testing.',
         graphConstructionSystemPrompt: "You construct graphs for testing.",
@@ -565,7 +565,7 @@ describe("Integration", () => {
         name: "E2E Test Aide",
         purpose: "End-to-end type initialization testing",
         conversationSystemPrompt: "You are a test agent for E2E testing.",
-        classificationSystemPrompt: "You classify information for testing.",
+        observerSystemPrompt: "You observe and classify information for testing.",
         analysisGenerationSystemPrompt: "You generate analyses for testing.",
         adviceGenerationSystemPrompt: 'You generate advice for testing.',
         graphConstructionSystemPrompt: "You construct graphs for testing.",

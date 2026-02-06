@@ -33,8 +33,7 @@ interface WorkerIteration {
   id: string;
   agentId: string;
   status: string;
-  classificationResult: string | null;
-  classificationReasoning: string | null;
+  observerPlan: { queries?: unknown[]; insights?: unknown[] } | null;
   errorMessage: string | null;
   createdAt: string;
   completedAt: string | null;
@@ -43,10 +42,14 @@ interface WorkerIteration {
 
 function getPhaseLabel(phase: string | null): string {
   switch (phase) {
-    case "classification":
-      return "Classification";
+    case "observer":
+      return "Observer";
+    case "knowledge_acquisition":
+      return "Knowledge Acquisition";
     case "analysis_generation":
       return "Analysis Generation";
+    case "advice_generation":
+      return "Advice Generation";
     case "graph_construction":
       return "Graph Construction";
     default:
@@ -58,12 +61,16 @@ function getPhaseVariant(
   phase: string | null,
 ): "default" | "secondary" | "outline" {
   switch (phase) {
-    case "classification":
+    case "observer":
       return "outline";
-    case "analysis_generation":
-      return "default";
+    case "knowledge_acquisition":
+      return "secondary";
     case "graph_construction":
       return "secondary";
+    case "analysis_generation":
+      return "default";
+    case "advice_generation":
+      return "default";
     default:
       return "outline";
   }
@@ -163,12 +170,9 @@ function IterationItem({ iteration }: { iteration: WorkerIteration }) {
         ? "destructive"
         : "secondary";
 
-  const actionLabel =
-    iteration.classificationResult === "synthesize"
-      ? "Synthesize"
-      : iteration.classificationResult === "populate"
-        ? "Populate"
-        : null;
+  const planSummary = iteration.observerPlan
+    ? `${iteration.observerPlan.queries?.length ?? 0} queries, ${iteration.observerPlan.insights?.length ?? 0} insights`
+    : null;
 
   return (
     <Collapsible open={isOpen} onOpenChange={setIsOpen}>
@@ -190,13 +194,9 @@ function IterationItem({ iteration }: { iteration: WorkerIteration }) {
                     {iteration.status.charAt(0).toUpperCase() +
                       iteration.status.slice(1)}
                   </Badge>
-                  {actionLabel && (
-                    <Badge
-                      variant={
-                        actionLabel === "Synthesize" ? "default" : "secondary"
-                      }
-                    >
-                      {actionLabel}
+                  {planSummary && (
+                    <Badge variant="outline">
+                      {planSummary}
                     </Badge>
                   )}
                 </div>

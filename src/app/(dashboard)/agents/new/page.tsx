@@ -19,7 +19,7 @@ export default function NewAgentPage() {
   const [error, setError] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     purpose: "",
-    intervalValue: "",
+    intervalValue: "60",
     intervalUnit: "minutes" as "minutes" | "hours" | "days",
   });
 

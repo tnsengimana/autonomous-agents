@@ -1,15 +1,14 @@
 /**
  * Worker Runner
  *
- * Agent-based iteration with 5-minute intervals using two-step classification -> action flow.
+ * Agent-based iteration with configurable intervals using an Observer -> Researcher -> Analyzer -> Adviser pipeline.
  *
  * For each active agent:
- * 1. Run classification phase to decide: "synthesize" or "populate"
- * 2. Run the appropriate action phase based on classification result
- *
- * This implements the KGoT-inspired INSERT/RETRIEVE loop:
- * - "populate" = INSERT branch: gather external knowledge via Tavily tools
- * - "synthesize" = RETRIEVE branch: create Analysis nodes from existing knowledge
+ * 1. Observer phase: scan graph, produce plan with queries (knowledge gaps) and insights (patterns)
+ * 2. Researcher phase: for each query, run knowledge acquisition + graph construction
+ * 3. Rebuild graph context after all queries are processed
+ * 4. Analyzer phase: for each insight, run analysis generation
+ * 5. Adviser phase: if analyses were produced, run advice generation
  */
 
 import {
@@ -58,26 +57,58 @@ export function stopRunner(): void {
 // Types & Schemas
 // ============================================================================
 
-const ClassificationResultSchema = z.object({
-  action: z
-    .enum(["synthesize", "populate"])
+const ObserverQuerySchema = z.object({
+  objective: z
+    .string()
     .describe(
-      "The action to take: 'synthesize' to create analyses from existing knowledge, 'populate' to gather more external knowledge",
+      "A specific research objective describing what knowledge to gather",
     ),
   reasoning: z
     .string()
     .describe(
-      "Detailed reasoning explaining why this action was chosen and what specific work should be done",
+      "Why this knowledge gap matters and how it advances the agent's mission",
     ),
-  knowledge_gaps: z
+  searchHints: z
     .array(z.string())
-    .optional()
     .describe(
-      "Required when action='populate'. Each string is a query representing a knowledge gap to fill",
+      "Suggested search queries or keywords to guide the research",
     ),
 });
 
-type ClassificationResult = z.infer<typeof ClassificationResultSchema>;
+const ObserverInsightSchema = z.object({
+  observation: z
+    .string()
+    .describe(
+      "A pattern, trend, or connection spotted in the existing graph knowledge",
+    ),
+  relevantNodeIds: z
+    .array(z.string())
+    .describe(
+      "UUIDs of graph nodes that are relevant to this observation",
+    ),
+  synthesisDirection: z
+    .string()
+    .describe(
+      "Guidance for the Analyzer on what angle to analyze this from",
+    ),
+});
+
+const ObserverPlanSchema = z.object({
+  queries: z
+    .array(ObserverQuerySchema)
+    .describe(
+      "Knowledge gaps to fill via web research. Each query becomes a Knowledge Acquisition + Graph Construction cycle.",
+    ),
+  insights: z
+    .array(ObserverInsightSchema)
+    .describe(
+      "Patterns worth analyzing from existing graph knowledge. Each insight becomes an Analysis Generation call.",
+    ),
+});
+
+type ObserverPlan = z.infer<typeof ObserverPlanSchema>;
+type ObserverQuery = z.infer<typeof ObserverQuerySchema>;
+type ObserverInsight = z.infer<typeof ObserverInsightSchema>;
 
 // ============================================================================
 // Utility Functions
@@ -129,71 +160,65 @@ async function isAgentDueForIteration(agent: Agent): Promise<boolean> {
 }
 
 // ============================================================================
-// Classification Phase
+// Observer Phase
 // ============================================================================
 
 /**
- * Run the classification phase to decide whether to synthesize or populate.
+ * Run the observer phase to scan the graph and produce a structured plan.
  * Uses structured output (generateLLMObject) to get a JSON response.
  */
-async function runClassificationPhase(
+async function runObserverPhase(
   agent: Agent,
   graphContext: string,
   workerIterationId: string,
-): Promise<ClassificationResult> {
-  log(`[Classification] Starting for agent: ${agent.name}`);
+): Promise<ObserverPlan> {
+  log(`[Observer] Starting for agent: ${agent.name}`);
 
-  const systemPrompt = agent.classificationSystemPrompt;
+  const systemPrompt = agent.observerSystemPrompt;
   if (!systemPrompt) {
-    throw new Error("Agent missing classificationSystemPrompt");
+    throw new Error("Agent missing observerSystemPrompt");
   }
 
   const requestMessages = [
     {
       role: "user" as const,
-      content: `Review your current knowledge graph state and decide your next action.
+      content: `Review your current knowledge graph and plan your next actions.
 
 ${graphContext}
 
-Based on the graph state above, decide:
-- "synthesize" if you have enough knowledge to derive meaningful analyses
-- "populate" if you need to gather more external knowledge
+Based on the graph state above, produce a plan with:
+- **queries**: Knowledge gaps to fill via web research. Each becomes a research cycle.
+- **insights**: Patterns worth analyzing from existing knowledge. Each becomes an analysis.
 
-If you choose "populate", you MUST also provide a "knowledge_gaps" array with specific research queries describing what information needs to be gathered.`,
+You may produce any combination: queries only, insights only, both, or neither (if there is nothing worth doing right now).`,
     },
   ];
 
-  // Create llm_interaction record for classification
   const interaction = await createLLMInteraction({
     agentId: agent.id,
     workerIterationId,
     systemPrompt: systemPrompt,
     request: { messages: requestMessages },
-    phase: "classification",
+    phase: "observer",
   });
 
-  log(
-    `[Classification] Calling LLM with structured output for agent ${agent.name}`,
-  );
-
-  const classification = await generateLLMObject(
+  const plan = await generateLLMObject(
     requestMessages,
-    ClassificationResultSchema,
+    ObserverPlanSchema,
     systemPrompt,
     { agentId: agent.id },
   );
 
   await updateLLMInteraction(interaction.id, {
-    response: classification,
+    response: plan,
     completedAt: new Date(),
   });
 
-  log(`[Classification] Agent ${agent.name} decided: ${classification.action}`);
   log(
-    `[Classification] Reasoning preview: ${classification.reasoning.substring(0, 200)}...`,
+    `[Observer] Agent ${agent.name} planned: ${plan.queries.length} queries, ${plan.insights.length} insights`,
   );
 
-  return classification;
+  return plan;
 }
 
 // ============================================================================
@@ -202,15 +227,16 @@ If you choose "populate", you MUST also provide a "knowledge_gaps" array with sp
 
 /**
  * Run the analysis generation phase.
- * Uses existing graph knowledge to create Analysis nodes.
+ * Uses existing graph knowledge to create Analysis nodes based on an Observer insight.
+ * Returns true if any AgentAnalysis nodes were created, false otherwise.
  */
 async function runAnalysisGenerationPhase(
   agent: Agent,
-  classificationReasoning: string,
+  insight: ObserverInsight,
   graphContext: string,
   workerIterationId: string,
-): Promise<void> {
-  log(`[AnalysisGeneration] Starting for agent: ${agent.name}`);
+): Promise<boolean> {
+  log(`[Analyzer] Analysis generation for: "${insight.observation.length > 50 ? insight.observation.substring(0, 50) + "..." : insight.observation}"`);
 
   const systemPrompt = agent.analysisGenerationSystemPrompt;
   if (!systemPrompt) {
@@ -220,15 +246,23 @@ async function runAnalysisGenerationPhase(
   const requestMessages = [
     {
       role: "user" as const,
-      content: `Execute analysis generation based on the classification decision.
+      content: `Analyze the following pattern observed in the knowledge graph.
 
-## Classification Decision
-${classificationReasoning}
+## Observation
+${insight.observation}
+
+## Relevant Nodes
+${insight.relevantNodeIds.map((id) => `- ${id}`).join("\n")}
+
+## Synthesis Direction
+${insight.synthesisDirection}
 
 ## Current Knowledge Graph
 ${graphContext}
 
-Analyze the existing knowledge in your graph and create AgentAnalysis nodes that capture observations or patterns. Use the addAgentAnalysisNode tool to create analyses and addGraphEdge to connect them to relevant nodes.`,
+Analyze this pattern using the graph data. Create AgentAnalysis nodes that capture your findings. Use the addAgentAnalysisNode tool to create analyses and addGraphEdge to connect them to relevant nodes.
+
+If you find that the available knowledge is insufficient to properly analyze this pattern, explain what additional data would be needed. Do NOT create a low-quality analysis just to produce output.`,
     },
   ];
 
@@ -246,7 +280,7 @@ Analyze the existing knowledge in your graph and create AgentAnalysis nodes that
   const tools = getAnalysisGenerationTools();
 
   log(
-    `[AnalysisGeneration] Calling LLM with ${tools.length} tools for agent ${agent.name}`,
+    `[Analyzer] Calling LLM with ${tools.length} tools for agent ${agent.name}`,
   );
 
   const { fullResponse } = await streamLLMResponseWithTools(
@@ -262,7 +296,7 @@ Analyze the existing knowledge in your graph and create AgentAnalysis nodes that
         await updateLLMInteraction(interaction.id, {
           response: { events },
         });
-        log(`[AnalysisGeneration] Step saved. Events: ${events.length}`);
+        log(`[Analyzer] Step saved. Events: ${events.length}`);
       },
     },
   );
@@ -292,9 +326,16 @@ Analyze the existing knowledge in your graph and create AgentAnalysis nodes that
   });
 
   log(
-    `[AnalysisGeneration] Completed for agent ${agent.name}. ` +
+    `[Analyzer] Completed for agent ${agent.name}. ` +
       `Tool calls: ${toolCallCount}, Response length: ${textLength}`,
   );
+
+  // Check if any AgentAnalysis nodes were created
+  const analysesProduced = result.events
+    .filter((e): e is { toolCalls: Array<{ toolName: string; args: Record<string, unknown> }> } => "toolCalls" in e)
+    .some((e) => e.toolCalls.some((tc) => tc.toolName === "addAgentAnalysisNode"));
+
+  return analysesProduced;
 }
 
 /**
@@ -393,16 +434,16 @@ Review the AgentAnalysis nodes in your knowledge graph. Only create AgentAdvice 
 
 /**
  * Run the knowledge acquisition phase.
- * Gathers raw information using web search tools for a specific knowledge gap.
+ * Gathers raw information using web search tools for a specific query from the Observer.
  * Returns a markdown document with the findings.
  */
 async function runKnowledgeAcquisitionPhase(
   agent: Agent,
-  knowledgeGap: string,
+  query: ObserverQuery,
   graphContext: string,
   workerIterationId: string,
 ): Promise<string> {
-  log(`[KnowledgeAcquisition] Starting for agent: ${agent.name}, gap: "${knowledgeGap.substring(0, 50)}..."`);
+  log(`[Researcher] Knowledge acquisition for: "${query.objective.length > 50 ? query.objective.substring(0, 50) + "..." : query.objective}"`);
 
   const systemPrompt = agent.knowledgeAcquisitionSystemPrompt;
   if (!systemPrompt) {
@@ -414,13 +455,19 @@ async function runKnowledgeAcquisitionPhase(
       role: "user" as const,
       content: `Research the following knowledge gap and return a comprehensive markdown document with your findings.
 
-## Knowledge Gap to Research
-${knowledgeGap}
+## Research Objective
+${query.objective}
+
+## Why This Matters
+${query.reasoning}
+
+## Suggested Search Queries
+${query.searchHints.map((h) => `- ${h}`).join("\n")}
 
 ## Current Knowledge Graph (for context)
 ${graphContext}
 
-Use the available web search tools (tavilySearch, tavilyExtract, tavilyResearch) to gather comprehensive information about this topic. Return a well-organized markdown document with all findings, including source URLs and publication dates.`,
+Use the available web search tools to gather comprehensive information. Return a well-organized markdown document with all findings, including source URLs and publication dates.`,
     },
   ];
 
@@ -438,7 +485,7 @@ Use the available web search tools (tavilySearch, tavilyExtract, tavilyResearch)
   const tools = getKnowledgeAcquisitionTools();
 
   log(
-    `[KnowledgeAcquisition] Calling LLM with ${tools.length} tools for agent ${agent.name}`,
+    `[Researcher] Calling LLM with ${tools.length} tools for agent ${agent.name}`,
   );
 
   const { fullResponse } = await streamLLMResponseWithTools(
@@ -454,7 +501,7 @@ Use the available web search tools (tavilySearch, tavilyExtract, tavilyResearch)
         await updateLLMInteraction(interaction.id, {
           response: { events },
         });
-        log(`[KnowledgeAcquisition] Step saved. Events: ${events.length}`);
+        log(`[Researcher] Step saved. Events: ${events.length}`);
       },
     },
   );
@@ -485,7 +532,7 @@ Use the available web search tools (tavilySearch, tavilyExtract, tavilyResearch)
   });
 
   log(
-    `[KnowledgeAcquisition] Completed for agent ${agent.name}. ` +
+    `[Researcher] Completed for agent ${agent.name}. ` +
       `Tool calls: ${toolCallCount}, Output length: ${markdownOutput.length}`,
   );
 
@@ -594,76 +641,48 @@ Transform the research findings above into structured graph nodes and edges. Use
 // ============================================================================
 
 /**
- * Process one agent's iteration using the two-step classification -> action flow.
+ * Process one agent's iteration using the Observer -> Researcher -> Analyzer -> Adviser pipeline.
  *
- * Step 1: Classification - decide "synthesize" or "populate"
- * Step 2: Execute the appropriate action phase
+ * Step 1: Observer - scan graph and produce plan with queries and insights
+ * Step 2: Researcher - for each query, run knowledge acquisition + graph construction
+ * Step 3: Rebuild graph context (now enriched)
+ * Step 4: Analyzer - for each insight, run analysis generation
+ * Step 5: Adviser - if analyses were produced, run advice generation
  */
 async function processAgentIteration(agent: Agent): Promise<void> {
   log(`Processing iteration for agent: ${agent.name} (${agent.id})`);
 
-  // Create worker iteration record
   const workerIteration = await createWorkerIteration({
     agentId: agent.id,
   });
   log(`Created worker iteration: ${workerIteration.id}`);
 
   try {
-    // Ensure graph types are initialized for this agent
+    // Ensure graph types are initialized
     await ensureGraphTypesInitialized(
       agent.id,
-      {
-        name: agent.name,
-        type: "agent", // Legacy field, can be anything
-        purpose: agent.purpose,
-      },
+      { name: agent.name, type: "agent", purpose: agent.purpose },
       { userId: agent.userId },
     );
 
-    // Build graph context once (reused across phases)
-    const graphContext = await buildGraphContextBlock(agent.id);
+    // Build initial graph context
+    let graphContext = await buildGraphContextBlock(agent.id);
 
-    // Step 1: CLASSIFICATION
-    const classification = await runClassificationPhase(
-      agent,
-      graphContext,
-      workerIteration.id,
-    );
+    // -- Step 1: OBSERVER --
+    const plan = await runObserverPhase(agent, graphContext, workerIteration.id);
 
-    // Update iteration with classification result
+    // Store the observer plan on the worker iteration
     await updateWorkerIteration(workerIteration.id, {
-      classificationResult: classification.action,
-      classificationReasoning: classification.reasoning,
+      observerPlan: plan,
     });
 
-    // Step 2: EXECUTE ACTION based on classification
-    if (classification.action === "synthesize") {
-      await runAnalysisGenerationPhase(
-        agent,
-        classification.reasoning,
-        graphContext,
-        workerIteration.id,
-      );
-
-      // Rebuild graph context so advice generation sees new AgentAnalysis nodes
-      const updatedGraphContext = await buildGraphContextBlock(agent.id);
-
-      // Run advice generation after analysis generation
-      await runAdviceGenerationPhase(
-        agent,
-        updatedGraphContext,
-        workerIteration.id,
-      );
-    } else {
-      // Populate action: loop through knowledge gaps
-      const knowledgeGaps = classification.knowledge_gaps ?? [];
-
-      if (knowledgeGaps.length === 0) {
-        log(`[Populate] No knowledge gaps provided, using reasoning as single gap`);
-        // Fallback: use reasoning as the knowledge gap if no specific gaps provided
+    // -- Step 2: RESEARCHER (for each query) --
+    if (plan.queries.length > 0) {
+      log(`[Researcher] Processing ${plan.queries.length} queries`);
+      for (const query of plan.queries) {
         const markdown = await runKnowledgeAcquisitionPhase(
           agent,
-          classification.reasoning,
+          query,
           graphContext,
           workerIteration.id,
         );
@@ -673,26 +692,38 @@ async function processAgentIteration(agent: Agent): Promise<void> {
           graphContext,
           workerIteration.id,
         );
-      } else {
-        log(`[Populate] Processing ${knowledgeGaps.length} knowledge gaps`);
-        for (const gap of knowledgeGaps) {
-          // Step 2a: Acquire knowledge for this gap
-          const markdown = await runKnowledgeAcquisitionPhase(
-            agent,
-            gap,
-            graphContext,
-            workerIteration.id,
-          );
+      }
 
-          // Step 2b: Construct graph from acquired knowledge
-          await runGraphConstructionPhase(
-            agent,
-            markdown,
-            graphContext,
-            workerIteration.id,
-          );
+      // -- Step 3: Rebuild graph context (now enriched) --
+      graphContext = await buildGraphContextBlock(agent.id);
+    }
+
+    // -- Step 4: ANALYZER (for each insight) --
+    let analysesProduced = false;
+    if (plan.insights.length > 0) {
+      log(`[Analyzer] Processing ${plan.insights.length} insights`);
+      for (const insight of plan.insights) {
+        const produced = await runAnalysisGenerationPhase(
+          agent,
+          insight,
+          graphContext,
+          workerIteration.id,
+        );
+        if (produced) {
+          analysesProduced = true;
         }
       }
+    }
+
+    // -- Step 5: ADVISER (if analyses were produced) --
+    if (analysesProduced) {
+      // Rebuild graph context so adviser sees new AgentAnalysis nodes
+      const adviserGraphContext = await buildGraphContextBlock(agent.id);
+      await runAdviceGenerationPhase(
+        agent,
+        adviserGraphContext,
+        workerIteration.id,
+      );
     }
 
     // Mark iteration as completed
@@ -701,12 +732,11 @@ async function processAgentIteration(agent: Agent): Promise<void> {
       completedAt: new Date(),
     });
 
-    log(`Completed two-step iteration for agent ${agent.name}`);
+    log(`Completed iteration for agent ${agent.name}`);
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : String(error);
     logError(`Error in iteration for agent ${agent.name}:`, error);
 
-    // Mark iteration as failed
     await updateWorkerIteration(workerIteration.id, {
       status: "failed",
       errorMessage: errorMsg,
@@ -727,7 +757,7 @@ async function processAgentIteration(agent: Agent): Promise<void> {
  */
 export async function startRunner(): Promise<void> {
   log(
-    "Worker runner started (two-step classification -> action flow, per-agent intervals)",
+    "Worker runner started (Observer -> Researcher -> Analyzer -> Adviser pipeline, per-agent intervals)",
   );
 
   // Register all tools before starting

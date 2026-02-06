@@ -69,7 +69,7 @@ export async function POST(request: NextRequest) {
       name: config.name,
       purpose,
       conversationSystemPrompt: config.conversationSystemPrompt,
-      classificationSystemPrompt: config.classificationSystemPrompt,
+      observerSystemPrompt: config.observerSystemPrompt,
       analysisGenerationSystemPrompt: config.analysisGenerationSystemPrompt,
       adviceGenerationSystemPrompt: config.adviceGenerationSystemPrompt,
       knowledgeAcquisitionSystemPrompt: config.knowledgeAcquisitionSystemPrompt,
